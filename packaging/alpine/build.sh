@@ -22,10 +22,15 @@ chown -R hopeabuild "$work"
 chmod 755 "$work"
 su -s /bin/sh -c 'abuild-keygen -an' hopeabuild
 # This build key is public alongside the package; private key never leaves HOME.
-cp /home/hopeabuild/.abuild/*.pub /etc/apk/keys/
+# abuild now uses XDG config paths. Ask its own configuration loader instead of
+# guessing ~/.abuild; this also supports older abuild releases.
+# shellcheck disable=SC2016
+public_key=$(su -s /bin/sh -c '. /usr/share/abuild/functions.sh; printf "%s.pub\n" "$PACKAGER_PRIVKEY"' hopeabuild)
+[[ $public_key == /home/hopeabuild/* && $public_key == *.pub && -f $public_key ]] || { echo 'abuild did not create a public signing key.' >&2; exit 1; }
+cp "$public_key" /etc/apk/keys/
 export HOPEA_ALPINE_WORK="$work"
 # shellcheck disable=SC2016
 su -s /bin/sh -c 'cd "$HOPEA_ALPINE_WORK/aports/community/hopea" && SRCDEST="$HOPEA_ALPINE_WORK/cache" REPODEST="$HOPEA_ALPINE_WORK/packages" abuild -r -d' hopeabuild
 mkdir -p "$root/dist"
 find "$work/packages" -name '*.apk' -exec cp {} "$root/dist/" \;
-cp /home/hopeabuild/.abuild/*.pub "$root/dist/"
+cp "$public_key" "$root/dist/"

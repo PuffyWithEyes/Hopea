@@ -33,6 +33,9 @@ class Hopea < Formula
     ENV["HOPEA_PREFIX"] = prefix
     ENV["HOPEA_BUILD_PYTHON"] = Formula["python@3.14"].opt_bin/"python3.14"
     ENV["CARGO_NET_OFFLINE"] = "true"
+    # Homebrew's compiler shim replaces -O0. AWS-LC's jitter RNG must retain
+    # that flag; use the SDK compiler directly for this dependency only.
+    ENV["AWS_LC_SYS_CC"] = Utils.safe_popen_read("xcrun", "--find", "clang").strip
     system "bash", "packaging/native.sh", "configure"
     system "bash", "packaging/native.sh", "build"
     ENV["DESTDIR"] = buildpath/"stage"

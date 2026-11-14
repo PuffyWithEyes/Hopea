@@ -43,7 +43,7 @@ case $platform in
     case $platform in
       fedora) runtime='Requires: ffmpeg, gstreamer1-plugins-good, gstreamer1-plugins-bad-free' ;;
       opensuse) runtime='Requires: ffmpeg, gstreamer-plugins-good, gstreamer-plugins-bad, gstreamer-plugins-libav' ;;
-      alt) runtime='Requires: ffmpeg, gst-plugins-good1.0, gst-plugins-bad1.0, gst-libav' ;;
+      alt) runtime='Requires: ffmpeg, gst-plugins-good1.0, gst-plugins-bad1.0, gst-libav, python3-modules-sqlite3' ;;
     esac
     sed "s|@RPM_REQUIRES@|$runtime|" "$work/recipes/rpm/hopea.spec" > "$top/SPECS/hopea.spec"
     # The container bootstrap checks pkg-config; distro package names differ.

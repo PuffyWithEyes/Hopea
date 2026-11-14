@@ -18,6 +18,8 @@
 # MPRIS on Windows (media keys go through the window only).
 
 set -euo pipefail
+# Blueprint reads UTF-8 sources; Windows otherwise defaults to its ANSI locale.
+export PYTHONUTF8=1
 
 if [[ "${MSYSTEM:-}" != "UCRT64" ]]; then
     echo "Run this in an MSYS2 UCRT64 shell" >&2

@@ -32,16 +32,21 @@ case ${1:-} in
       blueprint-compiler gettext-tools desktop-file-utils gtk4-devel libadwaita-devel libsoup-devel \
       libopenssl-devel gstreamer-devel gstreamer-plugins-base-devel gstreamer-plugins-bad-devel \
       python3-pip rpm-build file
+    # python-base/pip omit sqlite3; install the matching full interpreter.
+    python_package=$(python3 -c 'import sys; print("python%d%d" % sys.version_info[:2])')
+    zypper --non-interactive install "$python_package"
+    python3 -I -c 'import ssl, sqlite3, venv'
     ;;
   alt)
     apt-get update
-    apt-get install -y ca-certificates git gcc gcc-c++ cargo rust meson ninja-build pkg-config \
+    apt-get install -y ca-certificates git gcc gcc-c++ rust meson ninja-build pkg-config \
       blueprint-compiler gettext-tools desktop-file-utils libgtk4-devel libadwaita-devel \
-      libsoup3-devel libssl-devel libgstreamer1.0-devel libgst-plugins-base1.0-devel \
-      libgst-plugins-bad1.0-devel python3-module-pip python3-module-venv rpm-build file
+      libsoup3.0-devel libssl-devel gstreamer1.0-devel gst-plugins1.0-devel \
+      gst-plugins-bad1.0-devel python3-base python3-module-pip python3-modules-sqlite3 rpm-build file
     ;;
   *) echo 'Supported containers: debian ubuntu arch fedora opensuse alt' >&2; exit 2;;
 esac
 # Fail clearly before starting a lengthy Rust build; never weaken version checks.
 pkg-config --atleast-version=4.20 gtk4
 pkg-config --atleast-version=1.8 libadwaita-1
+python3 -I -c 'import ssl, sqlite3, venv'

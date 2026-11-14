@@ -31,7 +31,7 @@ sed -e "s|@VERSION@|$version|g" -e "s|@REPOSITORY@|$repo|g" \
     -e "s|@SOURCE_SHA256@|$hash|g" \
     -e "s|https://github.com/$repo/releases/download/v$version/hopea-$version-source.tar.gz|file://$root/dist/$prepared|" \
     packaging/homebrew/hopea.rb.in > "$formula"
-brew install --build-bottle "$tap/hopea"
+brew install --verbose --build-bottle "$tap/hopea"
 brew test "$tap/hopea"
 (cd "$root/dist" && brew bottle --json --root-url="https://github.com/$repo/releases/download/v$version" "$tap/hopea")
 # Publish a source-installable formula whose URL will exist in the same release.

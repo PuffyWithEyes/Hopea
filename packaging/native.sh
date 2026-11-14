@@ -15,6 +15,8 @@ case /$prefix/ in */../*) echo 'HOPEA_PREFIX cannot contain parent traversal' >&
 export CARGO_BUILD_JOBS=${CARGO_BUILD_JOBS:-4}
 case ${1:-} in
   prepare)
+    # Detect split/missing standard-library packages before compiling Rust.
+    "$python" -I -c 'import ssl, sqlite3, venv'
     mkdir -p .packaging/wheels .cargo
     if [[ ! -f .cargo/config.toml ]]; then
       cargo vendor --locked --versioned-dirs vendor-registry > .cargo/config.toml

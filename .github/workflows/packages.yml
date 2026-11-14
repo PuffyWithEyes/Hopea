@@ -132,6 +132,7 @@ jobs:
             -e HOPEA_CI_CONTAINER=1 -e HOPEA_VERSION -e HOPEA_REPOSITORY -e CARGO_BUILD_JOBS \
             "$BUILD_IMAGE" sh -ec '
               if [ "$1" = alpine ]; then apk add --no-cache bash; fi
+              if [ "$1" = void ]; then xbps-install -Suy xbps; xbps-install -Sy bash; fi
               exec bash "packaging/$1/build.sh" "dist/hopea-$HOPEA_VERSION-source.tar.gz"
             ' _ "$BUILD_SCRIPT"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -292,6 +293,12 @@ jobs:
         with: { name: source, path: dist }
       - run: bash packaging/macos-build.sh
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: failure()
+        with:
+          name: macos-logs-${{ matrix.runner }}
+          path: ~/Library/Logs/Homebrew/hopea/
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: macos-${{ matrix.runner }}
           path: |
@@ -380,10 +387,7 @@ jobs:
           cpu: '4'
           envs: 'HOPEA_VERSION HOPEA_REPOSITORY CARGO_BUILD_JOBS'
           run: |
-            set -eu
-            HOPEA_CI_CONTAINER=1 sh packaging/bsd/deps.sh
-            export PATH="/usr/local/bin:/usr/pkg/bin:/usr/pkg/gnu/bin:$PATH"
-            bash packaging/bsd/build.sh
+            sh packaging/bsd/ci.sh
       - if: matrix.os == 'OpenBSD'
         uses: vmactions/openbsd-vm@f1ca8bc8ecc5b6ef7218e5b914836e067e1546d3 # v1
         with:
@@ -392,10 +396,7 @@ jobs:
           cpu: '4'
           envs: 'HOPEA_VERSION HOPEA_REPOSITORY CARGO_BUILD_JOBS'
           run: |
-            set -eu
-            HOPEA_CI_CONTAINER=1 sh packaging/bsd/deps.sh
-            export PATH="/usr/local/bin:/usr/pkg/bin:/usr/pkg/gnu/bin:$PATH"
-            bash packaging/bsd/build.sh
+            sh packaging/bsd/ci.sh
       - if: matrix.os == 'NetBSD'
         uses: vmactions/netbsd-vm@5957cf330aef2e6ddc63c604364c99ce2e02b91d # v1
         with:
@@ -404,10 +405,7 @@ jobs:
           cpu: '4'
           envs: 'HOPEA_VERSION HOPEA_REPOSITORY CARGO_BUILD_JOBS'
           run: |
-            set -eu
-            HOPEA_CI_CONTAINER=1 sh packaging/bsd/deps.sh
-            export PATH="/usr/local/bin:/usr/pkg/bin:/usr/pkg/gnu/bin:$PATH"
-            bash packaging/bsd/build.sh
+            sh packaging/bsd/ci.sh
       - if: matrix.os == 'DragonFly'
         uses: vmactions/dragonflybsd-vm@4ab776fa9f914fbea72f13715b451e77e7ef5c41 # v1
         with:
@@ -416,10 +414,13 @@ jobs:
           cpu: '4'
           envs: 'HOPEA_VERSION HOPEA_REPOSITORY CARGO_BUILD_JOBS'
           run: |
-            set -eu
-            HOPEA_CI_CONTAINER=1 sh packaging/bsd/deps.sh
-            export PATH="/usr/local/bin:/usr/pkg/bin:/usr/pkg/gnu/bin:$PATH"
-            bash packaging/bsd/build.sh
+            sh packaging/bsd/ci.sh
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: bsd-logs-${{ matrix.os }}
+          path: dist/bsd-*.log
+          if-no-files-found: warn
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: bsd-${{ matrix.os }}

@@ -22,3 +22,4 @@ This file is the repository guide for Codex and other coding tools.
   for new files. Fork policies from other projects do not apply to contributions here.
 - Describe checks that actually ran and distinguish them from untested platform
   recipes. Release/package instructions live in `packaging/` and `nix/`.
+- Write project documentation in English.

@@ -27,7 +27,7 @@ for platform in fedora opensuse alt; do
   case $platform in
     fedora) runtime='Requires: ffmpeg, gstreamer1-plugins-good, gstreamer1-plugins-bad-free' ;;
     opensuse) runtime='Requires: ffmpeg, gstreamer-plugins-good, gstreamer-plugins-bad, gstreamer-plugins-libav' ;;
-    alt) runtime='Requires: ffmpeg, gst-plugins-good1.0, gst-plugins-bad1.0, gst-libav' ;;
+    alt) runtime='Requires: ffmpeg, gst-plugins-good1.0, gst-plugins-bad1.0, gst-libav, python3-modules-sqlite3' ;;
   esac
   sed "s|@RPM_REQUIRES@|$runtime|" dist/recipes/rpm/hopea.spec > "dist/recipes/rpm/hopea-$platform.spec"
 done

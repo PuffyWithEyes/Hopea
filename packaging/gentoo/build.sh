@@ -15,6 +15,9 @@ cp packaging/gentoo/pycryptodomex.ebuild "$overlay/dev-python/pycryptodomex/pycr
 printf 'hopea\n' > "$overlay/profiles/repo_name"
 printf 'masters = gentoo\nthin-manifests = true\n' > "$overlay/metadata/layout.conf"
 emerge-webrsync
+# These namespace features require privileges unavailable in Docker's default
+# sandbox. Keep Portage's filesystem sandbox and Docker's isolation enabled.
+export FEATURES="${FEATURES:-} -ipc-sandbox -network-sandbox -pid-sandbox"
 mkdir -p /etc/portage/repos.conf /etc/portage/package.accept_keywords
 printf '[hopea]\nlocation = %s\nmasters = gentoo\nauto-sync = no\n' "$overlay" > /etc/portage/repos.conf/hopea.conf
 printf 'media-sound/hopea ~amd64\ndev-python/vk-api ~amd64\ndev-python/yandex-music ~amd64\ndev-python/pycryptodomex ~amd64\n' \
@@ -22,6 +25,9 @@ printf 'media-sound/hopea ~amd64\ndev-python/vk-api ~amd64\ndev-python/yandex-mu
 mkdir -p /var/cache/distfiles
 cp "$archive" /var/cache/distfiles/
 while IFS= read -r -d '' recipe; do ebuild "$recipe" manifest; done < <(find "$overlay" -name '*.ebuild' -print0)
-emerge --usepkg=y --buildpkg=y media-sound/hopea
+mkdir -p /etc/portage/package.use
+printf 'net-misc/curl http2 ssl\n' > /etc/portage/package.use/hopea-build
+# Reconcile the stage3's installed packages with the freshly synced tree/USE.
+emerge --update --deep --newuse --with-bdeps=y --usepkg=y --buildpkg=y media-sound/hopea
 mkdir -p dist
 find /var/cache/binpkgs -path '*/hopea*' -type f \( -name '*.gpkg.tar' -o -name '*.tbz2' \) -exec cp {} dist/ \;

@@ -1,48 +1,52 @@
-# Сборки и релизы Hopea
+# Hopea builds and releases
 
-Выпускать версию можно когда удобно. Подписанные теги, особый формат коммитов,
-заполненный changelog и обязательное одобрение для этого не требуются.
+Release whenever it is useful. Signed tags, special commit formats, a completed
+changelog and mandatory approvals are not required.
 
-## Через GitHub
+## GitHub builds
 
-После загрузки проекта на GitHub сборки запускаются из вкладки **Actions**.
-Workflow создаёт пакеты и сохраняет их в **Artifacts**. Их можно скачать и проверить,
-не создавая релиз. Для публикации предусмотрен отдельный шаг создания черновика
-GitHub Release; можно просмотреть файлы и опубликовать его вручную.
+After pushing the project to GitHub, start builds from **Actions**. The workflow
+creates packages and saves them as **Artifacts**, which can be downloaded and
+tested without creating a release. A separate step prepares a GitHub Release
+draft for review and manual publication.
 
-Имена файлов и версии пакетов берутся из `meson.build`. Если используется тег,
-его вид `v2026.2` связывает сборку с конкретной версией; это технический формат CI,
-а не требование к обычной работе с Git. Подписывать тег необязательно.
+Package versions and filenames come from `meson.build`. Tags such as `v2026.2`
+associate builds with a specific version. This is a CI naming convention, not a
+requirement for everyday Git work. Tags do not need signatures.
 
-### Пошагово
+### Publishing a version
 
-1. Дождитесь успешного workflow **Checks** и проверьте приложение. Обновите
-   `version` в `meson.build`, сохраните изменения коммитом и отправьте `main`.
-2. Создайте тег с той же версией (пример для текущей `2026.2`):
+1. Update `version` in `meson.build`, commit the changes and push `main`. Check
+   that **Checks** succeeds and test the application.
+2. Create and push a matching tag, for example:
 
    ```sh
    git tag v2026.2
    git push origin v2026.2
    ```
 
-3. Отправка тега запускает **Packages** и после успешных сборок создаёт черновик
-   релиза с обычными платформами. Android, BSD и Gentoo включаются отдельно:
-   **Actions → Packages → Run workflow**, выберите **тег** `v2026.2`, включите
-   нужные платформы и `draft_release`. Для LFS нужен собственный настроенный runner.
-4. Дождитесь завершения сборок. В **Releases** откройте черновик, скачайте и
-   проверьте нужные файлы, заполните описание и нажмите **Publish release**.
-   Windows получает Setup EXE и ZIP; Android — отдельные APK для ARM64 и x86-64;
-   Linux/BSD/macOS — свои пакеты/архивы, перечисленные в руководстве упаковки.
+3. Pushing the tag starts **Packages**. Successful required builds create a draft
+   release for the default platforms. Enable Android, BSD and Gentoo separately:
+   open **Actions → Packages → Run workflow**, select the **tag** `v2026.2`, enable
+   the desired platforms and `draft_release`. LFS requires a configured
+   self-hosted runner.
+4. Wait for the builds, open the draft under **Releases**, download and test its
+   files, write a description, then select **Publish release**. Windows gets a
+   Setup EXE and ZIP; Android gets separate ARM64 and x86-64 APKs; Linux, BSD and
+   macOS get the packages listed in the [packaging guide](../packaging/README.md).
 
-Повторный запуск на том же теге обновляет файлы **черновика**, поэтому можно
-добавить Android позже. Опубликованный релиз workflow не перезаписывает:
-для исправленного выпуска создайте новую версию и новый тег. Если сборка
-обязательной платформы завершилась ошибкой, исправьте её до публикации;
-успешные отдельные пакеты можно скачать из Artifacts соответствующего запуска.
+Running again on the same tag updates the **draft's** assets, allowing Android to
+be added later. The workflow will not overwrite a published release. Publish fixes
+under a new version and tag. If a required platform fails, fix its build before
+publishing; successful individual packages remain available in that run's Artifacts.
 
-### Постоянный ключ для Android preview
+After changing build scripts, start **Run workflow** on the updated branch to test
+them. **Re-run jobs** uses the original run's commit, and an existing tag still
+points to its original source. Neither includes later fixes automatically.
 
-Один раз создайте ключ вне репозитория (нужен `keytool` из JDK):
+### Persistent Android preview key
+
+Create a key once, outside the repository, using `keytool` from a JDK:
 
 ```sh
 install -d -m 700 ~/.local/share/hopea-signing
@@ -53,41 +57,42 @@ keytool -genkeypair -keystore ~/.local/share/hopea-signing/debug.keystore \
 chmod 600 ~/.local/share/hopea-signing/debug.keystore
 ```
 
-Сохраните резервную копию ключа. В репозитории GitHub откройте
-**Settings → Secrets and variables → Actions → New repository secret**, имя
-`ANDROID_PREVIEW_KEYSTORE_BASE64`, значение — base64 этого файла. Если установлен
-GitHub CLI и выполнен `gh auth login`, можно передать ключ без вывода на экран:
+Back up the key. In the GitHub repository, open **Settings → Secrets and variables
+→ Actions → New repository secret**. Set the name to
+`ANDROID_PREVIEW_KEYSTORE_BASE64` and its value to the base64 representation of the
+keystore. With GitHub CLI installed and authenticated using `gh auth login`, you
+can send it without printing the key:
 
 ```sh
 base64 -w0 ~/.local/share/hopea-signing/debug.keystore | \
   gh secret set ANDROID_PREVIEW_KEYSTORE_BASE64 --repo PuffyWithEyes/Hopea
 ```
 
-Команда base64 выше предназначена для Linux. Ключ не коммитьте и не присылайте
-в чат. Для обновления ранее установленного APK нужен именно его прежний ключ.
-Этот pipeline выпускает debug-подписанный **preview**, а не готовый релиз для
-Google Play: для production ещё нужен release-вариант подписи и сборки.
+This `base64` command is for Linux. Do not commit the key or share it in chat.
+Updating an existing APK requires its original signing key. This pipeline produces
+a debug-signed **preview**, not a production Google Play release. Production still
+needs a release build and signing configuration.
 
-Матрица платформ, запуск отдельных сборок и необходимые настройки описаны
-в [packaging/README.md](../packaging/README.md). Home Manager и другие способы
-установки Nix — в [nix/README.md](../nix/README.md).
+See [packaging/README.md](../packaging/README.md) for the platform matrix, individual
+builds and required settings. Home Manager and other Nix installation methods are
+covered in [nix/README.md](../nix/README.md).
 
-## Локально
+## Local builds
 
 ```sh
-# Команды из корня проекта
+# Run from the project root
 nix build .#hopea
 bash build-aux/flatpak/build.sh
 # Windows: MSYS2 UCRT64
 bash build-aux/windows/build.sh
-# Затем в PowerShell 7: ./packaging/windows/build.ps1
-# Android: Docker и подготовленные ресурсы интерфейса
+# Then in PowerShell 7: ./packaging/windows/build.ps1
+# Android: requires Docker and prepared UI resources
 bash build-aux/android/build.sh
 ```
 
-Скрипты кладут файлы для передачи в `dist/`. Первые сборки скачивают зависимости
-и могут идти долго; кеши Cargo, Nix и Flatpak ускоряют последующие запуски.
-Публикация пакетов в AUR, Flathub и системных репозиториях пока не настроена.
+Scripts place distributable files in `dist/`. Initial builds download dependencies
+and can take a long time; Cargo, Nix and Flatpak caches speed up subsequent builds.
+Publication to AUR, Flathub and system repositories is not configured yet.
 
-Windows job создаёт переносимый ZIP и обычный Setup EXE. Установщик рассчитан на
-Windows 10/11 x64; [ограничения и локальная сборка](../packaging/windows/README.md).
+The Windows job produces a portable ZIP and a Setup EXE for Windows 10/11 x64.
+See [Windows limitations and local builds](../packaging/windows/README.md).

@@ -7,7 +7,7 @@ os=$(uname -s)
 case $os in FreeBSD|DragonFly) prefix=/usr/local;; NetBSD) prefix=/usr/pkg;; OpenBSD) prefix=/usr/local;; *) exit 2;; esac
 export HOPEA_PREFIX=$prefix
 if [[ -z ${HOPEA_BUILD_PYTHON:-} ]]; then
-  for candidate in python3 python3.13 python3.14; do
+  for candidate in python3 python3.14 python3.13 python3.12 python3.11; do
     if command -v "$candidate" >/dev/null; then HOPEA_BUILD_PYTHON=$candidate; break; fi
   done
 fi

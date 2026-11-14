@@ -7,6 +7,8 @@ pkgdesc='Music player with peer-to-peer sharing'
 arch=('x86_64' 'aarch64')
 url='https://github.com/@REPOSITORY@'
 license=('GPL-3.0-or-later')
+# GCC's LTO objects from bundled C libraries cannot be linked by Rust's LLD.
+options=('!lto')
 depends=('gtk4>=4.20' 'libadwaita>=1.8' 'libsoup3' 'openssl' 'gst-plugins-base'
          'gst-plugins-good' 'gst-plugins-bad' 'gst-plugins-ugly' 'gst-libav'
          'python' 'ffmpeg' 'adwaita-icon-theme')
