@@ -42,6 +42,39 @@ function Invoke-CheckedProcess([string]$File, [string[]]$Arguments) {
 function Assert-LibraryPreserved {
     if ((Get-FileHash -LiteralPath $sentinel).Hash -ne $expectedData) { throw 'User data changed.' }
 }
+# Shell links may expose an 8.3 path for names outside the ANSI code page.
+# Compare existing long Unicode paths, including extended-length path syntax.
+Add-Type @'
+using System;
+using System.ComponentModel;
+using System.Runtime.InteropServices;
+using System.Text;
+public static class InstallerPaths {
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern uint GetLongPathNameW(string path, StringBuilder buffer, uint size);
+    public static string LongPath(string path) {
+        var buffer = new StringBuilder(32768);
+        uint length = GetLongPathNameW(path, buffer, (uint)buffer.Capacity);
+        if (length == 0) throw new Win32Exception(Marshal.GetLastWin32Error());
+        if (length >= buffer.Capacity) throw new InvalidOperationException("Path exceeds buffer size.");
+        string result = buffer.ToString();
+        if (result.StartsWith(@"\\?\UNC\", StringComparison.OrdinalIgnoreCase))
+            return @"\\" + result.Substring(8);
+        if (result.StartsWith(@"\\?\", StringComparison.Ordinal)) return result.Substring(4);
+        return result;
+    }
+}
+'@
+function Assert-SameWindowsPath([string]$Actual, [string]$Expected, [string]$Description) {
+    if ([string]::IsNullOrWhiteSpace($Actual) -or -not (Test-Path -LiteralPath $Actual)) {
+        throw "${Description}: missing path '$Actual'; expected '$Expected'."
+    }
+    $actualPath = [InstallerPaths]::LongPath([IO.Path]::GetFullPath($Actual)).TrimEnd('\')
+    $expectedPath = [InstallerPaths]::LongPath([IO.Path]::GetFullPath($Expected)).TrimEnd('\')
+    if (-not [string]::Equals($actualPath, $expectedPath, [StringComparison]::OrdinalIgnoreCase)) {
+        throw "${Description}: got '$Actual' ('$actualPath'); expected '$Expected' ('$expectedPath')."
+    }
+}
 try {
     $quiet = @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-')
     Invoke-CheckedProcess $InstallerPath ($quiet + @("/DIR=`"$destination`"", "/LOG=`"$logs/install.log`""))
@@ -49,8 +82,17 @@ try {
     if (-not (Test-Path -LiteralPath $shortcut)) { throw 'Start menu shortcut is missing.' }
     $shell = New-Object -ComObject WScript.Shell
     $link = $shell.CreateShortcut($shortcut)
-    if ($link.TargetPath -ne "$destination\bin\hopea.exe") { throw 'Shortcut points outside installed bundle.' }
-    if ($link.IconLocation -notlike "$destination\hopea.ico*") { throw 'Shortcut has no Hopea icon.' }
+    @{
+        Destination = $destination
+        Target = $link.TargetPath
+        Icon = $link.IconLocation
+        WorkingDirectory = $link.WorkingDirectory
+    } | ConvertTo-Json | Set-Content -LiteralPath "$logs/shortcut.log" -Encoding utf8
+    Assert-SameWindowsPath $link.TargetPath "$destination\bin\hopea.exe" 'Shortcut target'
+    # IconLocation is a path followed by a comma and resource index.
+    $icon = $link.IconLocation -replace ',\s*-?\d+$', ''
+    Assert-SameWindowsPath $icon "$destination\hopea.ico" 'Shortcut icon'
+    Assert-SameWindowsPath $link.WorkingDirectory $destination 'Shortcut working directory'
     Assert-LibraryPreserved
 
     # No MSYS2, developer Python, or GTK DLLs may leak in from the runner's PATH.
@@ -74,7 +116,7 @@ try {
     'A file not owned by the installer' | Set-Content "$destination/keep-user-file.txt"
     Invoke-CheckedProcess $InstallerPath ($quiet + @("/LOG=`"$logs/reinstall.log`""))
     $location = (Get-ItemProperty $registry).InstallLocation.TrimEnd('\')
-    if ($location -ne $destination) { throw 'Reinstall changed the install directory.' }
+    Assert-SameWindowsPath $location $destination 'Reinstall directory'
     $uninstallers = @(Get-ChildItem "$destination/unins*.exe")
     if ($uninstallers.Count -ne 1) { throw 'Reinstall created duplicate uninstallers.' }
     Assert-LibraryPreserved

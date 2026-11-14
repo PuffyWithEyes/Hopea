@@ -416,6 +416,8 @@ jobs:
         with:
           release: '10.1'
           sync: nfs
+          # NFS timestamps come from the host; Meson rejects a lagging VM clock.
+          sync-time: 'true'
           mem: '12288'
           cpu: '4'
           envs: 'HOPEA_VERSION HOPEA_REPOSITORY CARGO_BUILD_JOBS'

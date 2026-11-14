@@ -1,6 +1,12 @@
 version = 1
 
 [[annotations]]
+path = "vendor/librqbit-dualstack-sockets/**"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2025 Igor Katson"
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
 path = "vendor/socket-pktinfo/**"
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2025 Pixsper"

@@ -21,6 +21,14 @@ Requires: python3, adwaita-icon-theme
 # Codec and FFmpeg package names differ; supplied by the platform recipe.
 @RPM_REQUIRES@
 
+%if "%{_vendor}" == "alt"
+# Bundled modules are private to the importer, not system Python providers.
+# ALT's generic python.prov otherwise treats this venv as a Python 2 tree.
+%add_findprov_skiplist /usr/lib/hopea-import/*
+# Keep ELF dependency detection for the bundled native extensions.
+%add_findreq_skiplist /usr/lib/hopea-import/lib/python*/site-packages/*.py* /usr/lib/hopea-import/lib/python*/site-packages/*.dist-info/*
+%endif
+
 %description
 GTK4 music player with collections, lyrics, service imports and P2P sharing.
 
