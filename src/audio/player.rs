@@ -22,20 +22,30 @@ use crate::{
 
 #[derive(Clone, Debug)]
 pub enum PlaybackAction {
+    // MPRIS/Android construct these messages. macOS and Windows UI/tray
+    // controls call AudioPlayer directly, so the shared variants stay unused.
+    #[cfg_attr(any(target_os = "macos", target_os = "windows"), allow(dead_code))]
     Play,
+    #[cfg_attr(any(target_os = "macos", target_os = "windows"), allow(dead_code))]
     Pause,
+    #[cfg_attr(any(target_os = "macos", target_os = "windows"), allow(dead_code))]
     Stop,
+    #[cfg_attr(any(target_os = "macos", target_os = "windows"), allow(dead_code))]
     SkipPrevious,
+    #[cfg_attr(any(target_os = "macos", target_os = "windows"), allow(dead_code))]
     SkipNext,
 
     /// Playback position in milliseconds, and whether this follows a seek.
     UpdatePosition(u64, bool),
     DurationChanged(u64),
     VolumeChanged(f64),
+    #[cfg_attr(any(target_os = "macos", target_os = "windows"), allow(dead_code))]
     Repeat(RepeatMode),
+    #[cfg_attr(any(target_os = "macos", target_os = "windows"), allow(dead_code))]
     Seek(i64),
     PlayNext,
 
+    #[cfg_attr(any(target_os = "macos", target_os = "windows"), allow(dead_code))]
     Raise,
 }
 
