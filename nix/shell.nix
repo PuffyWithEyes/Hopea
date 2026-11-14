@@ -4,9 +4,16 @@
 # Development shell with everything needed to build the client and the
 # peer-to-peer node: nix-shell nix/shell.nix --run 'meson setup _builddir . -Dprofile=development'
 {
-  pkgs ? import <nixpkgs> { },
+  pkgs ? import (builtins.fetchTree (builtins.fromJSON (builtins.readFile ../flake.lock)).nodes.nixpkgs.locked) { },
 }:
-
+let
+  # The pinned reuse recipe declares a man output which its Sphinx build does
+  # not produce. We need the CLI, not its documentation; keep upstream tests.
+  reuseCli = pkgs.reuse.overridePythonAttrs (_: {
+    outputs = [ "out" ];
+    build-system = [ pkgs.python3Packages.poetry-core ];
+  });
+in
 pkgs.mkShell {
   nativeBuildInputs = with pkgs; [
     appstream
@@ -20,7 +27,7 @@ pkgs.mkShell {
     ninja
     pkg-config
     python3
-    reuse
+    reuseCli
     rustc
     rustfmt
     typos

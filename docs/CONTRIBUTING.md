@@ -22,6 +22,9 @@ meson devenv -C _builddir ./src/hopea
 ```
 
 Также доступен `nix develop` для полного Git checkout или распакованного архива.
+Обе команды используют `nixpkgs` из `flake.lock`, как GitHub Actions; системный
+канал Nix не подменяет версии зависимостей. При изменении окружения проверяйте
+`nix develop --command bash tests/test_nix.sh` перед отправкой.
 Meson создаёт `src/config.rs` и ресурсы интерфейса; одного `cargo run` недостаточно.
 После изменения Blueprint выполните компиляцию повторно, чтобы обновился GResource.
 Системные зависимости и ограничения платформ перечислены в [README](../README.md).
