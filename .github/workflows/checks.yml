@@ -9,6 +9,14 @@ on:
 permissions:
   contents: read
 jobs:
+  windows-shortcuts:
+    runs-on: windows-2025
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: { persist-credentials: false }
+      - shell: pwsh
+        run: ./tests/test_windows_shortcuts.ps1
   debian-clean:
     runs-on: ubuntu-24.04
     steps:

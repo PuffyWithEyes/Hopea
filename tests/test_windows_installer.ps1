@@ -6,6 +6,7 @@ param([string]$InstallerPath)
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 if (-not $IsWindows -or $env:CI -ne 'true') { throw 'Run only in a disposable Windows CI account.' }
+Add-Type -Path "$PSScriptRoot/windows-shell-link.cs"
 $root = (Resolve-Path "$PSScriptRoot/..").Path
 if (-not $InstallerPath) {
     $installers = @(Get-ChildItem "$root/dist/*-windows-x86_64-setup.exe")
@@ -80,18 +81,17 @@ try {
     Invoke-CheckedProcess $InstallerPath ($quiet + @("/DIR=`"$destination`"", "/LOG=`"$logs/install.log`""))
     if (-not (Test-Path $registry)) { throw 'Uninstall registration is missing.' }
     if (-not (Test-Path -LiteralPath $shortcut)) { throw 'Start menu shortcut is missing.' }
-    $shell = New-Object -ComObject WScript.Shell
-    $link = $shell.CreateShortcut($shortcut)
+    Copy-Item -LiteralPath $shortcut -Destination "$logs/Hopea.lnk"
+    $link = [WindowsShellLink]::Read($shortcut)
     @{
         Destination = $destination
         Target = $link.TargetPath
-        Icon = $link.IconLocation
+        Icon = $link.IconPath
+        IconIndex = $link.IconIndex
         WorkingDirectory = $link.WorkingDirectory
     } | ConvertTo-Json | Set-Content -LiteralPath "$logs/shortcut.log" -Encoding utf8
     Assert-SameWindowsPath $link.TargetPath "$destination\bin\hopea.exe" 'Shortcut target'
-    # IconLocation is a path followed by a comma and resource index.
-    $icon = $link.IconLocation -replace ',\s*-?\d+$', ''
-    Assert-SameWindowsPath $icon "$destination\hopea.ico" 'Shortcut icon'
+    Assert-SameWindowsPath $link.IconPath "$destination\hopea.ico" 'Shortcut icon'
     Assert-SameWindowsPath $link.WorkingDirectory $destination 'Shortcut working directory'
     Assert-LibraryPreserved
 
