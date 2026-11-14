@@ -14,6 +14,63 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class BsdCiTest(unittest.TestCase):
+    def test_freebsd_uses_new_mount_and_cleans_up_after_failure(self):
+        for status in (0, 23):
+            with self.subTest(status=status), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                shared = root / "shared"
+                workspace = shared / "repo"
+                scripts = workspace / "packaging/bsd"
+                scripts.mkdir(parents=True)
+                (scripts / "ci.sh").write_text('pwd > "$TEST_ENTERED"; exit "$TEST_STATUS"\n')
+                wrapper = root / "freebsd-ci.sh"
+                wrapper.write_text((ROOT / "packaging/bsd/freebsd-ci.sh").read_text().replace(
+                    'shared_root=/home/runner/work', f'shared_root="{shared}"'))
+                binary = root / "bin"
+                binary.mkdir()
+                log = root / "calls.jsonl"
+                entered = root / "entered"
+                stub = binary / "stub"
+                stub.write_text(f"#!{sys.executable}\n" + '''
+import json, os, pathlib, sys
+name = pathlib.Path(sys.argv[0]).name
+with open(os.environ["TEST_LOG"], "a") as log:
+    log.write(json.dumps([name, *sys.argv[1:]]) + "\\n")
+if name == "uname":
+    print("FreeBSD")
+elif name == "mount":
+    print("host:/share", os.environ["TEST_SHARE"], "nfs rw 0 0")
+elif name == "mount_nfs":
+    (pathlib.Path(sys.argv[-1]) / "repo").symlink_to(os.environ["TEST_WORKSPACE"])
+elif name == "umount":
+    (pathlib.Path(sys.argv[-1]) / "repo").unlink()
+''')
+                stub.chmod(0o755)
+                for command in ("uname", "mount", "mount_nfs", "umount"):
+                    (binary / command).symlink_to("stub")
+                result = subprocess.run(["sh", str(wrapper)], cwd=workspace, capture_output=True, text=True,
+                                        env=dict(os.environ, PATH=f"{binary}:{os.environ['PATH']}",
+                                                 HOPEA_CI_CONTAINER="1", TEST_STATUS=str(status),
+                                                 TEST_LOG=str(log), TEST_SHARE=str(shared),
+                                                 TEST_WORKSPACE=str(workspace), TEST_ENTERED=str(entered)))
+                self.assertEqual(result.returncode, status, result.stdout + result.stderr)
+                calls = [json.loads(line) for line in log.read_text().splitlines()]
+                mount = next(call for call in calls if call[0] == "mount_nfs")
+                self.assertEqual(mount[:4], ["mount_nfs", "-o", "tcp,nolockd", "host:/share"])
+                self.assertIn(["umount", mount[-1]], calls)
+                self.assertFalse(Path(mount[-1]).exists())
+                self.assertTrue(entered.is_file())
+
+    def test_file_lock_preflight(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            temporary = root / "temporary"
+            temporary.mkdir()
+            subprocess.run([sys.executable, str(ROOT / "packaging/bsd/check-locks.py")],
+                           cwd=root, env=dict(os.environ, TMPDIR=str(temporary)), check=True)
+            self.assertEqual(list(temporary.iterdir()), [])
+            self.assertEqual(list(root.iterdir()), [temporary])
+
     def test_package_bootstrap_and_python_sqlite_pair(self):
         for system in ("FreeBSD", "DragonFly", "NetBSD"):
             with self.subTest(system=system), tempfile.TemporaryDirectory() as directory:

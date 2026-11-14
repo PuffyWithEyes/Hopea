@@ -53,6 +53,11 @@ sources, compiler output and caches on the runner's disk rather than the guest's
 small root partition. The final install image stays on the guest filesystem to
 preserve root ownership in packages. See the
 [VM action's sharing options](https://github.com/vmactions/openbsd-vm#2-share-code).
+FreeBSD uses a separate mount of the same share with `nolockd`, so Cargo's locks
+are handled locally inside its single build VM. The original action mount stays
+intact; the host consumes artifacts after the guest finishes. FreeBSD requires
+this option on a new mount, not a mount update; see
+[mount_nfs(8)](https://man.freebsd.org/cgi/man.cgi?query=mount_nfs&sektion=8).
 Python build dependencies use a temporary sibling of the checkout on the NFS
 mount, outside both Hopea workspaces. This prevents projects such as
 `maturin` from inheriting Hopea's workspace or offline vendor configuration.

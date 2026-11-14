@@ -400,7 +400,7 @@ jobs:
           cpu: '4'
           envs: 'HOPEA_VERSION HOPEA_REPOSITORY CARGO_BUILD_JOBS'
           run: |
-            sh packaging/bsd/ci.sh
+            HOPEA_CI_CONTAINER=1 sh packaging/bsd/freebsd-ci.sh
       - if: matrix.os == 'OpenBSD'
         uses: vmactions/openbsd-vm@f1ca8bc8ecc5b6ef7218e5b914836e067e1546d3 # v1
         with:

@@ -16,6 +16,7 @@ if [[ -z ${HOPEA_BUILD_PYTHON:-} ]]; then
 fi
 export HOPEA_BUILD_PYTHON=${HOPEA_BUILD_PYTHON:?Python 3 is required}
 "$HOPEA_BUILD_PYTHON" -I -c 'import pip, ssl, sqlite3, venv'
+"$HOPEA_BUILD_PYTHON" packaging/bsd/check-locks.py
 version=${HOPEA_VERSION:?Set release version}
 [[ $version =~ ^[0-9]+(\.[0-9]+)+$ ]] || exit 2
 # Keep the install image on the guest filesystem: NFS maps root to the runner
