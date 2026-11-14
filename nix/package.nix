@@ -168,6 +168,7 @@ stdenv.mkDerivation {
     meson
     ninja
     pkg-config
+    python3
     rustc
     rustPlatform.cargoSetupHook
     wrapGAppsHook4

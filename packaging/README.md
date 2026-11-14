@@ -47,6 +47,21 @@ the runner to its local BSD guest and executes build commands. Docker supplies
 Linux jobs with the selected distribution's libraries and packaging tools.
 Installed Hopea packages run natively and do not require Docker, SSH or a VM.
 
+BSD CI reuses the checksummed source artifact, including its vendored Cargo
+dependencies. The host extracts it before the VM starts; an NFS workspace keeps
+sources, compiler output and caches on the runner's disk rather than the guest's
+small root partition. The final install image stays on the guest filesystem to
+preserve root ownership in packages. See the
+[VM action's sharing options](https://github.com/vmactions/openbsd-vm#2-share-code).
+FreeBSD and DragonFly install the SQLite module matching the chosen Python/pip
+version and record it as a runtime dependency. Disposable CI guests upgrade
+existing packages before adding dependencies to avoid mixing library versions.
+NetBSD first installs `pkgin` through the base system's `pkg_add`, using the
+release-matched mirrors configured by the VM; see the
+[pkgsrc installation guide](https://www.netbsd.org/docs/pkgsrc/using.html).
+If a repository still lacks the required GTK/libadwaita versions, the build
+reports the installed and required versions and stops.
+
 ## GitHub Actions
 
 1. Push the current sources to GitHub, excluding caches, profiles, cookies and

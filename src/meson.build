@@ -37,7 +37,7 @@ run_command(
   check: true,
 )
 
-build_python = import('python').find_installation('python3')
+build_python = import('python').find_installation()
 cargo_builder = files('../build-aux/cargo-build.py')
 cargo_cache = get_option('cargo-cache-dir')
 cargo_target_dir = meson.project_build_root() / 'src'

@@ -40,3 +40,17 @@ in assert lib.all (case: lib.all (enable: lib.all (custom:
 ) [ false true ]) [ false true ]) cases;
 { moduleCases = 20; passed = true; }
 '
+# Configure the actual package in a Nix sandbox. The development shell has
+# extra tools and must not hide missing nativeBuildInputs in the package.
+# $out is expanded by the derivation's install phase, not by this test runner.
+# shellcheck disable=SC2016
+nix --extra-experimental-features 'nix-command flakes' build --impure --no-link --expr '
+let
+  flake = builtins.getFlake ("git+file://" + toString ./.);
+  package = flake.packages.${builtins.currentSystem}.hopea;
+in package.overrideAttrs (_: {
+  name = "hopea-configure-check";
+  phases = [ "unpackPhase" "patchPhase" "configurePhase" "installPhase" ];
+  installPhase = "mkdir -p $out; cp meson-logs/meson-log.txt $out/";
+})
+'

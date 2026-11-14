@@ -5,6 +5,34 @@ set -euo pipefail
 root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
+# Apply the real Android port to current sources before testing its Cargo shim.
+# This catches desktop build changes that leave the staging patch out of date.
+mkdir -p "$work/source"
+while IFS= read -r source; do
+  mkdir -p "$work/source/$(dirname "$source")"
+  cp "$root/$source" "$work/source/$source"
+done < <(sed -n 's|^--- a/||p' "$root/build-aux/android/port.patch")
+case ${1:-} in
+  --staged)
+    # The container receives an already-patched tree. Validate that state in
+    # the temporary copy before testing forward application again.
+    patch --reverse --batch --fuzz=0 -d "$work/source" -p1 < "$root/build-aux/android/port.patch"
+    ;;
+  '') ;;
+  *) echo 'Usage: test_android_build.sh [--staged]' >&2; exit 2 ;;
+esac
+patch --batch --fuzz=0 -d "$work/source" -p1 < "$root/build-aux/android/port.patch"
+grep -Fq "rust_archive = custom_target('hopea-rust'" "$work/source/src/meson.build"
+if grep -Fq 'cargo-build.py' "$work/source/src/meson.build"; then
+  echo 'Desktop Cargo helper leaked into Android build' >&2; exit 1
+fi
+if [[ ${1:-} != --staged ]]; then
+  # Also exercise the entry point used inside the Android container.
+  mkdir -p "$work/source/tests" "$work/source/build-aux/android"
+  cp "$root/tests/test_android_build.sh" "$work/source/tests/"
+  cp "$root/build-aux/android/port.patch" "$root/build-aux/android/cargo.sh" "$work/source/build-aux/android/"
+  bash "$work/source/tests/test_android_build.sh" --staged
+fi
 mkdir -p "$work/bin"
 # Check that Cargo, C dependencies and the copied archive all use the same
 # architecture. A stub avoids rebuilding GTK or accessing the user's Cargo home.

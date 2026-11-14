@@ -19,6 +19,7 @@ jobs:
       - run: sudo apt-get install -y --no-install-recommends python3-venv python3-pip libglib2.0-bin
       - run: bash tests/test_native_install.sh
       - run: python3 tests/test_cargo_build.py
+      - run: python3 tests/test_bsd_ci.py
   linux:
     runs-on: ubuntu-24.04
     timeout-minutes: 120

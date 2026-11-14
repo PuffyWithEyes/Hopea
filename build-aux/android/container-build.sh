@@ -8,7 +8,7 @@ case "$arch" in aarch64|x86_64) ;; *) echo 'Unsupported Android architecture' >&
 build_dir=.pixiewood/bin-$arch
 export CARGO_BUILD_JOBS="${HOPEA_BUILD_JOBS:-4}"
 bash tests/test_android_gaming.sh
-bash tests/test_android_build.sh
+bash tests/test_android_build.sh --staged
 /opt/pixiewood/pixiewood prepare -s /opt/android -a /opt/mini-studio hopea-android.xml
 cp src/gtk/*.ui "$build_dir/src/gtk/"
 if ! grep -q 'Hopea: prefer' subprojects/gtk/gdk/android/glue/java/org/gtk/android/ToplevelActivity.java; then

@@ -58,7 +58,7 @@ class CargoBuildTest(unittest.TestCase):
             ], capture_output=True)
             self.assertNotEqual(result.returncode, 0)
             self.assertEqual(output.read_text(), "working binary")
-            self.assertEqual(list(root.iterdir()), [output])
+            self.assertEqual([p.name for p in root.iterdir()], [output.name])
 
 
 if __name__ == "__main__":
