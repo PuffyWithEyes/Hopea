@@ -48,7 +48,7 @@ case "$(uname -s)" in
     run_pkgin upgrade
     run_pkgin install bash rust meson ninja-build pkgconf gtk4 \
       libadwaita libsoup3 gstreamer1 gst-plugins1-base gst-plugins1-bad \
-      ffmpeg7 python313 py313-pip py313-gobject3 gettext-tools coreutils jq
+      ffmpeg7 python313 py313-pip py313-gobject3 gettext-tools desktop-file-utils coreutils jq
     # Blueprint is absent from some binary pkgsrc repositories. Its universal
     # wheel uses PyGObject from pkgsrc; keep it out of the system Python tree.
     python3.13 -m venv --without-pip --system-site-packages /usr/local/lib/hopea-blueprint

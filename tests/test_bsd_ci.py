@@ -8,6 +8,7 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -145,10 +146,20 @@ elif name == "python3.13" and "venv" in sys.argv:
                     self.assertLess(calls.index(["pkg", "upgrade", "-y"]), calls.index(install))
 
     def test_ci_uses_vendored_tree_and_preserves_failure_status(self):
-        for status in (0, 23):
-            with self.subTest(status=status), tempfile.TemporaryDirectory() as directory:
+        for system, status in (("FreeBSD", 0), ("FreeBSD", 23), ("NetBSD", 0), ("NetBSD", 23)):
+            with self.subTest(system=system, status=status), tempfile.TemporaryDirectory() as directory:
                 root = Path(directory) / "checkout"
                 root.mkdir()
+                guest = Path(directory) / "guest"
+                guest.mkdir()
+                binary = Path(directory) / "bin"
+                binary.mkdir()
+                uname = binary / "uname"
+                uname.write_text('#!/bin/sh\nprintf "%s\\n" "$TEST_OS"\n')
+                uname.chmod(0o755)
+                ci = Path(directory) / "ci.sh"
+                ci.write_text((ROOT / "packaging/bsd/ci.sh").read_text().replace(
+                    "/var/tmp/hopea-bsd-tools.", str(guest / "hopea-bsd-tools.")))
                 scripts = root / "packaging/bsd"
                 scripts.mkdir(parents=True)
                 (scripts / "deps.sh").write_text("echo fixture-dependencies\n")
@@ -157,11 +168,18 @@ elif name == "python3.13" and "venv" in sys.argv:
                 (source / ".cargo").mkdir()
                 (root / "Cargo.toml").write_text('[workspace]\nmembers = []\n')
                 (source / "Cargo.toml").write_text('[workspace]\nmembers = []\n')
+                marker = source / "host-clock.txt"
+                marker.write_text("host timestamp\n")
+                future = time.time() + 120
+                os.utime(marker, (future, future))
                 # Foreign Rust builds must not inherit the vendored source's
                 # compiler/configuration, even if their own dependencies differ.
                 (source / ".cargo/config.toml").write_text('[build]\nrustc = "missing-hopea-only-compiler"\n')
                 probe = root / "probe.py"
-                probe.write_text('''import json, os, pathlib, subprocess, tempfile
+                probe.write_text('''import json, os, pathlib, subprocess, tempfile, time
+if os.environ["TEST_OS"] == "NetBSD":
+    assert pathlib.Path.cwd().is_relative_to(os.environ["TEST_GUEST"])
+    assert pathlib.Path("host-clock.txt").stat().st_mtime <= time.time()
 with tempfile.TemporaryDirectory() as directory:
     crate = pathlib.Path(directory) / "maturin-fixture"
     (crate / "src").mkdir(parents=True)
@@ -182,14 +200,18 @@ echo fixture-build
 touch "$HOPEA_DIST_DIR/fixture.pkg"
 exit "${TEST_STATUS}"
 ''')
-                result = subprocess.run(["sh", str(ROOT / "packaging/bsd/ci.sh")], cwd=root,
+                result = subprocess.run(["sh", str(ci)], cwd=root,
                                         env=dict(os.environ, HOPEA_VERSION="1.2", TEST_STATUS=str(status),
+                                                 PATH=f"{binary}:{os.environ['PATH']}",
+                                                 TEST_OS=system, TEST_GUEST=str(guest),
                                                  TEST_PYTHON=sys.executable, TEST_PROBE=str(probe)),
                                         capture_output=True, text=True)
                 self.assertEqual(result.returncode, status, result.stdout + result.stderr)
                 self.assertTrue((root / "dist/fixture.pkg").is_file())
                 self.assertIn("fixture-build", (root / "dist/bsd-build.log").read_text())
                 self.assertEqual(list(Path(directory).glob("hopea-bsd-tools.*")), [])
+                self.assertEqual(list(guest.iterdir()), [])
+                self.assertAlmostEqual(marker.stat().st_mtime, future, places=3)
 
 
 if __name__ == "__main__":

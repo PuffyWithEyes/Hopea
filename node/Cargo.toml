@@ -65,6 +65,7 @@ http-body-util = "0.1.5"
 debug = false
 
 [patch.crates-io]
+librqbit = { path = "../vendor/librqbit" }
 librqbit-dualstack-sockets = { path = "../vendor/librqbit-dualstack-sockets" }
 lofty = { path = "../vendor/lofty" }
 
