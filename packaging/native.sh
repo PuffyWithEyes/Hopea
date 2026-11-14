@@ -49,8 +49,9 @@ case ${1:-} in
     "$python" -m pip --python "$env_dir/bin/python3" install --no-compile \
       --no-index --find-links=.packaging/wheels -r build-aux/import-requirements.txt
     "$env_dir/bin/python3" -I -c 'import vk_api, bs4, yandex_music, ytmusicapi, yt_dlp, Cryptodome, spotipy, ssl, sqlite3'
-    # Only the interpreter is used; console-script shebangs would reference DESTDIR.
-    find "$env_dir/bin" -type f ! -name 'python*' -delete
+    # Keep only the interpreter names used by the importer. Remove console
+    # scripts and unused aliases, including Python 3.14's non-ASCII symlink.
+    find "$env_dir/bin" \( -type f -o -type l \) ! -name 'python*' -delete
     find "$env_dir" -type d -name __pycache__ -prune -exec rm -rf {} +
     # venv records its creation command, including the temporary DESTDIR.
     # This provenance is not needed at runtime and fails RPM's check-buildroot.

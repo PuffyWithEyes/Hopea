@@ -17,7 +17,7 @@ on:
         type: boolean
         default: false
       lfs:
-        description: Build on your configured native LFS runner (label hopea-lfs)
+        description: Requires your own online LFS/BLFS runner (hopea-lfs); otherwise leave disabled
         type: boolean
         default: false
       bsd:
@@ -248,7 +248,9 @@ jobs:
           update: true
       - shell: msys2 {0}
         run: |
-          bash build-aux/windows/build.sh
+          set -o pipefail
+          mkdir -p _windows
+          bash build-aux/windows/build.sh 2>&1 | tee _windows/build.log
           _windows/Hopea/bin/hopea.exe --help
           mv dist/hopea-windows.zip "dist/hopea-$HOPEA_VERSION-windows-x86_64.zip"
       - name: Build the offline Windows installer
@@ -263,6 +265,8 @@ jobs:
         with:
           name: windows-installer-diagnostics
           path: |
+            _windows/build.log
+            _windows/build/meson-logs/meson-log.txt
             _windows/setup/compiler-install.log
             _windows/setup/test-logs/*.log
           if-no-files-found: ignore
@@ -382,7 +386,7 @@ jobs:
       - if: matrix.os == 'FreeBSD'
         uses: vmactions/freebsd-vm@811efaaac0668df8bfb8308c3ec997b5ab50037b # v1
         with:
-          release: '15.0'
+          release: '15.1'
           mem: '12288'
           cpu: '4'
           envs: 'HOPEA_VERSION HOPEA_REPOSITORY CARGO_BUILD_JOBS'

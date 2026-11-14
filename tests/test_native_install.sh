@@ -32,6 +32,9 @@ cat > "$work/tools/meson" <<'SH'
 set -eu
 test "$1" = install
 mkdir -p "$DESTDIR/usr/bin"
+# Reproduce the Python 3.14 interpreter alias even on older CI interpreters.
+mkdir -p "$DESTDIR/usr/lib/hopea-import/bin"
+ln -s python3 "$DESTDIR/usr/lib/hopea-import/bin/𝜋thon"
 cat > "$DESTDIR/usr/bin/hopea" <<'APP'
 #!/bin/sh
 exec "$HOPEA_IMPORT_PYTHON" -I -B -c 'import vk_api, bs4, yandex_music, ytmusicapi, yt_dlp, Cryptodome, spotipy, ssl, sqlite3; assert vk_api.fixture'
@@ -50,6 +53,7 @@ import sys
 
 stage = Path(sys.argv[1])
 venv = stage / 'usr/lib/hopea-import'
+assert all(path.name.startswith('python') for path in (venv / 'bin').iterdir())
 for path in venv.rglob('*'):
     if path.is_file() and not path.is_symlink():
         assert str(stage).encode() not in path.read_bytes(), f'Build root leaked into {path}'
@@ -64,4 +68,9 @@ fi
 # The old path must disappear; imports must work through the installed launcher.
 mv "$stage" "$work/installed"
 "$work/installed/usr/bin/hopea"
+if command -v xbps-create >/dev/null; then
+  # Exercise Void's archive writer under the locale that rejected the alias.
+  (cd "$work" && LC_ALL=C xbps-create -A "$(xbps-uhelper arch)" \
+    -n hopea-install-fixture-1.0_1 -s 'Native install regression fixture' "$work/installed")
+fi
 echo 'Native install: no staging paths and relocated importer works: OK'

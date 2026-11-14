@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 EAPI=8
 PYTHON_COMPAT=( python3_{13,14} )
-inherit meson python-single-r1 xdg
+inherit meson python-single-r1 rust xdg
 DESCRIPTION="Music player with peer-to-peer sharing"
 HOMEPAGE="https://github.com/@REPOSITORY@"
 SRC_URI="https://github.com/@REPOSITORY@/releases/download/v${PV}/hopea-${PV}-source.tar.gz"
@@ -28,8 +28,12 @@ RDEPEND="${PYTHON_DEPS}
    dev-python/spotipy[${PYTHON_USEDEP}]
  ') )"
 DEPEND="${RDEPEND}"
-BDEPEND="dev-lang/rust dev-util/blueprint-compiler sys-devel/gettext virtual/pkgconfig"
+BDEPEND="dev-util/blueprint-compiler sys-devel/gettext virtual/pkgconfig"
 S="${WORKDIR}/hopea-${PV}"
+pkg_setup() {
+ python-single-r1_pkg_setup
+ rust_pkg_setup
+}
 src_configure() {
  export CARGO_NET_OFFLINE=true
  local emesonargs=( -Dprofile=default )

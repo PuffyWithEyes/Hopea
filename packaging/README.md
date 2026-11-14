@@ -28,7 +28,7 @@ Python's SQLite module. These checks do not constitute full application builds.
 | NixOS, Nix, Home Manager | [Nix recipe and modules](../nix/README.md) | x86_64/aarch64 Linux; CI also exports a binary cache |
 | CentOS Stream / RHEL / Rocky / Alma | Flatpak | Native RPMs need GTK 4.20+ and libadwaita 1.8+; older system libraries are not replaced automatically |
 | Linux Mint and other stable Linux distributions | Flatpak | Requires Flatpak and access to the GNOME runtime on Flathub |
-| FreeBSD / DragonFly | `bsd/build.sh` → `.pkg` and installation archive | Experimental BSD CI builds; depend on the availability of recent libraries |
+| FreeBSD / DragonFly | `bsd/build.sh` → `.pkg` and installation archive | Experimental BSD CI builds (FreeBSD 15.1); depend on the availability of recent libraries |
 | NetBSD / OpenBSD | `bsd/build.sh` → `.tgz` using native `pkg_create` | Dependencies and ABI match the build system; not yet validated on these OSes or submitted to ports/pkgsrc |
 | GhostBSD / HardenedBSD and other derivatives | The corresponding base BSD recipe | ABI compatibility and package availability must be checked for each release |
 | Windows 10/11 x64 | MSYS2 UCRT64 → Setup EXE, ZIP and Scoop JSON | Per-user installation; includes GTK, GStreamer, FFmpeg and private Python. See [compatibility and build instructions](windows/README.md) |

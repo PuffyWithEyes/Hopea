@@ -47,7 +47,15 @@ case $platform in
     esac
     sed "s|@RPM_REQUIRES@|$runtime|" "$work/recipes/rpm/hopea.spec" > "$top/SPECS/hopea.spec"
     # The container bootstrap checks pkg-config; distro package names differ.
-    rpmbuild -bb --nodeps --define "_topdir $top" "$top/SPECS/hopea.spec"
+    if [[ $platform == alt ]]; then
+      # ALT deliberately forbids rpmbuild as root. Own only the temporary tree.
+      useradd -m hopeabuild
+      chown -R hopeabuild "$work"
+      chmod 755 "$work"
+      runuser -u hopeabuild -- rpmbuild -bb --nodeps --define "_topdir $top" "$top/SPECS/hopea.spec"
+    else
+      rpmbuild -bb --nodeps --define "_topdir $top" "$top/SPECS/hopea.spec"
+    fi
     mkdir -p "$root/dist"
     while IFS= read -r -d '' file; do
       cp "$file" "$root/dist/$(basename "${file%.rpm}")-$platform.rpm"

@@ -37,6 +37,8 @@ run_command(
   check: true,
 )
 
+build_python = import('python').find_installation('python3')
+cargo_builder = files('../build-aux/cargo-build.py')
 cargo_cache = get_option('cargo-cache-dir')
 cargo_target_dir = meson.project_build_root() / 'src'
 if cargo_cache != ''
@@ -56,12 +58,11 @@ endif
 
 # Development builds use the crates already downloaded for other Rust builds;
 # release builds (such as Flatpak's) keep their own copy in the build directory
+cargo_env = environment()
 if cargo_cache != ''
-  cargo_env = [ 'CARGO_HOME=' + cargo_cache / 'home' ]
+  cargo_env.set('CARGO_HOME', cargo_cache / 'home')
 elif get_option('profile') == 'default'
-  cargo_env = [ 'CARGO_HOME=' + meson.project_build_root() / 'cargo-home' ]
-else
-  cargo_env = []
+  cargo_env.set('CARGO_HOME', meson.project_build_root() / 'cargo-home')
 endif
 
 player_binary = meson.project_name()
@@ -76,14 +77,12 @@ cargo_release = custom_target(
   console: true,
   install: true,
   install_dir: get_option('bindir'),
+  env: cargo_env,
   command: [
-    'env',
-    cargo_env,
+    build_python, cargo_builder,
+    cargo_target_dir / rust_target / player_binary, '@OUTPUT@',
     cargo, 'build',
     cargo_options,
-    '&&',
-    'cp', cargo_target_dir / rust_target / player_binary, '@OUTPUT@.new',
-    '&&', 'mv', '-f', '@OUTPUT@.new', '@OUTPUT@',
   ],
 )
 
@@ -101,9 +100,10 @@ custom_target(
   console: true,
   install: true,
   install_dir: get_option('bindir'),
+  env: cargo_env,
   command: [
-    'env', cargo_env, cargo, 'build', cargo_options, '--package', 'hopea-spotify',
-    '&&', 'cp', cargo_target_dir / rust_target / spotify_binary, '@OUTPUT@.new',
-    '&&', 'mv', '-f', '@OUTPUT@.new', '@OUTPUT@',
+    build_python, cargo_builder,
+    cargo_target_dir / rust_target / spotify_binary, '@OUTPUT@',
+    cargo, 'build', cargo_options, '--package', 'hopea-spotify',
   ],
 )

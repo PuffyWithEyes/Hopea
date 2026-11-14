@@ -26,7 +26,15 @@ mkdir -p /var/cache/distfiles
 cp "$archive" /var/cache/distfiles/
 while IFS= read -r -d '' recipe; do ebuild "$recipe" manifest; done < <(find "$overlay" -name '*.ebuild' -print0)
 mkdir -p /etc/portage/package.use
-printf 'net-misc/curl http2 ssl\n' > /etc/portage/package.use/hopea-build
+cat > /etc/portage/package.use/hopea-build <<'USE'
+net-misc/curl http2 ssl
+media-libs/libglvnd X
+media-libs/freetype harfbuzz
+x11-libs/cairo X
+USE
+# Bootstrap with Gentoo's binary compiler; a fresh stage3 has no Rust compiler
+# with which to build Rust itself. The ebuild accepts both compiler variants.
+emerge --oneshot --usepkg=y dev-lang/rust-bin
 # Reconcile the stage3's installed packages with the freshly synced tree/USE.
 emerge --update --deep --newuse --with-bdeps=y --usepkg=y --buildpkg=y media-sound/hopea
 mkdir -p dist

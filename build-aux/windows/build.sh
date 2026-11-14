@@ -41,6 +41,8 @@ pacman -S --needed --noconfirm \
     mingw-w64-ucrt-x86_64-gst-libav \
     mingw-w64-ucrt-x86_64-{python-pip,ffmpeg}
 
+python3 tests/test_cargo_build.py
+
 # Retain the Cargo and Meson caches for incremental builds.
 rm -rf "$prefix"
 meson setup "$root/_windows/build" "$root" \

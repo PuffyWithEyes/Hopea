@@ -42,7 +42,7 @@ case ${1:-} in
     apt-get install -y ca-certificates git gcc gcc-c++ rust meson ninja-build pkg-config \
       blueprint-compiler gettext-tools desktop-file-utils libgtk4-devel libadwaita-devel \
       libsoup3.0-devel libssl-devel gstreamer1.0-devel gst-plugins1.0-devel \
-      gst-plugins-bad1.0-devel python3-base python3-module-pip python3-modules-sqlite3 rpm-build file
+      gst-plugins-bad1.0-devel python3-base python3-module-pip python3-modules-sqlite3 rpm-build file shadow-utils util-linux
     ;;
   *) echo 'Supported containers: debian ubuntu arch fedora opensuse alt' >&2; exit 2;;
 esac
