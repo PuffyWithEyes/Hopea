@@ -16,6 +16,7 @@
 //! interfaces without a link layer. Tor can't be recognized this way, and
 //! BitTorrent can't go through it anyway: Tor carries no UDP.
 
+#[cfg(not(target_os = "windows"))]
 use std::net::{SocketAddr, UdpSocket};
 
 #[cfg(target_os = "windows")]
@@ -146,6 +147,7 @@ fn classify_routes(routes: &[Route]) -> Protection {
 
 /// The interface the internet is reached through for `target`'s address
 /// family: `None` without a route, `Some(None)` if the interface is unknown.
+#[cfg(not(target_os = "windows"))]
 fn route_interface(target: &str) -> Option<Option<String>> {
     let target: SocketAddr = target.parse().ok()?;
     let any: SocketAddr = if target.is_ipv4() {
@@ -183,6 +185,7 @@ fn interface_with(ip: std::net::IpAddr) -> Option<String> {
 }
 
 #[cfg(not(any(
+    target_os = "windows",
     target_os = "linux",
     target_os = "freebsd",
     target_os = "openbsd",
@@ -247,6 +250,7 @@ fn kernel_tunnel_name(name: &str) -> bool {
 }
 
 #[cfg(not(any(
+    target_os = "windows",
     target_os = "linux",
     target_os = "freebsd",
     target_os = "openbsd",
@@ -514,9 +518,12 @@ mod tests {
 
     #[test]
     fn interfaces_with_odd_names_are_not_tunnels() {
-        assert!(!is_tunnel("../lo"));
-        assert!(!is_tunnel(".hidden"));
-        assert!(!is_tunnel("lo"));
+        #[cfg(not(target_os = "windows"))]
+        {
+            assert!(!is_tunnel("../lo"));
+            assert!(!is_tunnel(".hidden"));
+            assert!(!is_tunnel("lo"));
+        }
         for name in ["utun0", "tun12", "tap3", "wg0"] {
             assert!(kernel_tunnel_name(name));
         }
