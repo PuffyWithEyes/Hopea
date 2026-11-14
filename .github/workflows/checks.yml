@@ -16,6 +16,8 @@ jobs:
         with: { persist-credentials: false }
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends debhelper
       - run: bash tests/test_debian_clean.sh
+      - run: sudo apt-get install -y --no-install-recommends python3-venv python3-pip libglib2.0-bin
+      - run: bash tests/test_native_install.sh
   linux:
     runs-on: ubuntu-24.04
     timeout-minutes: 120
@@ -30,7 +32,7 @@ jobs:
           bash tests/test_android_build.sh
           python3 tests/test_android_manifest.py
       - run: nix shell --inputs-from . nixpkgs#actionlint nixpkgs#shellcheck --command actionlint
-      - run: nix shell --inputs-from . nixpkgs#shellcheck --command shellcheck packaging/*.sh packaging/*/*.sh tests/test_packaging.sh
+      - run: nix shell --inputs-from . nixpkgs#shellcheck --command shellcheck packaging/*.sh packaging/*/*.sh tests/test_packaging.sh tests/test_native_install.sh
       - name: Build and test the player
         run: |
           nix develop --command bash -euc '

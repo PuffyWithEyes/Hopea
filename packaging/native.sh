@@ -52,6 +52,20 @@ case ${1:-} in
     # Only the interpreter is used; console-script shebangs would reference DESTDIR.
     find "$env_dir/bin" -type f ! -name 'python*' -delete
     find "$env_dir" -type d -name __pycache__ -prune -exec rm -rf {} +
+    # venv records its creation command, including the temporary DESTDIR.
+    # This provenance is not needed at runtime and fails RPM's check-buildroot.
+    # Retain home/executable and isolation settings for the system interpreter.
+    "$python" - "$env_dir/pyvenv.cfg" <<'PY'
+from pathlib import Path
+import sys
+
+config = Path(sys.argv[1])
+lines = config.read_text(encoding="utf-8").splitlines(keepends=True)
+config.write_text(
+    "".join(line for line in lines if line.partition("=")[0].strip() != "command"),
+    encoding="utf-8",
+)
+PY
     # Private schema cache avoids overwriting the distro-wide gschemas.compiled.
     install -d "$DESTDIR$prefix/share/hopea/schemas" "$DESTDIR$prefix/libexec"
     cp data/io.hopea.Hopea.gschema.xml "$DESTDIR$prefix/share/hopea/schemas/"
