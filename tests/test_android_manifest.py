@@ -26,4 +26,10 @@ with tempfile.TemporaryDirectory() as directory:
     categories = [node.get(name) for node in xml.findall("queries/intent/category")]
     assert categories == ["android.intent.category.LAUNCHER", "android.intent.category.LEANBACK_LAUNCHER"]
     assert len(xml.findall("application/service")) == 1
+    required = "{http://schemas.android.com/apk/res/android}required"
+    features = {node.get(name): node.get(required) for node in xml.findall("uses-feature")}
+    assert features == {"android.hardware.touchscreen": "false", "android.hardware.faketouch": "false"}
+    assert len(xml.findall("uses-feature")) == 2
+    assert len(xml.findall("supports-screens")) == 1
+    assert all(value == "true" for value in xml.find("supports-screens").attrib.values())
 print("Android usage-access manifest: passed")

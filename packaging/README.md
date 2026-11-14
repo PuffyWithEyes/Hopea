@@ -30,7 +30,7 @@ Alpine edge и Void musl; это ещё не компиляция и не про
 | GhostBSD / HardenedBSD и другие производные | Рецепт базовой BSD | Совместимость ABI и доступность пакетов проверяются на конкретной версии |
 | Windows 10/11 x64 | MSYS2 UCRT64 → Setup EXE + ZIP + Scoop JSON | Установка для текущего пользователя; GTK, GStreamer, FFmpeg и приватный Python включены; [совместимость и сборка](windows/README.md) |
 | macOS Apple Silicon / Intel | Homebrew formula + bottle | Нативная сборка и зависимости Homebrew; не standalone `.app`, нет Apple notarization |
-| Android ARM64 | APK preview | Отдельный тяжёлый job, стабильный preview-ключ для обновлений; ограничения приложения описаны в README |
+| Android ARM64 / x86-64 | APK preview | Отдельные тяжёлые jobs, один стабильный preview-ключ; Android 12+, x86-64 ещё требует полной проверки APK и запуска |
 | Flatpak | `build-aux/flatpak/` → `hopea.flatpak` | Общий вариант для Linux, runtime GNOME 51 |
 
 Для нативных Linux-пакетов используются GTK **4.20+**, libadwaita **1.8+** и

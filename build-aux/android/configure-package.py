@@ -15,6 +15,18 @@ root = tree.getroot()
 application = root.find('application')
 application.set(key('allowBackup'), 'false')
 application.set(key('extractNativeLibs'), 'true')
+# Do not exclude tablets, foldables or devices without touch input. Playback
+# requires neither a camera, telephony, GPS, nor Google Play Services.
+screens = root.find('supports-screens')
+if screens is None:
+    screens = ET.SubElement(root, 'supports-screens')
+for name in ['smallScreens', 'normalScreens', 'largeScreens', 'xlargeScreens', 'anyDensity']:
+    screens.set(key(name), 'true')
+for name in ['android.hardware.touchscreen', 'android.hardware.faketouch']:
+    feature = next((f for f in root.findall('uses-feature') if f.get(key('name')) == name), None)
+    if feature is None:
+        feature = ET.SubElement(root, 'uses-feature', {key('name'): name})
+    feature.set(key('required'), 'false')
 permissions = ['INTERNET', 'ACCESS_NETWORK_STATE', 'FOREGROUND_SERVICE',
                'FOREGROUND_SERVICE_MEDIA_PLAYBACK', 'WAKE_LOCK', 'PACKAGE_USAGE_STATS']
 seen = set()

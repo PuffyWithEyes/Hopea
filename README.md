@@ -122,7 +122,19 @@ use `bash build-aux/windows/build.sh` instead.
 
 ## Android preview
 
-The ARM64 preview is built for Android 12 or newer, including Android 17.
+Android builds target Android 12 or newer, including Android 17. ARM64 is the
+default; an x86-64 build recipe is also available for compatible devices and
+emulators. The x86-64 recipe still needs a complete APK/runtime verification.
+There is no Google Play Services dependency or phone-brand restriction. The
+manifest allows small screens, tablets, foldables and devices without touch.
+Both APK variants retain the 16 KiB alignment check.
+
+Android 11 and older and 32-bit ARM/x86 are not supported by the current GTK
+toolchain. It only provides ARM64/x86-64 targets and directly loads Android 12's
+`system_accent1_600` resource during GTK initialization. Simply lowering minSdk
+would permit installation of an app that fails at runtime. Supporting older
+devices requires a separate GTK/backend and native-library compatibility port,
+plus device/emulator tests, rather than a packaging-only change.
 It uses the same Rust/GTK player and sharing node. Account imports and the
 desktop browser-cookie reader are not available on Android. Service links
 try an installed app first, then fall back to the browser. Playback, file
@@ -138,6 +150,16 @@ The complete incremental recipe has produced a signed APK with 16 KiB alignment
 checked. A clean toolchain rebuild and physical-device behavior remain unverified.
 Existing toolchains and build caches are reused; set
 `HOPEA_ANDROID_REBUILD_TOOLCHAIN=1` when deliberately updating the toolchain.
+After updating from the ARM64-only toolchain, rebuild it once for x86-64:
+
+```sh
+HOPEA_ANDROID_ARCH=x86_64 HOPEA_ANDROID_REBUILD_TOOLCHAIN=1 bash build-aux/android/build.sh
+```
+
+This uses a separate staging directory and produces
+`dist/Hopea-android-x86_64-preview.apk`. The Packages workflow builds both
+architectures independently when its Android option is enabled, using the same
+configured signing key. Install the APK matching the device's Android ABI.
 The media service uses Android's mediaPlayback foreground-service type rather
 than a separate audio engine. This is required for background audio on
 [Android 17](https://developer.android.com/about/versions/17/changes/bg-audio).

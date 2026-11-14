@@ -18,13 +18,17 @@ jobs:
       - uses: cachix/install-nix-action@d698718aa798980d17dd749f03beae0b51183399
       - run: nix develop --command bash tests/test_nix.sh
       - run: nix develop --command bash tests/test_packaging.sh
+      - name: Check Android build configuration
+        run: |
+          bash tests/test_android_build.sh
+          python3 tests/test_android_manifest.py
       - run: nix shell --inputs-from . nixpkgs#actionlint nixpkgs#shellcheck --command actionlint
       - run: nix shell --inputs-from . nixpkgs#shellcheck --command shellcheck packaging/*.sh packaging/*/*.sh tests/test_packaging.sh
       - name: Build and test the player
         run: |
           nix develop --command bash -euc '
-            cargo fmt --all -- --check
             meson setup _builddir . -Dprofile=development
+            cargo fmt --all -- --check
             meson compile -C _builddir -j4
             cargo test --target-dir _builddir/src -- --test-threads=1
             cargo test -p hopea-spotify --target-dir _builddir/src

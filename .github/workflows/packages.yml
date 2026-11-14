@@ -13,7 +13,7 @@ on:
         type: boolean
         default: false
       android:
-        description: Also build the Android ARM64 preview (large SDK build)
+        description: Also build Android ARM64 and x86-64 previews (large SDK builds)
         type: boolean
         default: false
       lfs:
@@ -325,6 +325,12 @@ jobs:
     needs: source
     runs-on: ubuntu-24.04
     timeout-minutes: 350
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [aarch64, x86_64]
+    env:
+      HOPEA_ANDROID_ARCH: ${{ matrix.arch }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with: { persist-credentials: false }
@@ -341,12 +347,12 @@ jobs:
           install -d -m 700 /tmp/hopea-android-src/.android-user
           printf '%s' "$PREVIEW_KEY" | base64 --decode > /tmp/hopea-android-src/.android-user/debug.keystore
           chmod 600 /tmp/hopea-android-src/.android-user/debug.keystore
-      - run: bash build-aux/android/build.sh
+      - run: bash build-aux/android/build.sh /tmp/hopea-android-src
       - if: always()
         run: sudo rm -f /tmp/hopea-android-src/.android-user/debug.keystore
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: android-arm64-preview
+          name: android-${{ matrix.arch }}-preview
           path: dist/*.apk
           if-no-files-found: error
           compression-level: 0
@@ -444,6 +450,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
-          gh release create "$RELEASE_TAG" dist/* --repo "$HOPEA_REPOSITORY" \
-            --verify-tag --draft --title "Hopea $HOPEA_VERSION" \
-            --notes-file packaging/release-notes.md
+          if draft=$(gh release view "$RELEASE_TAG" --repo "$HOPEA_REPOSITORY" --json isDraft --jq .isDraft); then
+            [[ "$draft" == true ]] || { echo 'Release is already published; use a new version tag.' >&2; exit 1; }
+            gh release upload "$RELEASE_TAG" dist/* --repo "$HOPEA_REPOSITORY" --clobber
+          else
+            gh release create "$RELEASE_TAG" dist/* --repo "$HOPEA_REPOSITORY" \
+              --verify-tag --draft --title "Hopea $HOPEA_VERSION" \
+              --notes-file packaging/release-notes.md
+          fi

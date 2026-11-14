@@ -3,7 +3,13 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 set -euo pipefail
 repo=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
-stage=${1:-/tmp/hopea-android-src}
+arch=${HOPEA_ANDROID_ARCH:-aarch64}
+case "$arch" in
+  aarch64) abi=arm64-v8a; label=arm64; default_stage=/tmp/hopea-android-src ;;
+  x86_64) abi=x86_64; label=x86_64; default_stage=/tmp/hopea-android-x86_64-src ;;
+  *) echo 'HOPEA_ANDROID_ARCH must be aarch64 or x86_64.' >&2; exit 1 ;;
+esac
+stage=${1:-$default_stage}
 mkdir -p "$stage"
 stage=$(cd -- "$stage" && pwd)
 if [[ "$stage" == "$repo" || "$stage" == "$repo/"* ]]; then
@@ -24,13 +30,14 @@ cp "$repo/build-aux/android/cargo.sh" "$stage/android-cargo.sh"
 cp "$repo/build-aux/android/main.c" "$stage/src/android-main.c"
 cp "$repo/build-aux/android/android.cross" "$stage/hopea-rust.cross"
 cp "$repo/build-aux/android/hopea.xml" "$stage/hopea-android.xml"
+sed -i "s/aarch64/$arch/g" "$stage/hopea-android.xml"
 chmod +x "$stage/android-cargo.sh"
 if [[ "${HOPEA_ANDROID_REBUILD_TOOLCHAIN:-0}" == 1 ]] || ! docker image inspect hopea-android-toolchain >/dev/null 2>&1; then
   docker build -t hopea-android-toolchain "$repo/build-aux/android"
 fi
-docker run --init --rm --mount "type=bind,src=$stage,dst=/work" --workdir /work \
+docker run --init --rm --env "HOPEA_ANDROID_ARCH=$arch" --mount "type=bind,src=$stage,dst=/work" --workdir /work \
   hopea-android-toolchain bash /work/build-aux/android/container-build.sh
 mkdir -p "$repo/dist"
-cp "$stage/.pixiewood/android/app/build/outputs/apk/debug/app-arm64-v8a-debug.apk" \
-  "$repo/dist/Hopea-android-arm64-preview.apk"
-sha256sum "$repo/dist/Hopea-android-arm64-preview.apk"
+cp "$stage/.pixiewood/android/app/build/outputs/apk/debug/app-$abi-debug.apk" \
+  "$repo/dist/Hopea-android-$label-preview.apk"
+sha256sum "$repo/dist/Hopea-android-$label-preview.apk"

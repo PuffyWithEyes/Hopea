@@ -14,7 +14,7 @@ ENV ANDROID_HOME=/opt/android
 RUN sdkmanager --sdk_root=/opt/android 'build-tools;36.0.0' 'platforms;android-36' 'ndk;28.2.13676358'
 RUN curl --fail --proto '=https' --tlsv1.2 https://sh.rustup.rs -o /tmp/rustup.sh && \
     sh /tmp/rustup.sh -y --profile minimal --default-toolchain 1.100.0 && \
-    rustup target add aarch64-linux-android
+    rustup target add aarch64-linux-android x86_64-linux-android
 RUN git clone https://github.com/sp1ritCS/gtk-android-builder.git /opt/pixiewood && \
     git -C /opt/pixiewood checkout de3719725a8f6e3efe0f28203e803e7ce1904902 && \
     mkdir -p /opt/mini-studio
