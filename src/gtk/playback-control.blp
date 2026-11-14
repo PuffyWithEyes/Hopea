@@ -3,7 +3,7 @@
 
 using Gtk 4.0;
 
-template $AmberolPlaybackControl: Widget {
+template $HopeaPlaybackControl: Widget {
   Box center_box {
     orientation: vertical;
     spacing: 6;
@@ -15,7 +15,7 @@ template $AmberolPlaybackControl: Widget {
       hexpand: true;
 
       Button previous_button {
-        icon-name: "media-skip-backward-symbolic";
+        icon-name: "hopea-media-skip-backward-symbolic";
         action-name: "win.previous";
         valign: center;
         tooltip-text: _("Play the Previous Song");
@@ -30,7 +30,7 @@ template $AmberolPlaybackControl: Widget {
       }
 
       Button play_button {
-        icon-name: "media-playback-start-symbolic";
+        icon-name: "hopea-media-playback-start-symbolic";
         action-name: "win.play";
         valign: center;
         tooltip-text: _("Toggle Play");
@@ -46,7 +46,7 @@ template $AmberolPlaybackControl: Widget {
       }
 
       Button next_button {
-        icon-name: "media-skip-forward-symbolic";
+        icon-name: "hopea-media-skip-forward-symbolic";
         action-name: "win.next";
         valign: center;
         tooltip-text: _("Play the Next Song");
@@ -61,7 +61,7 @@ template $AmberolPlaybackControl: Widget {
       }
     }
 
-    $AmberolVolumeControl volume_control {
+    $HopeaVolumeControl volume_control {
       hexpand: "true";
     }
 
@@ -73,7 +73,7 @@ template $AmberolPlaybackControl: Widget {
         margin-end: 18;
 
         ToggleButton playlist_button {
-          icon-name: "view-queue-symbolic";
+          icon-name: "hopea-view-queue-symbolic";
           action-name: "queue.toggle";
           valign: center;
           tooltip-text: _("Toggle Playlist");
@@ -88,7 +88,7 @@ template $AmberolPlaybackControl: Widget {
         }
 
         ToggleButton shuffle_button {
-          icon-name: "media-playlist-shuffle-symbolic";
+          icon-name: "hopea-media-playlist-shuffle-symbolic";
           action-name: "queue.shuffle";
           valign: center;
           tooltip-text: _("Shuffle the Playlist");
@@ -108,9 +108,41 @@ template $AmberolPlaybackControl: Widget {
         halign: end;
         spacing: 12;
         margin-start: 18;
+        // Shows the lyrics in place of the cover art
+        ToggleButton lyrics_button {
+          icon-name: "hopea-media-view-subtitles-symbolic";
+          action-name: "win.lyrics";
+          valign: center;
+          tooltip-text: _("Lyrics");
+
+          styles [
+            "circular",
+          ]
+
+          accessibility {
+            label: C_("a11y", "Lyrics");
+          }
+        }
+
+        // Puts the song playing in the library, or takes it out
+        Button favorite_button {
+          icon-name: "hopea-non-starred-symbolic";
+          action-name: "win.toggle-favorite";
+          valign: center;
+          sensitive: false;
+          tooltip-text: _("Keep and Share");
+
+          styles [
+            "circular",
+          ]
+
+          accessibility {
+            label: C_("a11y", "Favorite");
+          }
+        }
 
         Button repeat_button {
-          icon-name: "media-playlist-consecutive-symbolic";
+          icon-name: "hopea-media-playlist-consecutive-symbolic";
           action-name: "queue.repeat-mode";
           valign: center;
           tooltip-text: _("Enable Repeat");
@@ -126,7 +158,7 @@ template $AmberolPlaybackControl: Widget {
 
         MenuButton menu_button {
           menu-model: primary_menu;
-          icon-name: "open-menu-symbolic";
+          icon-name: "hopea-open-menu-symbolic";
           primary: true;
           halign: end;
           valign: center;
@@ -148,6 +180,11 @@ template $AmberolPlaybackControl: Widget {
 
 menu primary_menu {
   section {
+    item { label: _("Change Cover…"); action: "win.edit-cover"; }
+    item { label: _("Edit Lyrics…"); action: "win.edit-lyrics"; }
+    item { label: _("Choose Cover and Lyrics…"); action: "win.metadata"; }
+  }
+  section {
     item {
       label: _("Copy");
       action: "win.copy";
@@ -168,6 +205,26 @@ menu primary_menu {
     item {
       label: _("Add _Folder");
       action: "queue.add-folder";
+    }
+
+    item {
+      label: _("Shared _Music");
+      action: "win.shared-library";
+    }
+
+    item {
+      label: _("Shared Music _Settings…");
+      action: "win.library-settings";
+    }
+
+    item {
+      label: _("_Bring Your Music Over…");
+      action: "win.import-music";
+    }
+
+    item {
+      label: _("My Albums…");
+      action: "win.my-albums";
     }
 
     item {
@@ -219,7 +276,7 @@ menu primary_menu {
     }
 
     item {
-      label: _("_About Amberol");
+      label: _("_About Hopea");
       action: "app.about";
     }
 

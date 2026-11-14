@@ -1,0 +1,215 @@
+# SPDX-FileCopyrightText: 2026 Daniil Klimov
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Applied only to the separate Android staging tree.
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -87,3 +87,9 @@
+ lofty = { path = "vendor/lofty" }
+ 
+ socket-pktinfo = { path = "vendor/socket-pktinfo" }
++
++[lib]
++path = "src/main.rs"
++crate-type = ["staticlib"]
++test = false
++doctest = false
+--- a/meson.build
++++ b/meson.build
+@@ -1,21 +1,18 @@
+ # SPDX-FileCopyrightText: 2022  Emmanuele Bassi
+ # SPDX-License-Identifier: GPL-3.0-or-later
+ 
+-project('hopea', 'rust',
++project('hopea', 'c',
+   version: '2026.2',
+   license: ['GPL-3.0'],
+   meson_version: '>= 0.59.0',
+   default_options: [ 'warning_level=2', ],
+ )
+ 
+-dependency('gtk4', version: '>= 4.19.5')
+-dependency('libadwaita-1', version: '>= 1.8.rc')
+-dependency('gstreamer-1.0', version: '>= 1.20')
+-dependency('gstreamer-audio-1.0', version: '>= 1.20')
+-dependency('gstreamer-play-1.0', version: '>= 1.20')
+-dependency('gstreamer-plugins-base-1.0', version: '>= 1.20')
+-dependency('gstreamer-plugins-bad-1.0', version: '>= 1.20')
+-dependency('gstreamer-bad-audio-1.0', version: '>= 1.20')
++gtk_dep = dependency('gtk4', version: '>= 4.19.5')
++adw_dep = dependency('libadwaita-1', version: '>= 1.8.rc')
++gst_dep = dependency('gstreamer-1.0', version: '>= 1.20')
++gst_audio_dep = dependency('gstreamer-audio-1.0', version: '>= 1.20')
++gst_play_dep = dependency('gstreamer-play-1.0', version: '>= 1.20')
+ 
+ i18n = import('i18n')
+ gnome = import('gnome')
+@@ -83,11 +80,6 @@
+   meson.project_build_root() / 'meson-dist' / '@0@-@1@'.format(meson.project_name(), meson.project_version()),
+ )
+ 
+-gnome.post_install(
+-  glib_compile_schemas: true,
+-  gtk_update_icon_cache: true,
+-  update_desktop_database: true,
+-)
+ 
+ summary({
+     'prefix': get_option('prefix'),
+--- a/src/main.rs
++++ b/src/main.rs
+@@ -79,6 +79,9 @@
+     env::set_var("PULSE_PROP_media.role", "music");
+ 
+     debug!("Loading resources");
++    #[cfg(target_os = "android")]
++    let resources = gio::Resource::from_data(&glib::Bytes::from_static(include_bytes!(env!("HOPEA_ANDROID_RESOURCE")))).expect("Unable to load bundled resources");
++    #[cfg(not(target_os = "android"))]
+     let resources = match env::var("MESON_DEVENV") {
+         Err(_) => gio::Resource::load(PKGDATADIR.to_owned() + "/hopea.gresource")
+             .or_else(|err| match beside_program("share/hopea/hopea.gresource") {
+@@ -113,3 +116,6 @@
+ 
+     Application::new().run()
+ }
++
++#[no_mangle]
++pub extern "C" fn hopea_android_main() -> i32 { main().get() as i32 }
+--- a/src/meson.build
++++ b/src/meson.build
+@@ -5,7 +5,7 @@
+ 
+ pkgdatadir = get_option('prefix') / get_option('datadir') / meson.project_name()
+ 
+-gnome.compile_resources('hopea',
++resources = gnome.compile_resources('hopea',
+   'hopea.gresource.xml',
+   gresource_bundle: true,
+   dependencies: blueprints,
+@@ -37,73 +37,17 @@
+   check: true,
+ )
+ 
+-cargo_cache = get_option('cargo-cache-dir')
+-cargo_target_dir = meson.project_build_root() / 'src'
+-if cargo_cache != ''
+-  cargo_target_dir = cargo_cache / 'target'
+-endif
+-cargo_options = [ '--manifest-path', meson.project_source_root() / 'Cargo.toml' ]
+-cargo_options += [ '--target-dir', cargo_target_dir, '--locked' ]
+-
+-if get_option('profile') == 'default'
+-  cargo_options += [ '--release' ]
+-  rust_target = 'release'
+-  message('Building in release mode')
+-else
+-  rust_target = 'debug'
+-  message('Building in debug mode')
+-endif
+-
+-# Development builds use the crates already downloaded for other Rust builds;
+-# release builds (such as Flatpak's) keep their own copy in the build directory
+-if cargo_cache != ''
+-  cargo_env = [ 'CARGO_HOME=' + cargo_cache / 'home' ]
+-elif get_option('profile') == 'default'
+-  cargo_env = [ 'CARGO_HOME=' + meson.project_build_root() / 'cargo-home' ]
+-else
+-  cargo_env = []
+-endif
+-
+-player_binary = meson.project_name()
+-if host_machine.system() == 'windows'
+-  player_binary += '.exe'
+-endif
+-cargo_release = custom_target(
+-  'cargo-build',
+-  build_by_default: true,
+-  build_always_stale: true,
+-  output: player_binary,
+-  console: true,
+-  install: true,
+-  install_dir: get_option('bindir'),
+-  command: [
+-    'env',
+-    cargo_env,
+-    cargo, 'build',
+-    cargo_options,
+-    '&&',
+-    'cp', cargo_target_dir / rust_target / player_binary, '@OUTPUT@.new',
+-    '&&', 'mv', '-f', '@OUTPUT@.new', '@OUTPUT@',
+-  ],
+-)
+-
+-# Separate Cargo invocation keeps librespot's features out of the P2P node.
+-# Both binaries share Cargo.lock and are installed next to each other.
+-spotify_binary = 'hopea-spotify'
+-if host_machine.system() == 'windows'
+-  spotify_binary += '.exe'
+-endif
+-custom_target(
+-  'spotify-worker',
+-  build_by_default: true,
+-  build_always_stale: true,
+-  output: spotify_binary,
+-  console: true,
+-  install: true,
+-  install_dir: get_option('bindir'),
+-  command: [
+-    'env', cargo_env, cargo, 'build', cargo_options, '--package', 'hopea-spotify',
+-    '&&', 'cp', cargo_target_dir / rust_target / spotify_binary, '@OUTPUT@.new',
+-    '&&', 'mv', '-f', '@OUTPUT@.new', '@OUTPUT@',
+-  ],
+-)
++soup_dep = dependency('libsoup-3.0')
++intl_dep = dependency('intl')
++rust_archive = custom_target('hopea-rust',
++ output: 'libhopea.a',
++ depends: resources,
++ command: [find_program('../android-cargo.sh'), meson.project_build_root(), '@OUTPUT@'],
++ build_by_default: true,
++ build_always_stale: true)
++executable('hopea', 'android-main.c',
++ android_exe_type: 'application',
++ link_depends: rust_archive,
++ link_args: [meson.current_build_dir() / 'libhopea.a', '-ldl', '-llog', '-lm'],
++ dependencies: [gtk_dep, adw_dep, gst_dep, gst_audio_dep, gst_play_dep, soup_dep, intl_dep],
++ install: true)
+--- a/src/gtk/meson.build
++++ b/src/gtk/meson.build
+@@ -1,24 +1,4 @@
+-# SPDX-FileCopyrightText: 2025  Emmanuele Bassi
+-# SPDX-License-Identifier: GPL-3.0-or-later
+-
+-blueprints = custom_target('blueprints',
+-  input: files(
+-    'library-panel.blp',
+-    'playback-control.blp',
+-    'playlist-view.blp',
+-    'queue-row.blp',
+-    'shortcuts-dialog.blp',
+-    'song-cover.blp',
+-    'song-details.blp',
+-    'volume-control.blp',
+-    'window.blp',
+-  ),
+-  output: '.',
+-  command: [
+-    find_program('blueprint-compiler'),
+-    'batch-compile',
+-    '@OUTPUT@',
+-    '@CURRENT_SOURCE_DIR@',
+-    '@INPUT@',
+-  ],
+-)
++# Compiled from Hopea Blueprint sources by the host toolchain.
++blueprints = files('library-panel.ui', 'playback-control.ui', 'playlist-view.ui',
++ 'queue-row.ui', 'shortcuts-dialog.ui', 'song-cover.ui', 'song-details.ui',
++ 'volume-control.ui', 'window.ui')
+--- a/data/io.hopea.Hopea.metainfo.xml.in.in
++++ b/data/io.hopea.Hopea.metainfo.xml.in.in
+@@ -1,5 +1,5 @@
+ <?xml version="1.0" encoding="UTF-8"?>
+-<component type="desktop-application">
++<component type="desktop-application" xmlns="https://specifications.freedesktop.org/metainfo/1.0">
+   <id>@APPLICATION_ID@</id>
+   <metadata_license>CC0-1.0</metadata_license>
+   <project_license>GPL-3.0-or-later</project_license>

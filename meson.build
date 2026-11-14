@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2022  Emmanuele Bassi
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-project('amberol', 'rust',
+project('hopea', 'rust',
   version: '2026.2',
   license: ['GPL-3.0'],
   meson_version: '>= 0.59.0',
@@ -45,13 +45,21 @@ else
   version_suffix = ''
 endif
 
-application_id = 'io.bassi.Amberol@0@'.format(profile)
+application_id = 'io.hopea.Hopea@0@'.format(profile)
 
 subdir('data')
 subdir('src')
 subdir('po')
 
 reuse = find_program('reuse', required: false)
+import_test_python = find_program('python3', required: false)
+if import_test_python.found()
+  test('Service import adapters', import_test_python,
+    args: ['-I', files('tests/test_service_import.py')],
+    suite: ['import'],
+    timeout: 30,
+  )
+endif
 if reuse.found()
   test('license',
     reuse,

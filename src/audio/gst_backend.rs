@@ -23,10 +23,25 @@ pub struct GstReplayGain {
 }
 
 fn send_update_position(sender: &Sender<PlaybackAction>, clock: gst::ClockTime, notify: bool) {
-    let pos = clock.seconds();
+    let pos = clock.mseconds();
     if let Err(e) = sender.send_blocking(PlaybackAction::UpdatePosition(pos, notify)) {
         error!("Failed to send UpdatePosition({pos}): {e}");
     }
+}
+
+#[test]
+fn position_updates_preserve_fractional_seconds() {
+    let (sender, receiver) = async_channel::bounded(1);
+    send_update_position(&sender, gst::ClockTime::from_mseconds(2375), false);
+    assert!(matches!(
+        receiver.try_recv().unwrap(),
+        PlaybackAction::UpdatePosition(2375, false)
+    ));
+    send_update_position(&sender, gst::ClockTime::from_mseconds(125), true);
+    assert!(matches!(
+        receiver.try_recv().unwrap(),
+        PlaybackAction::UpdatePosition(125, true)
+    ));
 }
 
 impl GstReplayGain {
@@ -70,13 +85,28 @@ impl GstReplayGain {
 }
 
 impl GstBackend {
+    #[cfg(test)]
+    pub fn test_audio_sink(&self, sink: &gst::Element) {
+        use gst::prelude::*;
+        self.gst_player.pipeline().set_property("audio-sink", sink);
+    }
     pub fn new(sender: Sender<PlaybackAction>) -> Self {
         let gst_player = gst_play::Play::default();
 
         gst_player.set_video_track_enabled(false);
 
+        // Songs streamed from the shared library need the access token
+        gst_player
+            .pipeline()
+            .connect("source-setup", false, |values| {
+                if let Ok(source) = values[1].get::<gst::Element>() {
+                    crate::library::configure_source(&source);
+                }
+                None
+            });
+
         let mut config = gst_player.config();
-        config.set_position_update_interval(250);
+        config.set_position_update_interval(50);
         gst_player.set_config(config).unwrap();
 
         let res = Self {
@@ -115,6 +145,12 @@ impl GstBackend {
                     gst_play::PlayMessage::PositionUpdated(message) => {
                         if let Some(position) = message.position() {
                             send_update_position(&sender, position, false);
+                        }
+                    }
+                    gst_play::PlayMessage::DurationChanged(message) => {
+                        if let Some(duration) = message.duration() {
+                            let _ = sender
+                                .send_blocking(PlaybackAction::DurationChanged(duration.seconds()));
                         }
                     }
                     gst_play::PlayMessage::SeekDone(message) => {

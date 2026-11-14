@@ -21,12 +21,13 @@ mod imp {
         pub playback_state: Cell<PlaybackState>,
         pub position: Cell<u64>,
         pub current_song: RefCell<Option<Song>>,
+        pub song_notify_id: RefCell<Option<glib::SignalHandlerId>>,
         pub volume: Cell<f64>,
     }
 
     #[glib::object_subclass]
     impl ObjectSubclass for PlayerState {
-        const NAME: &'static str = "AmberolPlayerState";
+        const NAME: &'static str = "HopeaPlayerState";
         type Type = super::PlayerState;
 
         fn new() -> Self {
@@ -34,6 +35,7 @@ mod imp {
                 playback_state: Cell::new(PlaybackState::Stopped),
                 position: Cell::new(0),
                 current_song: RefCell::new(None),
+                song_notify_id: RefCell::new(None),
                 volume: Cell::new(1.0),
             }
         }
@@ -46,6 +48,7 @@ mod imp {
                     ParamSpecBoolean::builder("playing").read_only().build(),
                     ParamSpecUInt64::builder("position").read_only().build(),
                     ParamSpecObject::builder::<Song>("song").read_only().build(),
+                    ParamSpecBoolean::builder("favorite").read_only().build(),
                     ParamSpecString::builder("title").read_only().build(),
                     ParamSpecString::builder("artist").read_only().build(),
                     ParamSpecString::builder("album").read_only().build(),
@@ -70,6 +73,10 @@ mod imp {
                 "playing" => obj.playing().to_value(),
                 "position" => obj.position().to_value(),
                 "song" => self.current_song.borrow().to_value(),
+                "favorite" => obj
+                    .current_song()
+                    .is_some_and(|s| s.property::<bool>("favorite"))
+                    .to_value(),
                 "volume" => obj.volume().to_value(),
 
                 // These are proxies for Song properties
@@ -153,9 +160,27 @@ impl PlayerState {
     }
 
     pub fn set_current_song(&self, song: Option<Song>) {
+        if let (Some(old), Some(id)) = (self.current_song(), self.imp().song_notify_id.take()) {
+            old.disconnect(id);
+        }
+        if let Some(song) = &song {
+            let state = self.downgrade();
+            let id = song.connect_notify_local(None, move |_, property| {
+                if matches!(
+                    property.name(),
+                    "cover" | "favorite" | "title" | "artist" | "album" | "duration"
+                ) {
+                    if let Some(state) = state.upgrade() {
+                        state.notify(property.name());
+                    }
+                }
+            });
+            self.imp().song_notify_id.replace(Some(id));
+        }
         self.imp().current_song.replace(song);
         self.imp().position.replace(0);
         self.notify("song");
+        self.notify("favorite");
         self.notify("title");
         self.notify("artist");
         self.notify("album");
@@ -165,10 +190,19 @@ impl PlayerState {
     }
 
     pub fn position(&self) -> u64 {
+        self.position_ms() / 1000
+    }
+
+    pub fn position_ms(&self) -> u64 {
         self.imp().position.get()
     }
 
+    #[cfg(test)]
     pub fn set_position(&self, position: u64) {
+        self.set_position_ms(position.saturating_mul(1000));
+    }
+
+    pub fn set_position_ms(&self, position: u64) {
         self.imp().position.replace(position);
         self.notify("position");
     }

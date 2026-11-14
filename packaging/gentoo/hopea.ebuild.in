@@ -1,0 +1,59 @@
+# SPDX-FileCopyrightText: 2026 Daniil Klimov
+# SPDX-License-Identifier: GPL-3.0-or-later
+EAPI=8
+PYTHON_COMPAT=( python3_{13,14} )
+inherit meson python-single-r1 xdg
+DESCRIPTION="Music player with peer-to-peer sharing"
+HOMEPAGE="https://github.com/@REPOSITORY@"
+SRC_URI="https://github.com/@REPOSITORY@/releases/download/v${PV}/hopea-${PV}-source.tar.gz"
+LICENSE="GPL-3+"
+SLOT="0"
+KEYWORDS="~amd64 ~arm64"
+IUSE="+import"
+REQUIRED_USE="${PYTHON_REQUIRED_USE}"
+RDEPEND="${PYTHON_DEPS}
+ >=gui-libs/gtk-4.20:4 >=gui-libs/libadwaita-1.8:1
+ net-libs/libsoup:3.0 dev-libs/openssl media-libs/gstreamer:1.0
+ media-libs/gst-plugins-base:1.0 media-libs/gst-plugins-bad:1.0
+ media-plugins/gst-plugins-meta:1.0 media-video/ffmpeg
+ x11-themes/adwaita-icon-theme
+ import? ( $(python_gen_cond_dep '
+   dev-python/vk-api[${PYTHON_USEDEP}]
+   dev-python/yandex-music[${PYTHON_USEDEP}]
+   dev-python/beautifulsoup4[${PYTHON_USEDEP}]
+   dev-python/ytmusicapi[${PYTHON_USEDEP}]
+   net-misc/yt-dlp[${PYTHON_USEDEP}]
+   dev-python/pycryptodomex[${PYTHON_USEDEP}]
+   dev-python/secretstorage[${PYTHON_USEDEP}]
+   dev-python/spotipy[${PYTHON_USEDEP}]
+ ') )"
+DEPEND="${RDEPEND}"
+BDEPEND="dev-lang/rust dev-util/blueprint-compiler sys-devel/gettext virtual/pkgconfig"
+S="${WORKDIR}/hopea-${PV}"
+src_configure() {
+ export CARGO_NET_OFFLINE=true
+ local emesonargs=( -Dprofile=default )
+ meson_src_configure
+}
+src_compile() {
+ export CARGO_NET_OFFLINE=true
+ meson_src_compile
+ meson_src_compile
+}
+src_install() {
+ meson_src_install
+ dodoc README.md ADDITIONAL-TERMS.md
+ dodir /usr/share/hopea/schemas
+ cp data/io.hopea.Hopea.gschema.xml "${ED}/usr/share/hopea/schemas/" || die
+ glib-compile-schemas "${ED}/usr/share/hopea/schemas" || die
+ # Match the Python implementation selected by Portage, including -I imports.
+ dodir /usr/libexec
+ mv "${ED}/usr/bin/hopea" "${ED}/usr/libexec/hopea" || die
+ cat > "${ED}/usr/bin/hopea" <<-WRAPPER
+#!/bin/sh
+export GSETTINGS_SCHEMA_DIR="/usr/share/hopea/schemas"
+export HOPEA_IMPORT_PYTHON="${PYTHON}"
+exec /usr/libexec/hopea "\$@"
+WRAPPER
+ chmod 755 "${ED}/usr/bin/hopea" || die
+}

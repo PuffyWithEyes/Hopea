@@ -4,13 +4,17 @@
 using Gtk 4.0;
 using Adw 1;
 
-template $AmberolPlaylistView: Widget {
-  Adw.ToolbarView {
+template $HopeaPlaylistView: Widget {
+  Adw.NavigationView navigation {
+    Adw.NavigationPage playlist_page {
+      tag: "playlist";
+      title: _("Playlist");
+      child: Adw.ToolbarView {
     [top]
     Adw.HeaderBar {
       [start]
       ToggleButton search_button {
-        icon-name: "system-search-symbolic";
+        icon-name: "hopea-system-search-symbolic";
         action-name: "queue.search";
         valign: center;
         tooltip-text: _("Search Songs in the Playlist");
@@ -41,7 +45,7 @@ template $AmberolPlaylistView: Widget {
       [end]
       Button back_button {
         visible: false;
-        icon-name: "go-previous-symbolic";
+        icon-name: "hopea-go-previous-symbolic";
         action-name: "queue.toggle";
         valign: center;
         tooltip-text: _("Close the Playlist");
@@ -49,10 +53,27 @@ template $AmberolPlaylistView: Widget {
 
       [end]
       ToggleButton select_button {
-        icon-name: "selection-mode-symbolic";
+        icon-name: "hopea-selection-mode-symbolic";
         action-name: "queue.select";
         valign: center;
         tooltip-text: _("Select Songs in the Playlist");
+      }
+    }
+
+    [top]
+    Box {
+      margin-start: 12;
+      margin-end: 12;
+      margin-bottom: 6;
+
+      Button {
+        hexpand: true;
+        action-name: "win.my-albums";
+        tooltip-text: _("Create, edit and share albums");
+        child: Adw.ButtonContent {
+          icon-name: "hopea-media-optical-symbolic";
+          label: _("My Albums");
+        };
       }
     }
 
@@ -81,7 +102,7 @@ template $AmberolPlaylistView: Widget {
         ]
       }
 
-      ScrolledWindow {
+      ScrolledWindow playlist_scroll {
         hscrollbar-policy: never;
         vscrollbar-policy: automatic;
         propagate-natural-height: true;
@@ -106,7 +127,7 @@ template $AmberolPlaylistView: Widget {
       ]
 
       Button queue_select_all_button {
-        icon-name: "edit-select-all-symbolic";
+        icon-name: "hopea-edit-select-all-symbolic";
         tooltip-text: _("Select All Songs");
       }
 
@@ -119,7 +140,7 @@ template $AmberolPlaylistView: Widget {
 
       [end]
       Button queue_remove_button {
-        icon-name: "app-remove-symbolic";
+        icon-name: "hopea-app-remove-symbolic";
         tooltip-text: _("Remove Selected Songs");
       }
     }
@@ -127,5 +148,7 @@ template $AmberolPlaylistView: Widget {
     styles [
       "playlist-background",
     ]
+  };
+    }
   }
 }

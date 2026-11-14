@@ -4,10 +4,10 @@
 using Gtk 4.0;
 using Adw 1;
 
-template $AmberolWindow: Adw.ApplicationWindow {
+template $HopeaWindow: Adw.ApplicationWindow {
   handle-menubar-accel: true;
   width-request: 360;
-  height-request: 660;
+  height-request: 480;
   default-width: 800;
 
   content: WindowHandle {
@@ -15,164 +15,468 @@ template $AmberolWindow: Adw.ApplicationWindow {
       title: _("Drop a song to add it to the playlist");
 
       child: Adw.ToastOverlay toast_overlay {
-        child: Stack main_stack {
-          transition-type: crossfade;
+        // On narrow screens such as phones, the shared music panel moves
+        // from the right into this sheet, whose bar always shows at the
+        // bottom and opens it by tapping or pulling it up
+        child: Adw.BottomSheet library_sheet {
+          show-drag-handle: true;
+          full-width: true;
+          reveal-bottom-bar: false;
 
-          StackPage {
-            name: "initial-view";
+          bottom-bar: CenterBox {
+            height-request: 46;
 
-            child: Adw.ToolbarView {
-              [top]
-              Adw.HeaderBar {
-                show-title: false;
+            center-widget: Box {
+              spacing: 8;
+
+              Image {
+                icon-name: "hopea-network-workgroup-symbolic";
               }
 
-              content: Adw.Clamp {
-                maximum-size: 450;
-                vexpand: true;
-                valign: fill;
+              Label {
+                label: _("Shared Music");
 
-                child: Adw.StatusPage status_page {
-                  margin-start: 12;
-                  margin-end: 12;
-                  title: "Amberol";
-                  description: _("Select a file or a folder, or drag files from your file manager to the application window to add songs to the playlist");
+                styles [
+                  "heading",
+                ]
+              }
+            };
+          };
 
-                  child: Box {
-                    orientation: vertical;
-                    halign: center;
-                    homogeneous: true;
-                    spacing: 12;
+          content: Adw.OverlaySplitView library_split {
+            sidebar-position: end;
+            // Stays open when the window gets narrow, covering the rest
+            pin-sidebar: true;
+            show-sidebar: false;
+            min-sidebar-width: 320;
+            max-sidebar-width: 420;
+            sidebar-width-fraction: 0.4;
 
-                    Button restore_playlist_button {
-                      label: _("Restore Playlist");
-                      action-name: "queue.restore-playlist";
+            sidebar: $HopeaLibraryPanel library_panel {};
 
-                      styles [
-                        "suggested-action",
-                        "pill",
-                      ]
+            content: Stack main_stack {
+              transition-type: crossfade;
+
+              StackPage {
+                name: "initial-view";
+
+                child: Adw.ToolbarView {
+                  [top]
+                  Adw.HeaderBar {
+                    show-title: false;
+
+                    [end]
+                    Button import_progress_start {
+                      icon-name: "hopea-folder-download-symbolic";
+                      visible: false;
+                      tooltip-text: _("Import Progress");
+                      action-name: "win.import-progress";
                     }
 
-                    Button add_folder_button {
-                      label: _("Add Folder");
-                      action-name: "queue.add-folder";
-
-                      styles [
-                        "pill",
-                      ]
-                    }
-
+                    [end]
                     Button {
-                      label: _("Add Song");
-                      action-name: "queue.add-song";
-
-                      styles [
-                        "pill",
-                      ]
+                      icon-name: "hopea-emblem-system-symbolic";
+                      tooltip-text: _("Settings");
+                      action-name: "win.library-settings";
                     }
+
+                    [end]
+                    ToggleButton library_toggle_start {
+                      tooltip-text: _("Shared Music");
+                      active: bind library_split.show-sidebar bidirectional;
+
+                      child: Adw.ButtonContent {
+                        icon-name: "hopea-network-workgroup-symbolic";
+                        label: _("Shared Music");
+                      };
+                    }
+                  }
+
+                  content: Adw.Clamp {
+                    maximum-size: 450;
+                    vexpand: true;
+                    valign: fill;
+
+                    child: Adw.StatusPage status_page {
+                      margin-start: 12;
+                      margin-end: 12;
+                      title: "Hopea";
+                      description: _(
+                        "Select a file or a folder, or drag files from your file manager to the application window to add songs to the playlist"
+                      );
+
+                      child: Box {
+                        orientation: vertical;
+                        halign: center;
+                        homogeneous: true;
+                        spacing: 12;
+
+                        Button restore_playlist_button {
+                          label: _("Restore Playlist");
+                          action-name: "queue.restore-playlist";
+
+                          styles [
+                            "suggested-action",
+                            "pill",
+                          ]
+                        }
+
+                        Button add_folder_button {
+                          label: _("Add Folder");
+                          action-name: "queue.add-folder";
+
+                          styles [
+                            "pill",
+                          ]
+                        }
+
+                        Button {
+                          label: _("Add Song");
+                          action-name: "queue.add-song";
+
+                          styles [
+                            "pill",
+                          ]
+                        }
+
+                        Button {
+                          label: _("Shared Music");
+                          action-name: "win.shared-library";
+
+                          styles [
+                            "pill",
+                          ]
+                        }
+                      };
+                    };
                   };
                 };
-              };
-            };
-          }
+              }
 
-          StackPage {
-            name: "main-view";
+              StackPage {
+                name: "main-view";
 
-            child: Adw.OverlaySplitView split_view {
-              max-sidebar-width: 330;
-              sidebar-width-fraction: 0.4;
+                child: Adw.OverlaySplitView split_view {
+                  max-sidebar-width: 330;
+                  sidebar-width-fraction: 0.4;
 
-              content: Adw.ToolbarView {
-                [top]
-                Adw.HeaderBar {
-                  show-title: false;
-                }
-
-                content: Box main_box {
-                  orientation: vertical;
-                  valign: center;
-                  vexpand: true;
-                  spacing: 6;
-
-                  styles [
-                    "main-box",
-                  ]
-
-                  $AmberolSongCover song_cover {}
-
-                  Box {
-                    orientation: vertical;
-                    spacing: 2;
-                    width-request: 256;
-
-                    Box {
-                      halign: center;
-
-                      $AmberolWaveformView waveform_view {
-                        can-focus: "true";
+                  content: Adw.ToolbarView {
+                    [top]
+                    Box audition_bar {
+                      visible: false;
+                      spacing: 12;
+                      margin-start: 12;
+                      margin-end: 12;
+                      margin-top: 8;
+                      margin-bottom: 8;
+                      Button {
+                        name: "import-preview-back";
+                        action-name: "win.return-to-import";
+                        child: Adw.ButtonContent {
+                          icon-name: "hopea-go-previous-symbolic";
+                          label: _("Back to Import");
+                        };
+                      }
+                      Label {
+                        label: _("Listening before import");
+                        hexpand: true;
+                        xalign: 1;
+                        ellipsize: end;
+                        styles ["dim-label"]
                       }
                     }
+                    [top]
+                    Adw.HeaderBar player_header {
+                      [end]
+                      Button import_progress_main {
+                        icon-name: "hopea-folder-download-symbolic";
+                        visible: false;
+                        tooltip-text: _("Import Progress");
+                        action-name: "win.import-progress";
+                      }
+                      [end]
+                      Button {
+                        icon-name: "hopea-emblem-system-symbolic";
+                        tooltip-text: _("Settings");
+                        action-name: "win.library-settings";
+                      }
 
-                    CenterBox {
-                      orientation: horizontal;
-                      width-request: 256;
-                      halign: center;
+                      // The listener's own music, or music picked for them
+                      title-widget: Box mode_switch {
+                        styles [
+                          "linked",
+                        ]
 
-                      [start]
-                      Label elapsed_label {
-                        label: "0:00";
-
-                        accessibility {
-                          label: C_("a11y", "Elapsed time");
+                        ToggleButton my_music_button {
+                          label: _("My Music");
+                          active: true;
                         }
 
-                        styles [
-                          "caption",
-                          "numeric",
-                        ]
-                      }
+                        ToggleButton for_you_button {
+                          label: _("For You");
+                          group: my_music_button;
+                        }
+                      };
 
                       [end]
-                      Label remaining_label {
-                        label: "0:00";
+                      ToggleButton library_toggle {
+                        tooltip-text: _("Shared Music");
+                        active: bind library_split.show-sidebar bidirectional;
 
-                        accessibility {
-                          label: C_("a11y", "Remaining time");
-                        }
-
-                        styles [
-                          "caption",
-                          "numeric",
-                        ]
+                        child: Adw.ButtonContent library_toggle_content {
+                          icon-name: "hopea-network-workgroup-symbolic";
+                          label: _("Shared Music");
+                        };
                       }
                     }
-                  }
 
-                  $AmberolSongDetails song_details {}
+                    // Phone widths give navigation its own centered row, so
+                    // settings, import progress and window controls cannot push it.
+                    [top]
+                    Box mode_switch_narrow {
+                      visible: false;
+                      halign: center;
+                      margin-bottom: 6;
+                    }
 
-                  $AmberolPlaybackControl playback_control {
-                    halign: "center";
-                    margin-top: "0";
-                    margin-bottom: "24";
-                  }
+                    content: Stack player_stack {
+                      transition-type: crossfade;
+
+                      StackPage {
+                        name: "player";
+
+                        child: ScrolledWindow {
+                          hscrollbar-policy: never;
+                          child: Box main_box {
+                      orientation: vertical;
+                      valign: center;
+                      vexpand: true;
+                      spacing: 6;
+
+                      styles [
+                        "main-box",
+                      ]
+
+                      // The cover art, or the lyrics in its place
+                      Stack cover_stack {
+                        hhomogeneous: false;
+                        vhomogeneous: false;
+                        interpolate-size: true;
+                        transition-type: crossfade;
+
+                        StackPage {
+                          name: "cover";
+                          child: $HopeaSongCover song_cover {};
+                        }
+
+                        StackPage {
+                          name: "lyrics";
+
+                          child: Stack lyrics_stack {
+                            width-request: 340;
+                            height-request: 340;
+                            transition-type: crossfade;
+
+                            StackPage {
+                              name: "lines";
+
+                              child: ScrolledWindow lyrics_scroller {
+                                hscrollbar-policy: never;
+
+                                child: Box lyrics_box {
+                                  orientation: vertical;
+                                  spacing: 10;
+                                  margin-top: 24;
+                                  margin-bottom: 24;
+                                  margin-start: 12;
+                                  margin-end: 12;
+
+                                  styles [
+                                    "lyrics",
+                                  ]
+                                };
+                              };
+                            }
+
+                            StackPage {
+                              name: "loading";
+
+                              child: Adw.Spinner {
+                                halign: center;
+                                valign: center;
+                                width-request: 32;
+                                height-request: 32;
+                              };
+                            }
+
+                            StackPage {
+                              name: "none";
+
+                              child: Box {
+                                orientation: vertical;
+                                valign: center;
+                                halign: center;
+                                spacing: 12;
+
+                                Label lyrics_none_label {
+                                  label: _("No Lyrics for This Song");
+                                  wrap: true;
+                                  justify: center;
+
+                                  styles [
+                                    "title-4",
+                                  ]
+                                }
+
+                                Box lyrics_online_box {
+                                  orientation: vertical;
+                                  spacing: 6;
+
+                                  Button lyrics_online_button {
+                                    label: _("_Search Online");
+                                    use-underline: true;
+                                    halign: center;
+
+                                    styles [
+                                      "pill",
+                                    ]
+                                  }
+
+                                  Label {
+                                    label: _("Asks lrclib.net, which then learns the song’s title and artist");
+                                    wrap: true;
+                                    justify: center;
+                                    max-width-chars: 32;
+
+                                    styles [
+                                      "caption",
+                                      "dim-label",
+                                    ]
+                                  }
+                                }
+                              };
+                            }
+                          };
+                        }
+                      }
+
+                      Box {
+                        orientation: vertical;
+                        spacing: 2;
+                        width-request: 256;
+
+                        Box {
+                          halign: center;
+
+                          $HopeaWaveformView waveform_view {
+                            can-focus: "true";
+                          }
+                        }
+
+                        CenterBox {
+                          orientation: horizontal;
+                          width-request: 256;
+                          halign: center;
+
+                          [start]
+                          Label elapsed_label {
+                            label: "0:00";
+
+                            accessibility {
+                              label: C_("a11y", "Elapsed time");
+                            }
+
+                            styles [
+                              "caption",
+                              "numeric",
+                            ]
+                          }
+
+                          [end]
+                          Label remaining_label {
+                            label: "0:00";
+
+                            accessibility {
+                              label: C_("a11y", "Remaining time");
+                            }
+
+                            styles [
+                              "caption",
+                              "numeric",
+                            ]
+                          }
+                        }
+                      }
+
+                      $HopeaSongDetails song_details {}
+
+                      $HopeaPlaybackControl playback_control {
+                        halign: "center";
+                        margin-top: "0";
+                        margin-bottom: "24";
+                      }
+                          };
+                        };
+                      }
+
+                      StackPage {
+                        name: "for-you";
+
+                        child: Adw.StatusPage queue_mode_page {
+                          title: _("Music for You");
+                          description: _("Songs picked from the genres and artists you star and listen to, from people sharing them right now. Star the ones you like to keep them; what you listen to here shapes what comes next.");
+
+                          child: Button for_you_play_button {
+                            halign: center;
+                            tooltip-text: _("Play Music for You");
+
+                            child: Adw.ButtonContent {
+                              icon-name: "hopea-media-playback-start-symbolic";
+                              label: _("_Play");
+                              use-underline: true;
+                            };
+
+                            styles [
+                              "pill",
+                              "suggested-action",
+                              "for-you-play",
+                            ]
+                          };
+                        };
+                      }
+                    };
+                  };
+
+                  sidebar: $HopeaPlaylistView playlist_view {};
                 };
-              };
-
-              sidebar: $AmberolPlaylistView playlist_view {};
+              }
             };
-          }
+          };
         };
       };
     }
   };
 
+  // Only one breakpoint applies at a time, so the narrow one sets both
   Adw.Breakpoint {
+    condition ("max-width: 1000sp")
+
+    setters {
+      library_split.collapsed: true;
+      library_toggle_content.label: "";
+    }
+  }
+
+  Adw.Breakpoint narrow_breakpoint {
     condition ("max-width: 560sp")
 
     setters {
       split_view.collapsed: true;
+      library_split.collapsed: true;
+      library_sheet.reveal-bottom-bar: true;
+      library_toggle.visible: false;
+      library_toggle_start.visible: false;
+      mode_switch_narrow.visible: true;
     }
   }
 }

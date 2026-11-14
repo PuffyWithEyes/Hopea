@@ -1,11 +1,11 @@
-# Bulgarian translation of amberol po-file.
+# Bulgarian translation of hopea po-file.
 # Copyright (C) 2024, 2026 twlvnn kraftwerk <kraft_werk@tutanota.com>
-# This file is distributed under the same license as the amberol package.
+# This file is distributed under the same license as the hopea package.
 # twlvnn kraftwerk <kraft_werk@tutanota.com>, 2024, 2026.
 #
 msgid ""
 msgstr ""
-"Project-Id-Version: amberol main\n"
+"Project-Id-Version: hopea main\n"
 "Report-Msgid-Bugs-To: https://gitlab.gnome.org/World/amberol/-/issues/\n"
 "POT-Creation-Date: 2026-07-08 19:26+0000\n"
 "PO-Revision-Date: 2026-09-06 11:53+0200\n"
@@ -18,61 +18,61 @@ msgstr ""
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 "X-Generator: Poedit 3.9\n"
 
-#: data/io.bassi.Amberol.desktop.in.in:2
-#: data/io.bassi.Amberol.metainfo.xml.in.in:6
-msgid "Amberol"
-msgstr "Amberol"
+#: data/io.hopea.Hopea.desktop.in.in:2
+#: data/io.hopea.Hopea.metainfo.xml.in.in:6
+msgid "Hopea"
+msgstr "Hopea"
 
-#: data/io.bassi.Amberol.desktop.in.in:3
+#: data/io.hopea.Hopea.desktop.in.in:3
 msgid "Music Player"
 msgstr "Плеър за музика"
 
 #. Translators: Search terms to find this application. Do NOT translate or localize the semicolons! The list MUST also end with a semicolon!
-#: data/io.bassi.Amberol.desktop.in.in:11
+#: data/io.hopea.Hopea.desktop.in.in:11
 msgid "music;player;media;audio;playlist;"
 msgstr "музика;устройство;медия;звук;аудио;списък;песни;изпълнение;music;player;media;audio;playlist;"
 
-#: data/io.bassi.Amberol.metainfo.xml.in.in:7
+#: data/io.hopea.Hopea.metainfo.xml.in.in:7
 msgid "Plays music, and nothing else"
 msgstr "Просто слушане на музика"
 
-#: data/io.bassi.Amberol.metainfo.xml.in.in:9
+#: data/io.hopea.Hopea.metainfo.xml.in.in:9
 msgid ""
-"Amberol is a music player with no delusions of grandeur. If you just want to "
-"play music available on your local system then Amberol is the music player "
+"Hopea is a music player with no delusions of grandeur. If you just want to "
+"play music available on your local system then Hopea is the music player "
 "you are looking for."
 msgstr ""
-"„Amberol“ е музикален плеър, което не се преструва на велик. Ако просто "
-"искате да слушате музика от локалната ви система, тогава „Amberol“ е "
+"„Hopea“ е музикален плеър, което не се преструва на велик. Ако просто "
+"искате да слушате музика от локалната ви система, тогава „Hopea“ е "
 "музикалното програма, която търсите."
 
-#: data/io.bassi.Amberol.metainfo.xml.in.in:14
+#: data/io.hopea.Hopea.metainfo.xml.in.in:14
 msgid "Current features:"
 msgstr "Функции:"
 
-#: data/io.bassi.Amberol.metainfo.xml.in.in:16
+#: data/io.hopea.Hopea.metainfo.xml.in.in:16
 msgid "adaptive UI"
 msgstr "адаптивен потребителски интерфейс"
 
-#: data/io.bassi.Amberol.metainfo.xml.in.in:17
+#: data/io.hopea.Hopea.metainfo.xml.in.in:17
 msgid "UI recoloring using the album art"
 msgstr ""
 "преоцветяване на потребителския интерфейс с помощта на обложката на албума"
 
-#: data/io.bassi.Amberol.metainfo.xml.in.in:18
+#: data/io.hopea.Hopea.metainfo.xml.in.in:18
 msgid "drag and drop support to queue songs"
 msgstr "изтегляне и пускане в опашката с песни"
 
-#: data/io.bassi.Amberol.metainfo.xml.in.in:19
+#: data/io.hopea.Hopea.metainfo.xml.in.in:19
 msgid "shuffle and repeat"
 msgstr "разбъркване и повтаряне"
 
-#: data/io.bassi.Amberol.metainfo.xml.in.in:20
+#: data/io.hopea.Hopea.metainfo.xml.in.in:20
 msgid "MPRIS integration"
 msgstr "Интеграция с MPRIS"
 
-#: data/io.bassi.Amberol.metainfo.xml.in.in:48
-#: data/io.bassi.Amberol.metainfo.xml.in.in:50
+#: data/io.hopea.Hopea.metainfo.xml.in.in:48
+#: data/io.hopea.Hopea.metainfo.xml.in.in:50
 msgid "Emmanuele Bassi"
 msgstr "Emmanuele Bassi"
 
@@ -191,8 +191,8 @@ msgid "_Keyboard Shortcuts"
 msgstr "_Клавишни комбинации"
 
 #: src/gtk/playback-control.blp:222
-msgid "_About Amberol"
-msgstr "_Относно „Amberol“"
+msgid "_About Hopea"
+msgstr "_Относно „Hopea“"
 
 #: src/gtk/playback-control.blp:227
 msgid "_Quit"
@@ -385,8 +385,8 @@ msgstr ""
 "newticket'>съответния раздел</a>."
 
 #: src/application.rs:255
-msgid "Amberol needs to run in the background to play music"
-msgstr "„Amberol“ трябва да работи във фонов режим, за да възпроизвежда музика"
+msgid "Hopea needs to run in the background to play music"
+msgstr "„Hopea“ трябва да работи във фонов режим, за да възпроизвежда музика"
 
 #: src/audio/inhibit_controller.rs:40
 msgid "Playback in progress"

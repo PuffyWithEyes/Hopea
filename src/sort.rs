@@ -15,7 +15,7 @@ mod imp {
     };
     use once_cell::sync::Lazy;
 
-    use crate::{audio::Song, utils::cmp_two_files};
+    use crate::audio::Song;
 
     #[derive(Default)]
     pub struct FuzzySorter {
@@ -24,7 +24,7 @@ mod imp {
 
     #[glib::object_subclass]
     impl ObjectSubclass for FuzzySorter {
-        const NAME: &'static str = "AmberolFuzzySorter";
+        const NAME: &'static str = "HopeaFuzzySorter";
         type Type = super::FuzzySorter;
         type ParentType = gtk::Sorter;
     }
@@ -62,12 +62,16 @@ mod imp {
                 let item2_score = matcher.fuzzy_match(&item2_key, search);
                 item1_score.cmp(&item2_score).reverse().into()
             } else {
-                cmp_two_files(None, &item1.file(), &item2.file()).into()
+                gtk::Ordering::Equal
             }
         }
 
         fn order(&self) -> gtk::SorterOrder {
-            gtk::SorterOrder::Partial
+            if self.search.borrow().is_some() {
+                gtk::SorterOrder::Partial
+            } else {
+                gtk::SorterOrder::None
+            }
         }
     }
 }
@@ -94,6 +98,7 @@ impl FuzzySorter {
     }
 
     pub fn set_search(&self, search: Option<String>) {
+        let search = search.filter(|s| !s.trim().is_empty());
         if *self.imp().search.borrow() != search {
             *self.imp().search.borrow_mut() = search;
             self.changed(gtk::SorterChange::Different);

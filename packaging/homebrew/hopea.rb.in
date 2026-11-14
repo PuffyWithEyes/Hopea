@@ -1,0 +1,46 @@
+# SPDX-FileCopyrightText: 2026 Daniil Klimov
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Native source formula. CI prepares the matching platform source with wheels
+# before invoking Homebrew; do not resolve Python packages in the build sandbox.
+class Hopea < Formula
+  desc "Music player with peer-to-peer sharing"
+  homepage "https://github.com/@REPOSITORY@"
+  url "https://github.com/@REPOSITORY@/releases/download/v@VERSION@/hopea-@VERSION@-source.tar.gz"
+  sha256 "@SOURCE_SHA256@"
+  version "@VERSION@"
+  license "GPL-3.0-or-later"
+  depends_on "coreutils" => :build
+  depends_on "rust" => :build
+  depends_on "meson" => :build
+  depends_on "ninja" => :build
+  depends_on "pkgconf" => :build
+  depends_on "blueprint-compiler" => :build
+  depends_on "gettext"
+  depends_on "gtk4"
+  depends_on "libadwaita"
+  depends_on "libsoup"
+  depends_on "gstreamer"
+  depends_on "openssl@3"
+  depends_on "ffmpeg"
+  depends_on "python@3.14"
+  depends_on "adwaita-icon-theme"
+
+  def install
+    # `packaging/native.sh prepare` must already have produced this platform's
+    # wheels. Release automation replaces the URL/hash with that prepared source.
+    odie "Missing offline importer wheels; use the generated platform formula" unless (buildpath/".packaging/wheels/SHA256SUMS").exist?
+    ENV.prepend_path "PATH", Formula["coreutils"].opt_libexec/"gnubin"
+    ENV["HOPEA_PREFIX"] = prefix
+    ENV["HOPEA_BUILD_PYTHON"] = Formula["python@3.14"].opt_bin/"python3.14"
+    ENV["CARGO_NET_OFFLINE"] = "true"
+    system "bash", "packaging/native.sh", "configure"
+    system "bash", "packaging/native.sh", "build"
+    ENV["DESTDIR"] = buildpath/"stage"
+    system "bash", "packaging/native.sh", "install"
+    prefix.install Dir[(buildpath/"stage#{prefix}").to_s + "/*"]
+  end
+
+  test do
+    assert_match "hopea", shell_output("#{bin}/hopea --help")
+  end
+end

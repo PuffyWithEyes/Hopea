@@ -1,24 +1,43 @@
 // SPDX-FileCopyrightText: 2022  Emmanuele Bassi
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use std::{cell::RefCell, rc::Rc};
+use std::{
+    cell::{Cell, RefCell},
+    rc::Rc,
+    time::{Duration, Instant},
+};
 
 use adw::prelude::AdwDialogExt;
 use adw::subclass::prelude::*;
-#[cfg(any(target_os = "linux", target_os = "freebsd"))]
+#[cfg(target_os = "linux")]
 use ashpd::{desktop::background::Background, WindowIdentifier};
 use async_channel::Receiver;
 use glib::clone;
 use gtk::{gio, glib, prelude::*};
 use log::{debug, warn};
 
+#[cfg(any(
+    target_os = "linux",
+    target_os = "freebsd",
+    target_os = "openbsd",
+    target_os = "netbsd",
+    target_os = "dragonfly",
+    target_os = "windows",
+    target_os = "macos"
+))]
+use crate::tray::{Tray, TrayEvent, TrayState};
 use crate::{
     audio::AudioPlayer,
-    config::{APPLICATION_ID, VERSION},
+    config::{APPLICATION_ICON, APPLICATION_ID, VERSION},
     i18n::i18n,
-    utils,
+    library, utils,
     window::Window,
 };
+
+/// How often the VPN is checked, between the network change notices
+const GUARD_INTERVAL: Duration = Duration::from_secs(2);
+/// How long to wait before trying to join again after it failed
+const JOIN_RETRY_DELAY: Duration = Duration::from_secs(60);
 
 pub enum ApplicationAction {
     Present,
@@ -32,12 +51,28 @@ mod imp {
         pub player: Rc<AudioPlayer>,
         pub receiver: RefCell<Option<Receiver<ApplicationAction>>>,
         pub background_hold: RefCell<Option<gio::ApplicationHoldGuard>>,
+        /// Keeps the app running while it shares music, with the window closed
+        pub sharing_hold: RefCell<Option<gio::ApplicationHoldGuard>>,
+        #[cfg(any(
+            target_os = "linux",
+            target_os = "freebsd",
+            target_os = "openbsd",
+            target_os = "netbsd",
+            target_os = "dragonfly",
+            target_os = "windows",
+            target_os = "macos"
+        ))]
+        pub tray: RefCell<Option<Tray>>,
         pub settings: gio::Settings,
+        /// Joining or leaving the network is under way
+        pub switching: Cell<bool>,
+        /// When joining last failed, to not retry it every moment
+        pub join_failed_at: Cell<Option<Instant>>,
     }
 
     #[glib::object_subclass]
     impl ObjectSubclass for Application {
-        const NAME: &'static str = "AmberolApplication";
+        const NAME: &'static str = "HopeaApplication";
         type Type = super::Application;
         type ParentType = adw::Application;
 
@@ -49,7 +84,20 @@ mod imp {
                 player: AudioPlayer::new(sender),
                 receiver,
                 background_hold: RefCell::default(),
+                sharing_hold: RefCell::default(),
+                #[cfg(any(
+                    target_os = "linux",
+                    target_os = "freebsd",
+                    target_os = "openbsd",
+                    target_os = "netbsd",
+                    target_os = "dragonfly",
+                    target_os = "windows",
+                    target_os = "macos"
+                ))]
+                tray: RefCell::default(),
                 settings: utils::settings_manager(),
+                switching: Cell::default(),
+                join_failed_at: Cell::default(),
             }
         }
     }
@@ -71,6 +119,7 @@ mod imp {
             obj.set_accels_for_action("queue.toggle", &["F9"]);
             obj.set_accels_for_action("queue.search", &["<primary>F"]);
             obj.set_accels_for_action("queue.shuffle", &["<primary>r"]);
+            obj.set_accels_for_action("win.shared-library", &["<primary>u"]);
 
             obj.set_accels_for_action("win.seek-backwards", &["<primary>Left"]);
             obj.set_accels_for_action("win.seek-forward", &["<primary>Right"]);
@@ -85,13 +134,57 @@ mod imp {
         fn startup(&self) {
             self.parent_startup();
 
-            gtk::Window::set_default_icon_name(APPLICATION_ID);
+            if let Some(display) = gtk::gdk::Display::default() {
+                gtk::IconTheme::for_display(&display).add_resource_path("/io/hopea/Hopea/icons");
+            }
+            gtk::Window::set_default_icon_name(APPLICATION_ICON);
+            crate::accent::init();
+            crate::gaming::init();
+            #[cfg(any(
+                target_os = "linux",
+                target_os = "freebsd",
+                target_os = "openbsd",
+                target_os = "netbsd",
+                target_os = "dragonfly",
+                target_os = "windows",
+                target_os = "macos"
+            ))]
+            self.obj().setup_tray();
+
+            // Once the listener joined, the app joins the network as it
+            // starts, unless they chose not to or this is a phone
+            if self.settings.boolean("library-enabled") && library::joins_at_start(&self.settings) {
+                library::set_wanted(true);
+            }
+            self.obj().watch_connection();
+            if library::wanted() && library::allowed(&self.settings) {
+                glib::spawn_future_local(async {
+                    if let Err(err) = library::ensure_started().await {
+                        warn!("Unable to start the shared library: {err}");
+                    }
+                });
+            }
         }
 
         fn activate(&self) {
             debug!("Application::activate");
 
             self.obj().present_main_window();
+        }
+
+        fn shutdown(&self) {
+            #[cfg(any(
+                target_os = "linux",
+                target_os = "freebsd",
+                target_os = "openbsd",
+                target_os = "netbsd",
+                target_os = "dragonfly",
+                target_os = "windows",
+                target_os = "macos"
+            ))]
+            self.tray.take();
+            library::shutdown();
+            self.parent_shutdown();
         }
 
         fn open(&self, files: &[gio::File], _hint: &str) {
@@ -120,7 +213,7 @@ impl Default for Application {
         glib::Object::builder::<Application>()
             .property("application-id", APPLICATION_ID)
             .property("flags", gio::ApplicationFlags::HANDLES_OPEN)
-            .property("resource-base-path", "/io/bassi/Amberol")
+            .property("resource-base-path", "/io/hopea/Hopea")
             .build()
     }
 }
@@ -154,6 +247,225 @@ impl Application {
         );
 
         let _dummy = self.imp().settings.boolean("background-play");
+    }
+
+    #[cfg(not(any(
+        target_os = "linux",
+        target_os = "freebsd",
+        target_os = "openbsd",
+        target_os = "netbsd",
+        target_os = "dragonfly",
+        target_os = "windows",
+        target_os = "macos"
+    )))]
+    pub fn update_sharing(&self) {}
+
+    /// Network sharing continues after closing the window on desktop systems.
+    /// The player tray itself is independent of the sharing setting.
+    #[cfg(any(
+        target_os = "linux",
+        target_os = "freebsd",
+        target_os = "openbsd",
+        target_os = "netbsd",
+        target_os = "dragonfly",
+        target_os = "windows",
+        target_os = "macos"
+    ))]
+    pub fn update_sharing(&self) {
+        let imp = self.imp();
+        let sharing = imp.settings.boolean("library-enabled") && library::wanted();
+        if sharing && imp.sharing_hold.borrow().is_none() {
+            imp.sharing_hold.replace(Some(self.hold()));
+        } else if !sharing {
+            imp.sharing_hold.take();
+        }
+    }
+
+    #[cfg(any(
+        target_os = "linux",
+        target_os = "freebsd",
+        target_os = "openbsd",
+        target_os = "netbsd",
+        target_os = "dragonfly",
+        target_os = "windows",
+        target_os = "macos"
+    ))]
+    fn setup_tray(&self) {
+        // GTK tests must not publish temporary applications to the user's panel.
+        #[cfg(test)]
+        if std::env::var_os("HOPEA_TEST_ENABLE_TRAY").is_none() {
+            return;
+        }
+        let (sender, receiver) = async_channel::unbounded();
+        self.imp()
+            .tray
+            .replace(Tray::show(sender, TrayState::from_player(&self.player())));
+        glib::spawn_future_local(clone!(
+            #[weak(rename_to = app)]
+            self,
+            async move {
+                while let Ok(event) = receiver.recv().await {
+                    app.handle_tray_event(event);
+                }
+            }
+        ));
+        self.player().state().connect_notify_local(
+            None,
+            clone!(
+                #[weak(rename_to = app)]
+                self,
+                move |_, property| {
+                    if matches!(property.name(), "song" | "title" | "artist" | "playing") {
+                        app.refresh_tray();
+                    }
+                }
+            ),
+        );
+        self.player().queue().connect_notify_local(
+            Some("n-songs"),
+            clone!(
+                #[weak(rename_to = app)]
+                self,
+                move |_, _| app.refresh_tray()
+            ),
+        );
+    }
+
+    #[cfg(any(
+        target_os = "linux",
+        target_os = "freebsd",
+        target_os = "openbsd",
+        target_os = "netbsd",
+        target_os = "dragonfly",
+        target_os = "windows",
+        target_os = "macos"
+    ))]
+    fn refresh_tray(&self) {
+        if let Some(tray) = self.imp().tray.borrow().as_ref() {
+            tray.update(TrayState::from_player(&self.player()));
+        }
+    }
+
+    #[cfg(any(
+        target_os = "linux",
+        target_os = "freebsd",
+        target_os = "openbsd",
+        target_os = "netbsd",
+        target_os = "dragonfly",
+        target_os = "windows",
+        target_os = "macos"
+    ))]
+    pub(crate) fn handle_tray_event(&self, event: TrayEvent) {
+        let player = self.player();
+        match event {
+            TrayEvent::Show => self.activate(),
+            TrayEvent::Quit => self.quit(),
+            TrayEvent::Previous => player.skip_previous(),
+            TrayEvent::PlayPause => player.toggle_play(),
+            TrayEvent::Next => player.skip_next(),
+        }
+    }
+
+    /// Keeps an eye on what the network may be used through, to leave it
+    /// the moment it may not and join again when it may (see
+    /// [`Self::guard_connection`]).
+    fn watch_connection(&self) {
+        self.imp().settings.connect_changed(
+            Some("library-only-protected"),
+            clone!(
+                #[weak(rename_to = app)]
+                self,
+                move |_, _| {
+                    app.imp().join_failed_at.set(None);
+                    app.guard_connection();
+                }
+            ),
+        );
+        glib::timeout_add_local(
+            GUARD_INTERVAL,
+            clone!(
+                #[weak(rename_to = app)]
+                self,
+                #[upgrade_or]
+                glib::ControlFlow::Break,
+                move || {
+                    app.guard_connection();
+                    glib::ControlFlow::Continue
+                }
+            ),
+        );
+        gio::NetworkMonitor::default().connect_network_changed(clone!(
+            #[weak(rename_to = app)]
+            self,
+            move |_, _| app.guard_connection()
+        ));
+    }
+
+    /// Leaves the network if it may no longer be used, as when the VPN the
+    /// listener shares through goes off, and joins again once it may, if
+    /// they want to be on it.
+    fn guard_connection(&self) {
+        let imp = self.imp();
+        let settings = &imp.settings;
+        if imp.switching.get() || !settings.boolean("library-enabled") {
+            return;
+        }
+        let connected = library::client().is_some();
+        let mode = library::network_mode(settings);
+        let allowed = mode.is_some();
+        if connected && mode != Some(library::uses_ipv4_only()) {
+            imp.switching.set(true);
+            glib::spawn_future_local(clone!(
+                #[weak(rename_to = app)]
+                self,
+                async move {
+                    library::disconnect().await;
+                    app.imp().switching.set(false);
+                    app.connection_changed(if allowed {
+                        i18n("Reconnecting with the updated connection settings…")
+                    } else {
+                        i18n("The VPN is off. Sharing will resume when it reconnects.")
+                    });
+                    app.guard_connection();
+                }
+            ));
+        } else if !connected && allowed && library::wanted() {
+            if imp
+                .join_failed_at
+                .get()
+                .is_some_and(|t| t.elapsed() < JOIN_RETRY_DELAY)
+            {
+                return;
+            }
+            imp.switching.set(true);
+            let protected = settings.boolean("library-only-protected");
+            glib::spawn_future_local(clone!(
+                #[weak(rename_to = app)]
+                self,
+                async move {
+                    let result = library::ensure_started().await;
+                    app.imp().switching.set(false);
+                    match result {
+                        Ok(_) => app.connection_changed(if protected {
+                            i18n("The VPN is on: joined the network")
+                        } else {
+                            i18n("Joined the network")
+                        }),
+                        Err(err) => {
+                            warn!("Unable to join the network: {err}");
+                            app.imp().join_failed_at.set(Some(Instant::now()));
+                        }
+                    }
+                }
+            ));
+        }
+    }
+
+    /// Tells the window the app joined or left the network by itself.
+    fn connection_changed(&self, message: String) {
+        if let Some(window) = self.active_window().and_downcast::<Window>() {
+            window.library_connection_changed(message);
+        }
     }
 
     fn setup_channel(&self) {
@@ -190,7 +502,6 @@ impl Application {
             window.upcast()
         };
 
-        #[cfg(any(target_os = "linux", target_os = "freebsd"))]
         self.request_background();
 
         window.present();
@@ -230,14 +541,14 @@ impl Application {
     fn show_about(&self) {
         let window = self.active_window().unwrap();
         let dialog = adw::AboutDialog::builder()
-            .application_icon(APPLICATION_ID)
-            .application_name("Amberol")
-            .developer_name("Emmanuele Bassi")
+            .application_icon(APPLICATION_ICON)
+            .application_name("Hopea")
+            .developer_name("Daniil Klimov")
             .version(VERSION)
-            .developers(vec!["Emmanuele Bassi"])
-            .copyright("© 2022 Emmanuele Bassi")
-            .website("https://apps.gnome.org/Amberol/")
-            .issue_url("https://gitlab.gnome.org/World/amberol/-/issues/new")
+            .website("https://github.com/PuffyWithEyes/Hopea")
+            .issue_url("https://github.com/PuffyWithEyes/Hopea/issues")
+            .developers(vec!["Daniil Klimov", "Emmanuele Bassi"])
+            .copyright("© 2022 Emmanuele Bassi\n© 2026 Daniil Klimov")
             .license_type(gtk::License::Gpl30)
             // Translators: Replace "translator-credits" with your names, one name per line
             .translator_credits(i18n("translator-credits"))
@@ -246,14 +557,14 @@ impl Application {
         dialog.present(Some(&window));
     }
 
-    #[cfg(any(target_os = "linux", target_os = "freebsd"))]
+    #[cfg(target_os = "linux")]
     async fn portal_request_background(&self) {
         if let Some(window) = self.active_window() {
             let root = window.native().unwrap();
             let identifier = WindowIdentifier::from_native(&root).await;
-            let request = Background::request().identifier(identifier).reason(&*i18n(
-                "Amberol needs to run in the background to play music",
-            ));
+            let request = Background::request()
+                .identifier(identifier)
+                .reason(&*i18n("Hopea needs to run in the background to play music"));
 
             match request.send().await.and_then(
                 |r: ashpd::desktop::Request<ashpd::desktop::background::Background>| r.response(),
@@ -273,7 +584,7 @@ impl Application {
         }
     }
 
-    #[cfg(any(target_os = "linux", target_os = "freebsd"))]
+    #[cfg(target_os = "linux")]
     fn request_background(&self) {
         let background_play = self.imp().settings.boolean("background-play");
         if background_play {
@@ -286,6 +597,30 @@ impl Application {
         }
     }
 
-    #[cfg(not(any(target_os = "linux", target_os = "freebsd")))]
+    #[cfg(any(
+        target_os = "windows",
+        target_os = "macos",
+        target_os = "freebsd",
+        target_os = "openbsd",
+        target_os = "netbsd",
+        target_os = "dragonfly"
+    ))]
+    fn request_background(&self) {
+        if self.imp().settings.boolean("background-play")
+            && self.imp().background_hold.borrow().is_none()
+        {
+            self.imp().background_hold.replace(Some(self.hold()));
+        }
+    }
+
+    #[cfg(not(any(
+        target_os = "linux",
+        target_os = "freebsd",
+        target_os = "openbsd",
+        target_os = "netbsd",
+        target_os = "dragonfly",
+        target_os = "windows",
+        target_os = "macos"
+    )))]
     fn request_background(&self) {}
 }

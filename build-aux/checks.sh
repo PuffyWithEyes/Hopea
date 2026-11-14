@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 # SPDX-FileCopyrightText: 2021  Alejandro Domínguez
 # SPDX-FileCopyrightText: 2022  Kévin Commaile
@@ -35,7 +35,6 @@ neg="\e[31m"
 res="\e[0m"
 
 # Common styled strings
-Installing="${act}Installing${res}"
 Checking="  ${act}Checking${res}"
 Failed="    ${err}Failed${res}"
 error="${err}error:${res}"
@@ -204,10 +203,10 @@ check_potfiles() {
         fi
     fi
 
-    ui_files=(`/usr/bin/grep -lIrE '[C]?_\(' src/gtk/*.blp`)
+    ui_files=(`grep -lIrE '[C]?_\(' src/gtk/*.blp`)
 
     # Get Rust files with regex 'i18n[!]?\('.
-    rs_files=(`/usr/bin/grep -lIrE 'i18n[!]?\(' --exclude=src/i18n.rs src/*`)
+    rs_files=(`grep -lIrE 'i18n[!]?\(' --exclude=src/i18n.rs src/*`)
 
     # Remove common files
     to_diff1=("${ui_potfiles[@]}")
@@ -294,9 +293,9 @@ check_potfiles() {
     fi
 }
 
-# Check if files in src/amberol.gresource.xml are sorted alphabetically.
+# Check if files in src/hopea.gresource.xml are sorted alphabetically.
 check_resources() {
-    [ $tap -eq 0 ] && echo -e "$Checking src/amberol.gresource.xml…"
+    [ $tap -eq 0 ] && echo -e "$Checking src/hopea.gresource.xml…"
 
     local ret=0
 
@@ -306,15 +305,15 @@ check_resources() {
         if [[ $line =~ $regex ]]; then
             files+=("${BASH_REMATCH[1]}")
         fi
-    done < src/amberol.gresource.xml
+    done < src/hopea.gresource.xml
 
     # Check sorted alphabetically
     to_sort=("${files[@]}")
     sort
     for i in ${!files[@]}; do
         if [[ "${files[$i]}" != "${to_sort[$i]}" ]]; then
-            [ $tap -eq 0 ] && echo -e "$error Found file '${files[$i]#src/}' before '${to_sort[$i]#src/}' in amberol.gresource.xml"
-            [ $tap -eq 1 ] && echo "# Sorting error: '${files[$i]}' before '${to_sort[$i]}' in amberol.gresource.xml"
+            [ $tap -eq 0 ] && echo -e "$error Found file '${files[$i]#src/}' before '${to_sort[$i]#src/}' in hopea.gresource.xml"
+            [ $tap -eq 1 ] && echo "# Sorting error: '${files[$i]}' before '${to_sort[$i]}' in hopea.gresource.xml"
             ret=1
             break
         fi
@@ -323,26 +322,23 @@ check_resources() {
     if [[ ret -eq 1 ]]; then
         if [[ $tap -eq 0 ]]; then
             echo ""
-            echo -e "  Checking src/amberol.gresource.xml result: $fail"
+            echo -e "  Checking src/hopea.gresource.xml result: $fail"
             echo "Please fix the above issues"
             exit 1
         else
-            echo "not ok 4 - amberol.gresource.xml"
+            echo "not ok 4 - hopea.gresource.xml"
         fi
     else
         if [[ $tap -eq 0 ]]; then
-            echo -e "  Checking src/amberol.gresource.xml result: $ok"
+            echo -e "  Checking src/hopea.gresource.xml result: $ok"
         else
-            echo "ok 4 - amberol.gresource.xml"
+            echo "ok 4 - hopea.gresource.xml"
         fi
     fi
 }
 
 # Check arguments
 while [[ "$1" ]]; do case $1 in
-    -f | --force-install )
-        force_install=1
-        ;;
     -t | --tap )
         tap=1
         ;;

@@ -1,0 +1,30 @@
+# SPDX-FileCopyrightText: 2026 Daniil Klimov
+# SPDX-License-Identifier: GPL-3.0-or-later
+pkgname=hopea
+pkgver=@VERSION@
+pkgrel=0
+pkgdesc="Music player with peer-to-peer sharing"
+url="https://github.com/@REPOSITORY@"
+arch="x86_64 aarch64"
+license="GPL-3.0-or-later"
+depends="gtk4.0>=4.20 libadwaita>=1.8 libsoup3 gstreamer gst-plugins-base gst-plugins-good gst-plugins-bad gst-plugins-ugly gst-libav python3 ffmpeg adwaita-icon-theme"
+makedepends="bash cargo rust meson ninja pkgconf blueprint-compiler gettext-dev desktop-file-utils
+ gtk4.0-dev libadwaita-dev libsoup3-dev openssl-dev gstreamer-dev gst-plugins-base-dev
+ gst-plugins-bad-dev python3-dev py3-pip libffi-dev"
+source="https://github.com/@REPOSITORY@/releases/download/v$pkgver/hopea-$pkgver-source.tar.gz"
+builddir="$srcdir/hopea-$pkgver"
+prepare() {
+ default_prepare
+ bash packaging/native.sh prepare
+}
+build() {
+ bash packaging/native.sh configure
+ bash packaging/native.sh build
+}
+check() {
+ python3 -I tests/test_service_import.py
+}
+package() {
+ DESTDIR="$pkgdir" bash packaging/native.sh install
+}
+sha512sums="@SOURCE_SHA512@  hopea-$pkgver-source.tar.gz"

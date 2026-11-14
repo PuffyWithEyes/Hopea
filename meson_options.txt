@@ -10,3 +10,6 @@ option (
   ],
   value: 'default',
 )
+
+option('cargo-cache-dir', type: 'string', value: '',
+  description: 'Optional persistent Cargo cache, outside disposable build directories')

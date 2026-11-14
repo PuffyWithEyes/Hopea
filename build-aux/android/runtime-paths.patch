@@ -1,0 +1,20 @@
+--- a/gdk/android/glue/java/org/gtk/android/RuntimeApplication.java
++++ b/gdk/android/glue/java/org/gtk/android/RuntimeApplication.java
+@@ -40,6 +40,17 @@
+ 	@Override
+ 	public void onCreate() {
+ 		super.onCreate();
++		// Hopea uses private, writable Android locations for caches and settings.
++		try {
++			android.system.Os.setenv("HOME", getFilesDir().getAbsolutePath(), true);
++			android.system.Os.setenv("XDG_CACHE_HOME", getCacheDir().getAbsolutePath(), true);
++			android.system.Os.setenv("TMPDIR", getCacheDir().getAbsolutePath(), true);
++			android.system.Os.setenv("FONTCONFIG_FILE", new java.io.File(getFilesDir(), "etc/fonts/fonts.conf").getAbsolutePath(), true);
++			android.system.Os.setenv("GSETTINGS_BACKEND", "keyfile", true);
++		} catch (android.system.ErrnoException error) {
++			throw new IllegalStateException("Unable to initialize Hopea storage", error);
++		}
++
+ 		SystemFilesystem.writeResources(this);
+ 		startRuntime(System.mapLibraryName(getApplicationLibrary()));
+ 	}

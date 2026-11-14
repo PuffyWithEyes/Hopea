@@ -1,0 +1,26 @@
+# SPDX-FileCopyrightText: 2026 Daniil Klimov
+# SPDX-License-Identifier: GPL-3.0-or-later
+[binaries]
+rust = ['rustc', '--target=aarch64-linux-android']
+rust_ld = '/opt/android/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android31-clang'
+
+[gstreamer-full:project options]
+tests = 'disabled'
+examples = 'disabled'
+introspection = 'disabled'
+libav = 'disabled'
+ges = 'disabled'
+devtools = 'disabled'
+rtsp_server = 'disabled'
+gst-examples = 'disabled'
+python = 'disabled'
+libnice = 'disabled'
+qt5 = 'disabled'
+qt6 = 'disabled'
+
+[libsoup:project options]
+introspection = 'disabled'
+vapi = 'disabled'
+tests = false
+sysprof = 'disabled'
+docs = 'disabled'

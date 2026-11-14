@@ -1,0 +1,33 @@
+--- a/libSBRdec/src/lpp_tran.cpp
++++ b/libSBRdec/src/lpp_tran.cpp
+@@ -119,7 +119,11 @@
+ */
+ 
+ #ifdef __ANDROID__
+-#include "log/log.h"
++#include <stdio.h>
++static void hopea_fdk_security_log(int tag, const char *issue) {
++  (void)tag;
++  fprintf(stderr, "FDK AAC safety check: %s\n", issue);
++}
+ #endif
+ 
+ #include "lpp_tran.h"
+@@ -337,7 +341,7 @@
+ #ifdef __ANDROID__
+   else {
+     // Safetynet logging
+-    android_errorWriteLog(0x534e4554, "112160868");
++    hopea_fdk_security_log(0x534e4554, "112160868");
+   }
+ #endif
+ 
+@@ -933,7 +937,7 @@
+ #ifdef __ANDROID__
+   else {
+     // Safetynet logging
+-    android_errorWriteLog(0x534e4554, "112160868");
++    hopea_fdk_security_log(0x534e4554, "112160868");
+   }
+ #endif
+ 

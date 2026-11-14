@@ -1,0 +1,5 @@
+hopea (@VERSION@-1) unstable; urgency=medium
+
+  * Build Hopea from the matching release sources.
+
+ -- Hopea maintainers <maintainers@localhost>  Sat, 14 Nov 2026 00:00:00 +0000

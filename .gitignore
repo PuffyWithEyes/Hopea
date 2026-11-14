@@ -5,3 +5,40 @@ src/config.rs
 target
 
 subprojects/blueprint-compiler
+
+_builddir
+common/Cargo.lock
+
+# Packaging output
+dist/
+result
+_flatpak/
+.flatpak-builder/
+*.flatpak
+_windows/
+_native-build/
+.venv-import/
+__pycache__/
+.packaging/
+vendor-registry/
+
+# Local credentials, tool state and Android signing/build caches
+.env
+.env.*
+!.env.example
+.aws/
+.ssh/
+.codex/
+.agents/
+.android-cargo/
+.android-user/
+.gradle-user/
+.pixiewood/
+*.jks
+*.keystore
+/cookies*.txt
+/cookies*.json
+/session*.json
+/credentials.json
+core
+core.[0-9]*

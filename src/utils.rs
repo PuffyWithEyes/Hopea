@@ -37,7 +37,10 @@ pub fn format_time(t: i64) -> String {
 const COVER_SIZE: i32 = 192 * 2;
 
 pub fn load_cover_texture(buffer: &glib::Bytes) -> Option<gdk_pixbuf::Pixbuf> {
-    let stream = gio::MemoryInputStream::from_bytes(buffer);
+    // Tags and adjacent images can be arbitrary files. Never hand their
+    // original bytes to a native decoder before enforcing pixel/allocation limits.
+    let normalized = hopea_node::ingest::reencode_cover(buffer)?;
+    let stream = gio::MemoryInputStream::from_bytes(&glib::Bytes::from_owned(normalized));
 
     if let Ok(pixbuf) = gdk_pixbuf::Pixbuf::from_stream(&stream, gio::Cancellable::NONE) {
         let width = pixbuf.width();
@@ -49,9 +52,9 @@ pub fn load_cover_texture(buffer: &glib::Bytes) -> Option<gdk_pixbuf::Pixbuf> {
 
         if ratio > 1.0 {
             w = COVER_SIZE;
-            h = (COVER_SIZE as f32 / ratio) as i32;
+            h = ((COVER_SIZE as f32 / ratio) as i32).max(1);
         } else {
-            w = (COVER_SIZE as f32 * ratio) as i32;
+            w = ((COVER_SIZE as f32 * ratio) as i32).max(1);
             h = COVER_SIZE;
         }
 
@@ -64,9 +67,44 @@ pub fn load_cover_texture(buffer: &glib::Bytes) -> Option<gdk_pixbuf::Pixbuf> {
     }
 }
 
+pub fn read_cover_file(path: &std::path::Path) -> Option<glib::Bytes> {
+    use std::io::Read;
+    const LIMIT: u64 = 8 * 1024 * 1024;
+    if !path.metadata().ok()?.is_file() {
+        return None;
+    }
+    let mut bytes = Vec::new();
+    std::fs::File::open(path)
+        .ok()?
+        .take(LIMIT + 1)
+        .read_to_end(&mut bytes)
+        .ok()?;
+    (bytes.len() as u64 <= LIMIT).then(|| glib::Bytes::from_owned(bytes))
+}
+
+/// Bound the actual bytes read, including files that grow while being read.
+pub async fn read_file_limited(file: &gio::File, limit: usize) -> Result<Vec<u8>, glib::Error> {
+    let stream = file.read_future(glib::Priority::DEFAULT).await?;
+    let mut bytes = Vec::new();
+    loop {
+        let chunk = stream
+            .read_bytes_future(64 * 1024, glib::Priority::DEFAULT)
+            .await?;
+        if chunk.is_empty() {
+            return Ok(bytes);
+        }
+        if chunk.len() > limit.saturating_sub(bytes.len()) {
+            return Err(glib::Error::new(
+                gio::IOErrorEnum::InvalidData,
+                "File exceeds its size limit",
+            ));
+        }
+        bytes.extend_from_slice(&chunk);
+    }
+}
+
 pub fn cache_cover_art(uuid: &str, pixbuf: &gdk_pixbuf::Pixbuf) -> Option<PathBuf> {
-    let mut cache_dir = glib::user_cache_dir();
-    cache_dir.push("amberol");
+    let mut cache_dir = crate::paths::cache_dir();
     cache_dir.push("covers");
     glib::mkdir_with_parents(&cache_dir, 0o755);
 
@@ -78,7 +116,7 @@ pub fn cache_cover_art(uuid: &str, pixbuf: &gdk_pixbuf::Pixbuf) -> Option<PathBu
             pixbuf.save_to_streamv_async(
                 &stream,
                 "png",
-                &[("tEXt::Software", "amberol")],
+                &[("tEXt::Software", "hopea")],
                 gio::Cancellable::NONE,
                 move |res| {
                     if let Err(e) = res {
@@ -244,22 +282,34 @@ pub fn load_files_from_folder(folder: &gio::File, recursive: bool) -> Vec<gio::F
 }
 
 pub fn store_playlist(queue: &Queue) {
+    store_songs(
+        &(0..queue.n_songs())
+            .filter_map(|i| queue.song_at(i))
+            .collect::<Vec<_>>(),
+    );
+}
+
+pub fn store_songs(songs: &[Song]) {
     let pls = glib::KeyFile::new();
-    pls.set_string("playlist", "X-GNOME-Title", "Amberol's current playlist");
+    pls.set_string("playlist", "X-GNOME-Title", "Hopea's current playlist");
 
-    pls.set_int64("playlist", "NumberOfEntries", queue.n_songs() as i64);
-
-    let model = queue.model();
-    for i in 0..model.n_items() {
-        let item = model.item(i).unwrap();
-        let song = item.downcast_ref::<Song>().unwrap();
-        let path = song.file().path().expect("Unknown file");
-        let path_str = path.to_string_lossy();
-        pls.set_value("playlist", &format!("File{i}"), &path_str);
+    // Songs streamed from the shared library have no local path, and are not
+    // restored
+    let mut n_entries = 0;
+    for song in songs {
+        if !song.property::<bool>("favorite") {
+            continue;
+        }
+        if let Some(path) = song.file().path() {
+            let path_str = path.to_string_lossy();
+            pls.set_value("playlist", &format!("File{n_entries}"), &path_str);
+            n_entries += 1;
+        }
     }
 
-    let mut pls_cache = glib::user_cache_dir();
-    pls_cache.push("amberol");
+    pls.set_int64("playlist", "NumberOfEntries", n_entries);
+
+    let mut pls_cache = crate::paths::cache_dir();
     pls_cache.push("playlists");
     glib::mkdir_with_parents(&pls_cache, 0o755);
 
@@ -271,8 +321,7 @@ pub fn store_playlist(queue: &Queue) {
 }
 
 pub fn load_cached_songs() -> Option<Vec<gio::File>> {
-    let mut pls_cache = glib::user_cache_dir();
-    pls_cache.push("amberol");
+    let mut pls_cache = crate::paths::cache_dir();
     pls_cache.push("playlists");
     pls_cache.push("current.pls");
 
@@ -300,8 +349,7 @@ pub fn load_cached_songs() -> Option<Vec<gio::File>> {
 }
 
 pub fn has_cached_playlist() -> bool {
-    let mut pls_cache = glib::user_cache_dir();
-    pls_cache.push("amberol");
+    let mut pls_cache = crate::paths::cache_dir();
     pls_cache.push("playlists");
     pls_cache.push("current.pls");
 

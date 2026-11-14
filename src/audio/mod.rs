@@ -44,14 +44,29 @@ mod cover_cache;
 pub use cover_cache::CoverCache;
 
 mod inhibit_controller;
+#[cfg(any(
+    target_os = "linux",
+    target_os = "freebsd",
+    target_os = "openbsd",
+    target_os = "netbsd",
+    target_os = "dragonfly"
+))]
 mod mpris_controller;
 pub use inhibit_controller::InhibitController;
+#[cfg(any(
+    target_os = "linux",
+    target_os = "freebsd",
+    target_os = "openbsd",
+    target_os = "netbsd",
+    target_os = "dragonfly"
+))]
 pub use mpris_controller::MprisController;
 
 mod gst_backend;
 pub use gst_backend::GstBackend;
 
 mod player;
+pub use player::PreviewCheckpoint;
 mod queue;
 mod shuffle;
 mod song;

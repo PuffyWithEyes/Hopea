@@ -1,11 +1,11 @@
-# Chinese (Taiwan) translation for amberol.
-# Copyright (C) 2026 amberol's COPYRIGHT HOLDER
-# This file is distributed under the same license as the amberol package.
+# Chinese (Taiwan) translation for hopea.
+# Copyright (C) 2026 hopea's COPYRIGHT HOLDER
+# This file is distributed under the same license as the hopea package.
 # A-Lang <alang.hsu@gmail.com>, 2026.
 #
 msgid ""
 msgstr ""
-"Project-Id-Version: amberol main\n"
+"Project-Id-Version: hopea main\n"
 "Report-Msgid-Bugs-To: https://gitlab.gnome.org/World/amberol/-/issues/\n"
 "POT-Creation-Date: 2026-07-08 19:26+0000\n"
 "PO-Revision-Date: 2026-09-29 22:38+0800\n"
@@ -18,59 +18,59 @@ msgstr ""
 "Plural-Forms: nplurals=1; plural=0;\n"
 "X-Generator: Poedit 3.9\n"
 
-#: data/io.bassi.Amberol.desktop.in.in:2
-#: data/io.bassi.Amberol.metainfo.xml.in.in:6
-msgid "Amberol"
-msgstr "Amberol"
+#: data/io.hopea.Hopea.desktop.in.in:2
+#: data/io.hopea.Hopea.metainfo.xml.in.in:6
+msgid "Hopea"
+msgstr "Hopea"
 
-#: data/io.bassi.Amberol.desktop.in.in:3
+#: data/io.hopea.Hopea.desktop.in.in:3
 msgid "Music Player"
 msgstr "音樂播放器"
 
 #. Translators: Search terms to find this application. Do NOT translate or localize the semicolons! The list MUST also end with a semicolon!
-#: data/io.bassi.Amberol.desktop.in.in:11
+#: data/io.hopea.Hopea.desktop.in.in:11
 msgid "music;player;media;audio;playlist;"
 msgstr "音樂;播放器;媒體;音訊;播放清單;music;player;media;audio;playlist;"
 
-#: data/io.bassi.Amberol.metainfo.xml.in.in:7
+#: data/io.hopea.Hopea.metainfo.xml.in.in:7
 msgid "Plays music, and nothing else"
 msgstr "播放音樂，僅此而已"
 
-#: data/io.bassi.Amberol.metainfo.xml.in.in:9
+#: data/io.hopea.Hopea.metainfo.xml.in.in:9
 msgid ""
-"Amberol is a music player with no delusions of grandeur. If you just want to "
-"play music available on your local system then Amberol is the music player "
+"Hopea is a music player with no delusions of grandeur. If you just want to "
+"play music available on your local system then Hopea is the music player "
 "you are looking for."
 msgstr ""
-"Amberol 是一款謙遜樸實的音樂播放器。如果您只想播放本機系統上的音樂，那麼 "
-"Amberol 就是您正在尋找的音樂播放器。"
+"Hopea 是一款謙遜樸實的音樂播放器。如果您只想播放本機系統上的音樂，那麼 "
+"Hopea 就是您正在尋找的音樂播放器。"
 
-#: data/io.bassi.Amberol.metainfo.xml.in.in:14
+#: data/io.hopea.Hopea.metainfo.xml.in.in:14
 msgid "Current features:"
 msgstr "目前的功能："
 
-#: data/io.bassi.Amberol.metainfo.xml.in.in:16
+#: data/io.hopea.Hopea.metainfo.xml.in.in:16
 msgid "adaptive UI"
 msgstr "自適應介面"
 
-#: data/io.bassi.Amberol.metainfo.xml.in.in:17
+#: data/io.hopea.Hopea.metainfo.xml.in.in:17
 msgid "UI recoloring using the album art"
 msgstr "使用專輯封面為介面重新配色"
 
-#: data/io.bassi.Amberol.metainfo.xml.in.in:18
+#: data/io.hopea.Hopea.metainfo.xml.in.in:18
 msgid "drag and drop support to queue songs"
 msgstr "支援拖放以將歌曲加入佇列"
 
-#: data/io.bassi.Amberol.metainfo.xml.in.in:19
+#: data/io.hopea.Hopea.metainfo.xml.in.in:19
 msgid "shuffle and repeat"
 msgstr "隨機播放與重複播放"
 
-#: data/io.bassi.Amberol.metainfo.xml.in.in:20
+#: data/io.hopea.Hopea.metainfo.xml.in.in:20
 msgid "MPRIS integration"
 msgstr "MPRIS 整合"
 
-#: data/io.bassi.Amberol.metainfo.xml.in.in:48
-#: data/io.bassi.Amberol.metainfo.xml.in.in:50
+#: data/io.hopea.Hopea.metainfo.xml.in.in:48
+#: data/io.hopea.Hopea.metainfo.xml.in.in:50
 msgid "Emmanuele Bassi"
 msgstr "Emmanuele Bassi"
 
@@ -189,8 +189,8 @@ msgid "_Keyboard Shortcuts"
 msgstr "鍵盤快捷鍵(_K)"
 
 #: src/gtk/playback-control.blp:222
-msgid "_About Amberol"
-msgstr "關於 _Amberol"
+msgid "_About Hopea"
+msgstr "關於 _Hopea"
 
 #: src/gtk/playback-control.blp:227
 msgid "_Quit"
@@ -374,8 +374,8 @@ msgid "translator-credits"
 msgstr "Alang Hsu <alang.hsu@gmail.com>, 2026."
 
 #: src/application.rs:255
-msgid "Amberol needs to run in the background to play music"
-msgstr "Amberol 需要在背景執行才能播放音樂"
+msgid "Hopea needs to run in the background to play music"
+msgstr "Hopea 需要在背景執行才能播放音樂"
 
 #: src/audio/inhibit_controller.rs:40
 msgid "Playback in progress"

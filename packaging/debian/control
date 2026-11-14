@@ -1,0 +1,20 @@
+Source: hopea
+Section: sound
+Priority: optional
+Maintainer: Hopea maintainers <maintainers@localhost>
+Build-Depends: debhelper-compat (= 13), cargo, rustc, meson, ninja-build,
+ blueprint-compiler, pkg-config, gettext, desktop-file-utils,
+ libgtk-4-dev (>= 4.20), libadwaita-1-dev (>= 1.8), libsoup-3.0-dev,
+ libssl-dev, libgstreamer1.0-dev, libgstreamer-plugins-base1.0-dev,
+ libgstreamer-plugins-bad1.0-dev, python3, python3-venv, python3-pip
+Standards-Version: 4.7.2
+Rules-Requires-Root: no
+
+Package: hopea
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, python3, ffmpeg,
+ gstreamer1.0-plugins-base, gstreamer1.0-plugins-good, gstreamer1.0-plugins-bad,
+ gstreamer1.0-plugins-ugly, gstreamer1.0-libav, adwaita-icon-theme
+Description: Music player with peer-to-peer sharing
+ GTK4 music player with collections, lyrics, service imports and a built-in
+ peer-to-peer sharing node.

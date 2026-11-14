@@ -109,9 +109,6 @@ dragoverlay {
   --sidebar-shade-color: rgb(0 0 0 / 10%);
   --sidebar-border-color: rgb(0 0 0 / 10%);
 
-  --accent-bg-color: rgb(0 0 0 / 75%);
-  --accent-fg-color: white;
-  --accent-color: oklab(from var(--accent-bg-color) var(--standalone-color-oklab));
 
   --scrollbar-outline-color: rgb(255 255 255 / 25%);
 
@@ -150,9 +147,129 @@ volume > scale trough slider { opacity: 0; }
     --sidebar-shade-color: rgb(0 0 0 / 20%);
     --sidebar-border-color: rgb(0 0 0 / 28%);
 
-    --accent-bg-color: rgb(255 255 255 / 75%);
-    --accent-fg-color: rgb(0 0 0 / 75%);
 
     --scrollbar-outline-color: rgb(0 0 0 / 25%);
   }
+}
+
+/* The format of a shared library song, framed under its title */
+.format-badge {
+  padding: 0 6px;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--accent-color) 55%, transparent);
+  background-color: color-mix(in srgb, var(--accent-bg-color) 14%, transparent);
+  color: var(--accent-color);
+  font-size: 0.72em;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+/* In the bottom sheet on phones, leave room for the drag handle */
+.in-sheet headerbar {
+  margin-top: 12px;
+}
+
+.sharing-connection {
+  padding: 14px;
+}
+
+.track-thumbnail {
+  border-radius: 6px;
+  background-color: alpha(currentColor, 0.08);
+}
+
+.import-collection {
+  padding: 6px;
+  border: 2px solid transparent;
+}
+
+.import-collection-selected {
+  border-color: alpha(@accent_color, 0.6);
+}
+
+.protection-on {
+  color: @accent_color;
+}
+
+.protection-off {
+  color: @error_color;
+}
+
+progressbar.song-progress trough,
+progressbar.song-progress progress {
+  min-height: 3px;
+}
+
+.for-you-play {
+  padding: 18px 48px;
+  font-size: 1.4em;
+}
+
+.lyrics label {
+  font-size: 1.15em;
+}
+
+.lyrics.synced label {
+  opacity: 0.55;
+  font-weight: 600;
+  transition: opacity 180ms ease-out, color 180ms ease-out;
+}
+
+.lyrics.synced label.current {
+  opacity: 1;
+  color: var(--accent-color);
+}
+
+/* A lifted song retains its real cover and name during vertical reordering. */
+/* GtkListItemWidget's hover background stays at its original allocation.
+ * During a drag only QueueRow content should move. */
+listview.reordering > row {
+  background: transparent;
+}
+
+.lifted-song {
+  background: var(--window-bg-color);
+  border-radius: 10px;
+  box-shadow: 0 5px 16px rgb(0 0 0 / 25%);
+}
+
+.import-comparison {
+  padding: 14px;
+}
+
+.import-warning-banner {
+  padding: 6px 12px;
+  border-radius: 12px;
+  background: alpha(@warning_color, 0.08);
+}
+
+.import-conflict,
+.import-conflict .title,
+.import-conflict .subtitle {
+  color: #b07800;
+}
+
+.import-unavailable,
+.import-unavailable .title,
+.import-unavailable .subtitle {
+  color: #932b46;
+}
+
+@media (prefers-color-scheme: dark) {
+  .import-conflict,
+  .import-conflict .title,
+  .import-conflict .subtitle {
+    color: #f4cb63;
+  }
+
+  .import-unavailable,
+  .import-unavailable .title,
+  .import-unavailable .subtitle {
+    color: #cf7189;
+  }
+}
+
+/* Action rows wrap naturally instead of setting a dialog's minimum width. */
+.action-wrap > flowboxchild {
+  padding: 0;
 }

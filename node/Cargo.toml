@@ -1,0 +1,70 @@
+# SPDX-FileCopyrightText: 2026  Daniil Klimov
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+[package]
+name = "hopea-node"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Peer-to-peer music sharing for Hopea"
+
+# Built into the player as a library; the binary is an optional headless node.
+# It has its own lockfile for running its tests independently of the client.
+[workspace]
+
+[dependencies]
+hopea-common = { path = "../common" }
+anyhow = "1.0.104"
+axum = "0.8.9"
+base64 = "0.23.1"
+clap = { version = "4.6.7", features = ["derive", "env"] }
+ed25519-dalek = "3.0.0"
+futures-util = "0.3.34"
+getrandom = "0.4.3"
+hex = "0.4.3"
+image = { version = "0.25.10", default-features = false, features = ["png", "jpeg"] }
+librqbit = { version = "9.0.1", default-features = false, features = ["rust-tls"] }
+librqbit-upnp = "9.0.1"
+# Do not decompress untrusted ID3 payloads in the node process.
+lofty = { version = "0.25.5", default-features = false }
+mdns-sd = "0.21.7"
+percent-encoding = "2.3.2"
+reqwest = { version = "0.13.5", default-features = false, features = ["json"] }
+rusqlite = { version = "0.41.1", features = ["bundled"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+sha1 = "0.11.0"
+sha2 = "0.11.1"
+strsim = "0.11.1"
+symphonia = { version = "0.6.1", default-features = false, features = [
+    "flac",
+    "mp3",
+    "aac",
+    "alac",
+    "isomp4",
+    "ogg",
+    "vorbis",
+    "wav",
+    "pcm",
+] }
+tempfile = "3.27.0"
+thiserror = "2.0.21"
+tokio = { version = "1.54.1", features = ["rt-multi-thread", "macros", "fs", "io-util", "net", "signal", "sync", "time"] }
+tower = { version = "0.5.3", features = ["util", "limit"] }
+tower-http = { version = "0.7.1", features = ["fs", "set-header", "trace", "timeout"] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+unicode-normalization = "0.1.26"
+
+[dev-dependencies]
+http-body-util = "0.1.5"
+
+# Dependencies are built without debug information: it takes most of the
+# space of a debug build, and debugging rarely needs to step into them
+[profile.dev.package."*"]
+debug = false
+
+[patch.crates-io]
+lofty = { path = "../vendor/lofty" }
+
+socket-pktinfo = { path = "../vendor/socket-pktinfo" }

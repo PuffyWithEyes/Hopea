@@ -18,60 +18,60 @@ msgstr ""
 "Plural-Forms: nplurals=2; plural=n != 1;\n"
 "X-Generator: Lokalize 25.04.0\n"
 
-#: data/io.bassi.Amberol.desktop.in.in:2
-#: data/io.bassi.Amberol.metainfo.xml.in.in:6
-msgid "Amberol"
-msgstr "Amberol"
+#: data/io.hopea.Hopea.desktop.in.in:2
+#: data/io.hopea.Hopea.metainfo.xml.in.in:6
+msgid "Hopea"
+msgstr "Hopea"
 
-#: data/io.bassi.Amberol.desktop.in.in:3
+#: data/io.hopea.Hopea.desktop.in.in:3
 msgid "Music Player"
 msgstr "Tónlistarspilari"
 
 #. Translators: Search terms to find this application. Do NOT translate or localize the semicolons! The list MUST also end with a semicolon!
-#: data/io.bassi.Amberol.desktop.in.in:11
+#: data/io.hopea.Hopea.desktop.in.in:11
 msgid "music;player;media;audio;playlist;"
 msgstr "tónlist;spilari;margmiðlun;hljóð;spilun;spilunarlisti"
 
-#: data/io.bassi.Amberol.metainfo.xml.in.in:7
+#: data/io.hopea.Hopea.metainfo.xml.in.in:7
 msgid "Plays music, and nothing else"
 msgstr "Spilar tónlist og ekkert annað"
 
-#: data/io.bassi.Amberol.metainfo.xml.in.in:9
+#: data/io.hopea.Hopea.metainfo.xml.in.in:9
 msgid ""
-"Amberol is a music player with no delusions of grandeur. If you just want to "
-"play music available on your local system then Amberol is the music player "
+"Hopea is a music player with no delusions of grandeur. If you just want to "
+"play music available on your local system then Hopea is the music player "
 "you are looking for."
 msgstr ""
-"Amberol er tónlistarspilari án alls óþarfa. Ef þú ert bara að leita að "
-"spilara fyrir tónlist sem þú átt þegar á tölvunni þinni, þá er Amberol "
+"Hopea er tónlistarspilari án alls óþarfa. Ef þú ert bara að leita að "
+"spilara fyrir tónlist sem þú átt þegar á tölvunni þinni, þá er Hopea "
 "eitthvað fyrir þig."
 
-#: data/io.bassi.Amberol.metainfo.xml.in.in:14
+#: data/io.hopea.Hopea.metainfo.xml.in.in:14
 msgid "Current features:"
 msgstr "Núverandi eiginleikar:"
 
-#: data/io.bassi.Amberol.metainfo.xml.in.in:16
+#: data/io.hopea.Hopea.metainfo.xml.in.in:16
 msgid "adaptive UI"
 msgstr "Aðlaganlegt viðmót"
 
-#: data/io.bassi.Amberol.metainfo.xml.in.in:17
+#: data/io.hopea.Hopea.metainfo.xml.in.in:17
 msgid "UI recoloring using the album art"
 msgstr "Endurlitun notandaviðmóts út frá umslagsmyndum"
 
-#: data/io.bassi.Amberol.metainfo.xml.in.in:18
+#: data/io.hopea.Hopea.metainfo.xml.in.in:18
 msgid "drag and drop support to queue songs"
 msgstr "stuðningur við draga og sleppa lögum í biðröð"
 
-#: data/io.bassi.Amberol.metainfo.xml.in.in:19
+#: data/io.hopea.Hopea.metainfo.xml.in.in:19
 msgid "shuffle and repeat"
 msgstr "stokka og endurtaka"
 
-#: data/io.bassi.Amberol.metainfo.xml.in.in:20
+#: data/io.hopea.Hopea.metainfo.xml.in.in:20
 msgid "MPRIS integration"
 msgstr "MPRIS-samþætting"
 
-#: data/io.bassi.Amberol.metainfo.xml.in.in:48
-#: data/io.bassi.Amberol.metainfo.xml.in.in:50
+#: data/io.hopea.Hopea.metainfo.xml.in.in:48
+#: data/io.hopea.Hopea.metainfo.xml.in.in:50
 msgid "Emmanuele Bassi"
 msgstr "Emmanuele Bassi"
 
@@ -191,8 +191,8 @@ msgid "_Keyboard Shortcuts"
 msgstr "Flýtily_klar"
 
 #: src/gtk/playback-control.blp:222
-msgid "_About Amberol"
-msgstr "_Um Amberol"
+msgid "_About Hopea"
+msgstr "_Um Hopea"
 
 #: src/gtk/playback-control.blp:227
 msgid "_Quit"
@@ -378,8 +378,8 @@ msgid "translator-credits"
 msgstr "Sveinn í Felli, sv1@fellsnet.is"
 
 #: src/application.rs:255
-msgid "Amberol needs to run in the background to play music"
-msgstr "Amberol þarf að keyra í bakgrunni til að geta spilað tónlist"
+msgid "Hopea needs to run in the background to play music"
+msgstr "Hopea þarf að keyra í bakgrunni til að geta spilað tónlist"
 
 #: src/audio/inhibit_controller.rs:40
 msgid "Playback in progress"
@@ -537,5 +537,5 @@ msgstr "Get ekki ekki opnað möppu"
 #~ msgid "_Cancel"
 #~ msgstr "_Hætta við"
 
-#~ msgid "Amberol cannot run in the background"
-#~ msgstr "Amberol getur ekki keyrt í bakgrunni"
+#~ msgid "Hopea cannot run in the background"
+#~ msgstr "Hopea getur ekki keyrt í bakgrunni"

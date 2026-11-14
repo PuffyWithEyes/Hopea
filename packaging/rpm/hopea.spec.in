@@ -1,0 +1,54 @@
+# SPDX-FileCopyrightText: 2026 Daniil Klimov
+# SPDX-License-Identifier: GPL-3.0-or-later
+Name: hopea
+Version: @VERSION@
+Release: 1%{?dist}
+Summary: Music player with peer-to-peer sharing
+License: GPL-3.0-or-later
+URL: https://github.com/@REPOSITORY@
+Source0: https://github.com/@REPOSITORY@/releases/download/v%{version}/hopea-%{version}-source.tar.gz
+# Prepared on the same distribution/Python/architecture by packaging/native.sh.
+Source1: hopea-import-wheels.tar.gz
+BuildRequires: gcc, gcc-c++, cargo, rust, meson, ninja-build, gettext
+BuildRequires: blueprint-compiler, desktop-file-utils, python3, python3-pip
+BuildRequires: pkgconfig(gtk4) >= 4.20
+BuildRequires: pkgconfig(libadwaita-1) >= 1.8
+BuildRequires: pkgconfig(libsoup-3.0), pkgconfig(openssl)
+BuildRequires: pkgconfig(gstreamer-1.0), pkgconfig(gstreamer-audio-1.0)
+BuildRequires: pkgconfig(gstreamer-play-1.0), pkgconfig(gstreamer-plugins-bad-1.0)
+Requires: python3, adwaita-icon-theme
+# Codec and FFmpeg package names differ; supplied by the platform recipe.
+@RPM_REQUIRES@
+
+%description
+GTK4 music player with collections, lyrics, service imports and P2P sharing.
+
+%prep
+%setup -q
+mkdir -p .packaging
+tar -xzf %{SOURCE1} -C .packaging
+
+%build
+export CARGO_NET_OFFLINE=true
+bash packaging/native.sh configure
+bash packaging/native.sh build
+
+%install
+DESTDIR=%{buildroot} bash packaging/native.sh install
+
+%check
+python3 -I tests/test_service_import.py
+
+%files
+%{_bindir}/hopea
+%{_bindir}/hopea-spotify
+%{_libexecdir}/hopea
+/usr/lib/hopea-import
+%{_datadir}/hopea
+%{_datadir}/applications/*
+%{_datadir}/metainfo/*
+%{_datadir}/dbus-1/services/*
+%{_datadir}/glib-2.0/schemas/*
+%{_datadir}/icons/*
+%{_datadir}/locale/*
+%license /usr/share/licenses/hopea

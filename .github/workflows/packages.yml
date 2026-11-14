@@ -1,0 +1,449 @@
+# SPDX-FileCopyrightText: 2026 Daniil Klimov
+# SPDX-License-Identifier: CC0-1.0
+name: Packages
+on:
+  workflow_dispatch:
+    inputs:
+      draft_release:
+        description: Create a draft release after successful builds (run from a vVERSION tag)
+        type: boolean
+        default: false
+      gentoo:
+        description: Also build a Gentoo binary package (may compile many dependencies)
+        type: boolean
+        default: false
+      android:
+        description: Also build the Android ARM64 preview (large SDK build)
+        type: boolean
+        default: false
+      lfs:
+        description: Build on your configured native LFS runner (label hopea-lfs)
+        type: boolean
+        default: false
+      bsd:
+        description: Also build native BSD packages in CI VMs (experimental)
+        type: boolean
+        default: false
+  push:
+    tags: ['v*']
+permissions:
+  contents: read
+concurrency:
+  group: packages-${{ github.ref }}
+  cancel-in-progress: false
+env:
+  CARGO_BUILD_JOBS: '4'
+  HOPEA_REPOSITORY: ${{ github.repository }}
+jobs:
+  source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: cachix/install-nix-action@d698718aa798980d17dd749f03beae0b51183399 # v31
+      - id: version
+        shell: bash
+        run: |
+          version=$(sed -n "s/.*version: '\([^']*\)'.*/\1/p" meson.build | head -1)
+          [[ $version =~ ^[0-9]+(\.[0-9]+)+$ ]]
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - run: nix develop --command bash tests/test_nix.sh
+      - run: nix develop --command bash packaging/source.sh
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: source
+          path: dist/hopea-*-source.tar.gz*
+          if-no-files-found: error
+          compression-level: 0
+
+  linux:
+    needs: source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { platform: debian, image: 'debian:sid' }
+          - { platform: ubuntu, image: 'ubuntu:26.10' }
+          - { platform: arch, image: 'archlinux:base-devel' }
+          - { platform: fedora, image: 'fedora:rawhide' }
+          - { platform: opensuse, image: 'opensuse/tumbleweed:latest' }
+          - { platform: alt, image: 'alt:sisyphus' }
+    env:
+      HOPEA_VERSION: ${{ needs.source.outputs.version }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with: { persist-credentials: false }
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with: { name: source, path: dist }
+      - name: Build in the target distribution
+        env:
+          BUILD_IMAGE: ${{ matrix.image }}
+          BUILD_PLATFORM: ${{ matrix.platform }}
+        run: |
+          docker pull "$BUILD_IMAGE"
+          docker image inspect "$BUILD_IMAGE" --format '{{index .RepoDigests 0}}' > "dist/build-image-$BUILD_PLATFORM.txt"
+          docker run --rm -v "$PWD:/work" -w /work \
+            -e HOPEA_CI_CONTAINER=1 -e HOPEA_VERSION -e HOPEA_REPOSITORY -e CARGO_BUILD_JOBS \
+            "$BUILD_IMAGE" bash -c 'bash packaging/linux-deps.sh "$1" && bash packaging/linux-build.sh "$1" "dist/hopea-$HOPEA_VERSION-source.tar.gz"' _ "$BUILD_PLATFORM"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: linux-${{ matrix.platform }}
+          path: |
+            dist/*.deb
+            dist/*.rpm
+            dist/*.pkg.tar.*
+            dist/build-image-*.txt
+          if-no-files-found: error
+          compression-level: 0
+
+  extra-linux:
+    needs: source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { platform: void-glibc, image: 'ghcr.io/void-linux/void-glibc-full:latest', script: void }
+          - { platform: void-musl, image: 'ghcr.io/void-linux/void-musl-full:latest', script: void }
+          - { platform: alpine, image: 'alpine:edge', script: alpine }
+    env:
+      HOPEA_VERSION: ${{ needs.source.outputs.version }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with: { persist-credentials: false }
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with: { name: source, path: dist }
+      - name: Build with the distribution's native libc and package tools
+        env:
+          BUILD_IMAGE: ${{ matrix.image }}
+          BUILD_PLATFORM: ${{ matrix.platform }}
+          BUILD_SCRIPT: ${{ matrix.script }}
+        run: |
+          docker pull "$BUILD_IMAGE"
+          docker image inspect "$BUILD_IMAGE" --format '{{index .RepoDigests 0}}' > "dist/build-image-$BUILD_PLATFORM.txt"
+          docker run --rm -v "$PWD:/work" -w /work \
+            -e HOPEA_CI_CONTAINER=1 -e HOPEA_VERSION -e HOPEA_REPOSITORY -e CARGO_BUILD_JOBS \
+            "$BUILD_IMAGE" sh -ec '
+              if [ "$1" = alpine ]; then apk add --no-cache bash; fi
+              exec bash "packaging/$1/build.sh" "dist/hopea-$HOPEA_VERSION-source.tar.gz"
+            ' _ "$BUILD_SCRIPT"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: linux-${{ matrix.platform }}
+          path: |
+            dist/*.xbps
+            dist/*-repodata
+            dist/*.apk
+            dist/*.pub
+            dist/build-image-*.txt
+          if-no-files-found: error
+          compression-level: 0
+
+  lfs:
+    if: github.event_name == 'workflow_dispatch' && inputs.lfs
+    needs: source
+    runs-on: [self-hosted, Linux, hopea-lfs]
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with: { persist-credentials: false }
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with: { name: source, path: dist }
+      - env:
+          HOPEA_VERSION: ${{ needs.source.outputs.version }}
+        run: |
+          stage=$(mktemp -d)
+          trap 'rm -rf "$stage"' EXIT
+          tar -xzf "dist/hopea-$HOPEA_VERSION-source.tar.gz" -C "$stage"
+          (cd "$stage/hopea-$HOPEA_VERSION" && bash packaging/lfs/build.sh)
+          cp "$stage/hopea-$HOPEA_VERSION"/dist/*-lfs-*.tar.gz dist/
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: lfs-native
+          path: dist/*-lfs-*.tar.gz
+          if-no-files-found: error
+          compression-level: 0
+
+  gentoo:
+    if: github.event_name == 'workflow_dispatch' && inputs.gentoo
+    needs: source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 350
+    env:
+      HOPEA_VERSION: ${{ needs.source.outputs.version }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with: { persist-credentials: false }
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with: { name: source, path: dist }
+      - run: |
+          docker run --rm -v "$PWD:/work" -w /work \
+            -e HOPEA_CI_CONTAINER=1 -e HOPEA_VERSION -e HOPEA_REPOSITORY \
+            gentoo/stage3:amd64-openrc bash packaging/gentoo/build.sh "dist/hopea-$HOPEA_VERSION-source.tar.gz"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: gentoo-amd64
+          path: |
+            dist/*.gpkg.tar
+            dist/*.tbz2
+          if-no-files-found: error
+          compression-level: 0
+
+  nix:
+    needs: source
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with: { persist-credentials: false }
+      - uses: cachix/install-nix-action@d698718aa798980d17dd749f03beae0b51183399
+      - run: nix build .#hopea --print-build-logs
+      - run: ./result/bin/hopea --help
+      - name: Export binary cache
+        env:
+          SIGNING_KEY: ${{ secrets.NIX_SIGNING_KEY }}
+        run: |
+          system=$(nix eval --impure --raw --expr builtins.currentSystem)
+          mkdir -p dist .packaging/nix-cache
+          if [[ -n $SIGNING_KEY ]]; then
+            key_file="$RUNNER_TEMP/hopea-nix-key"
+            trap 'rm -f "$key_file"' EXIT
+            (umask 077; printf '%s' "$SIGNING_KEY" > "$key_file")
+            nix store sign --recursive --key-file "$key_file" ./result
+          fi
+          nix copy --to "file://$PWD/.packaging/nix-cache" ./result
+          readlink -f result > ".packaging/nix-cache/hopea-store-path"
+          tar -cf "dist/hopea-nix-$system.tar" -C .packaging/nix-cache .
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: nix-${{ matrix.runner }}
+          path: dist/hopea-nix-*.tar
+          compression-level: 0
+          if-no-files-found: error
+
+  windows:
+    needs: source
+    runs-on: windows-2025
+    timeout-minutes: 180
+    env:
+      HOPEA_VERSION: ${{ needs.source.outputs.version }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with: { persist-credentials: false }
+      - uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e # v2
+        with:
+          msystem: UCRT64
+          update: true
+      - shell: msys2 {0}
+        run: |
+          bash build-aux/windows/build.sh
+          _windows/Hopea/bin/hopea.exe --help
+          mv dist/hopea-windows.zip "dist/hopea-$HOPEA_VERSION-windows-x86_64.zip"
+      - name: Build the offline Windows installer
+        shell: pwsh
+        run: ./packaging/windows/build.ps1
+      - name: Check install, reinstall and uninstall
+        shell: pwsh
+        run: ./tests/test_windows_installer.ps1
+      - name: Keep installer diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: windows-installer-diagnostics
+          path: |
+            _windows/setup/compiler-install.log
+            _windows/setup/test-logs/*.log
+          if-no-files-found: ignore
+          retention-days: 7
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: windows-x86_64
+          path: |
+            dist/*windows*.zip
+            dist/*windows*-setup.exe*
+          if-no-files-found: error
+          compression-level: 0
+
+  macos:
+    needs: source
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [macos-15, macos-15-intel]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 180
+    env:
+      HOPEA_VERSION: ${{ needs.source.outputs.version }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with: { persist-credentials: false }
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with: { name: source, path: dist }
+      - run: bash packaging/macos-build.sh
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: macos-${{ matrix.runner }}
+          path: |
+            dist/*macos*.tar.gz
+            dist/*.bottle.*
+            dist/hopea-*.rb
+          if-no-files-found: error
+          compression-level: 0
+
+  flatpak:
+    needs: source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with: { persist-credentials: false }
+      - run: |
+          sudo apt-get update
+          sudo apt-get install -y flatpak flatpak-builder appstream
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          dbus-run-session -- bash build-aux/flatpak/build.sh
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: flatpak
+          path: dist/*.flatpak*
+          if-no-files-found: error
+          compression-level: 0
+
+  android:
+    if: github.event_name == 'workflow_dispatch' && inputs.android
+    needs: source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with: { persist-credentials: false }
+      - uses: cachix/install-nix-action@d698718aa798980d17dd749f03beae0b51183399
+      - name: Compile desktop-independent UI resources
+        run: |
+          mkdir -p _builddir/src/gtk
+          nix develop --command bash -c 'blueprint-compiler batch-compile _builddir/src/gtk src/gtk src/gtk/*.blp'
+      - name: Prepare a stable preview signing key
+        env:
+          PREVIEW_KEY: ${{ secrets.ANDROID_PREVIEW_KEYSTORE_BASE64 }}
+        run: |
+          test -n "$PREVIEW_KEY" || { echo 'Configure ANDROID_PREVIEW_KEYSTORE_BASE64 to keep APK updates installable.' >&2; exit 1; }
+          install -d -m 700 /tmp/hopea-android-src/.android-user
+          printf '%s' "$PREVIEW_KEY" | base64 --decode > /tmp/hopea-android-src/.android-user/debug.keystore
+          chmod 600 /tmp/hopea-android-src/.android-user/debug.keystore
+      - run: bash build-aux/android/build.sh
+      - if: always()
+        run: sudo rm -f /tmp/hopea-android-src/.android-user/debug.keystore
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: android-arm64-preview
+          path: dist/*.apk
+          if-no-files-found: error
+          compression-level: 0
+
+  bsd:
+    if: github.event_name == 'workflow_dispatch' && inputs.bsd
+    needs: source
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [FreeBSD, NetBSD, OpenBSD, DragonFly]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    env:
+      HOPEA_VERSION: ${{ needs.source.outputs.version }}
+    steps:
+      # The VM is only a build machine; installed BSD binaries run natively.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with: { persist-credentials: false }
+      - if: matrix.os == 'FreeBSD'
+        uses: vmactions/freebsd-vm@811efaaac0668df8bfb8308c3ec997b5ab50037b # v1
+        with:
+          release: '15.0'
+          mem: '12288'
+          cpu: '4'
+          envs: 'HOPEA_VERSION HOPEA_REPOSITORY CARGO_BUILD_JOBS'
+          run: |
+            set -eu
+            HOPEA_CI_CONTAINER=1 sh packaging/bsd/deps.sh
+            export PATH="/usr/local/bin:/usr/pkg/bin:/usr/pkg/gnu/bin:$PATH"
+            bash packaging/bsd/build.sh
+      - if: matrix.os == 'OpenBSD'
+        uses: vmactions/openbsd-vm@f1ca8bc8ecc5b6ef7218e5b914836e067e1546d3 # v1
+        with:
+          release: '7.9'
+          mem: '12288'
+          cpu: '4'
+          envs: 'HOPEA_VERSION HOPEA_REPOSITORY CARGO_BUILD_JOBS'
+          run: |
+            set -eu
+            HOPEA_CI_CONTAINER=1 sh packaging/bsd/deps.sh
+            export PATH="/usr/local/bin:/usr/pkg/bin:/usr/pkg/gnu/bin:$PATH"
+            bash packaging/bsd/build.sh
+      - if: matrix.os == 'NetBSD'
+        uses: vmactions/netbsd-vm@5957cf330aef2e6ddc63c604364c99ce2e02b91d # v1
+        with:
+          release: '10.1'
+          mem: '12288'
+          cpu: '4'
+          envs: 'HOPEA_VERSION HOPEA_REPOSITORY CARGO_BUILD_JOBS'
+          run: |
+            set -eu
+            HOPEA_CI_CONTAINER=1 sh packaging/bsd/deps.sh
+            export PATH="/usr/local/bin:/usr/pkg/bin:/usr/pkg/gnu/bin:$PATH"
+            bash packaging/bsd/build.sh
+      - if: matrix.os == 'DragonFly'
+        uses: vmactions/dragonflybsd-vm@4ab776fa9f914fbea72f13715b451e77e7ef5c41 # v1
+        with:
+          release: '6.4.2'
+          mem: '12288'
+          cpu: '4'
+          envs: 'HOPEA_VERSION HOPEA_REPOSITORY CARGO_BUILD_JOBS'
+          run: |
+            set -eu
+            HOPEA_CI_CONTAINER=1 sh packaging/bsd/deps.sh
+            export PATH="/usr/local/bin:/usr/pkg/bin:/usr/pkg/gnu/bin:$PATH"
+            bash packaging/bsd/build.sh
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: bsd-${{ matrix.os }}
+          path: |
+            dist/*.pkg
+            dist/*.tgz
+            dist/*.tar.gz
+          if-no-files-found: error
+
+  release:
+    if: >-
+      always() && !cancelled() && !failure() &&
+      (github.ref_type == 'tag') &&
+      (github.event_name == 'push' || inputs.draft_release)
+    needs: [source, linux, extra-linux, lfs, gentoo, nix, windows, macos, flatpak, android, bsd]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      HOPEA_VERSION: ${{ needs.source.outputs.version }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with: { persist-credentials: false }
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with: { path: dist, merge-multiple: true }
+      - run: bash packaging/release-files.sh
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$RELEASE_TAG" dist/* --repo "$HOPEA_REPOSITORY" \
+            --verify-tag --draft --title "Hopea $HOPEA_VERSION" \
+            --notes-file packaging/release-notes.md

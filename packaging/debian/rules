@@ -1,0 +1,21 @@
+#!/usr/bin/make -f
+# SPDX-FileCopyrightText: 2026 Daniil Klimov
+# SPDX-License-Identifier: GPL-3.0-or-later
+export CARGO_NET_OFFLINE=true
+%:
+	dh $@
+
+override_dh_auto_configure:
+	bash packaging/native.sh configure
+
+override_dh_auto_build:
+	bash packaging/native.sh build
+
+override_dh_auto_test:
+	python3 -I tests/test_service_import.py
+
+override_dh_auto_install:
+	DESTDIR=$(CURDIR)/debian/hopea bash packaging/native.sh install
+
+override_dh_auto_clean:
+	rm -rf .packaging/build

@@ -1,9 +1,26 @@
 # SPDX-FileCopyrightText: 2022  Emmanuele Bassi
 # SPDX-License-Identifier: CC0-1.0
 [files]
-extend-exclude = ["LICENSES/*", "po/*"]
+extend-exclude = ["LICENSES/*", "po/*", "vendor/**"]
+
+[default.extend-words]
+# MPEG-4 track box and ID3v2 "performer" frames
+trak = "trak"
+TPE = "TPE"
+# Symphonia's time base numerator
+numer = "numer"
+# Process names as the kernel keeps them, cut at 15 characters
+clien = "clien"
+# Intentional artist misspelling in the import matching regression test.
+LINKINK = "LINKINK"
+# GObject introspection and GStreamer Editing Services build options.
+gir = "gir"
+ges = "ges"
 
 [default.extend-identifiers]
 # MPRIS has a bad API, and mpris-server goes along with it
 Seeked = "Seeked"
 seeked = "seeked"
+UPnP = "UPnP"
+# Gentoo package metadata variable.
+PYPI_PN = "PYPI_PN"

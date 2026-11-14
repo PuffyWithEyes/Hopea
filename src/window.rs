@@ -1,6 +1,15 @@
 // SPDX-FileCopyrightText: 2022  Emmanuele Bassi
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#[cfg(test)]
+mod tests;
+
+mod collections;
+mod import_audition;
+mod metadata;
+mod song_drag;
+mod song_editor;
+
 use std::{
     cell::{Cell, RefCell},
     path::PathBuf,
@@ -9,16 +18,19 @@ use std::{
     time::Instant,
 };
 
-use adw::subclass::prelude::*;
+use adw::{prelude::AnimationExt, subclass::prelude::*};
 use glib::{clone, closure_local};
 use gtk::{gdk, gio, glib, prelude::*, CompositeTemplate};
+use hopea_common::api::Track;
 use log::debug;
 
 use crate::{
     audio::{AudioPlayer, RepeatMode, ReplayGainMode, Song},
-    config::APPLICATION_ID,
+    config::APPLICATION_ICON,
     drag_overlay::DragOverlay,
     i18n::{i18n, i18n_k, ni18n_f, ni18n_k},
+    library,
+    library_panel::LibraryPanel,
     playback_control::PlaybackControl,
     playlist_view::PlaylistView,
     queue_row::QueueRow,
@@ -45,7 +57,7 @@ mod imp {
     use super::*;
 
     #[derive(CompositeTemplate)]
-    #[template(resource = "/io/bassi/Amberol/window.ui")]
+    #[template(resource = "/io/hopea/Hopea/window.ui")]
     pub struct Window {
         // Template widgets
         #[template_child]
@@ -71,6 +83,51 @@ mod imp {
         #[template_child]
         pub split_view: TemplateChild<adw::OverlaySplitView>,
         #[template_child]
+        pub library_split: TemplateChild<adw::OverlaySplitView>,
+        #[template_child]
+        pub library_sheet: TemplateChild<adw::BottomSheet>,
+        #[template_child]
+        pub narrow_breakpoint: TemplateChild<adw::Breakpoint>,
+        #[template_child]
+        pub library_panel: TemplateChild<LibraryPanel>,
+        #[template_child]
+        pub import_progress_start: TemplateChild<gtk::Button>,
+        #[template_child]
+        pub import_progress_main: TemplateChild<gtk::Button>,
+        #[template_child]
+        pub for_you_button: TemplateChild<gtk::ToggleButton>,
+        #[template_child]
+        pub my_music_button: TemplateChild<gtk::ToggleButton>,
+        #[template_child]
+        pub player_header: TemplateChild<adw::HeaderBar>,
+        #[template_child]
+        pub audition_bar: TemplateChild<gtk::Box>,
+        pub(super) audition: RefCell<Option<import_audition::State>>,
+        #[template_child]
+        pub mode_switch: TemplateChild<gtk::Box>,
+        #[template_child]
+        pub mode_switch_narrow: TemplateChild<gtk::Box>,
+        #[template_child]
+        pub cover_stack: TemplateChild<gtk::Stack>,
+        #[template_child]
+        pub lyrics_stack: TemplateChild<gtk::Stack>,
+        #[template_child]
+        pub lyrics_scroller: TemplateChild<gtk::ScrolledWindow>,
+        #[template_child]
+        pub lyrics_box: TemplateChild<gtk::Box>,
+        #[template_child]
+        pub lyrics_none_label: TemplateChild<gtk::Label>,
+        #[template_child]
+        pub lyrics_online_box: TemplateChild<gtk::Box>,
+        #[template_child]
+        pub lyrics_online_button: TemplateChild<gtk::Button>,
+        #[template_child]
+        pub player_stack: TemplateChild<gtk::Stack>,
+        #[template_child]
+        pub for_you_play_button: TemplateChild<gtk::Button>,
+        #[template_child]
+        pub queue_mode_page: TemplateChild<adw::StatusPage>,
+        #[template_child]
         pub playlist_view: TemplateChild<PlaylistView>,
         #[template_child]
         pub add_folder_button: TemplateChild<gtk::Button>,
@@ -92,20 +149,44 @@ mod imp {
         pub notify_position_id: RefCell<Option<glib::SignalHandlerId>>,
         pub notify_song_id: RefCell<Option<glib::SignalHandlerId>>,
         pub notify_cover_id: RefCell<Option<glib::SignalHandlerId>>,
+        pub notify_favorite_id: RefCell<Option<glib::SignalHandlerId>>,
         pub notify_nsongs_id: RefCell<Option<glib::SignalHandlerId>>,
         pub notify_current_id: RefCell<Option<glib::SignalHandlerId>>,
         pub notify_peaks_id: RefCell<Option<glib::SignalHandlerId>>,
+        /// Playing recommendations ("For You") rather than the playlist
+        pub in_for_you: Cell<bool>,
+        /// The queue that isn't playing: the playlist or For You
+        pub my_music_songs: RefCell<Vec<Song>>,
+        pub for_you_songs: RefCell<Vec<Song>>,
+        /// More recommendations are being fetched
+        pub for_you_refilling: Cell<bool>,
+        pub metadata_reviewing: Cell<bool>,
+        pub for_you_checking: Cell<bool>,
+        /// Tracks already asked to download ahead
+        pub prefetched: RefCell<std::collections::HashSet<i64>>,
+        /// Songs from other services are being looked for
+        pub looking_for_wanted: Cell<bool>,
+        /// The lyrics shown, their labels and the line being sung
+        pub lyrics: RefCell<Option<crate::lyrics::Lyrics>>,
+        pub lyrics_labels: RefCell<Vec<gtk::Label>>,
+        pub lyrics_line: Cell<Option<usize>>,
+        pub lyrics_scroll_animation: RefCell<Option<adw::TimedAnimation>>,
+        /// Bumped for every lookup, so that a late answer is ignored
+        pub lyrics_generation: Cell<u64>,
     }
 
     #[glib::object_subclass]
     impl ObjectSubclass for Window {
-        const NAME: &'static str = "AmberolWindow";
+        const NAME: &'static str = "HopeaWindow";
         type Type = super::Window;
         type ParentType = adw::ApplicationWindow;
 
         fn class_init(klass: &mut Self::Class) {
             Self::bind_template(klass);
 
+            klass.install_action("win.return-to-import", None, |win, _, _| {
+                win.finish_import_audition(true)
+            });
             klass.install_action("win.play", None, move |win, _, _| {
                 debug!("Window::win.play()");
                 if let Some(p) = win.player() {
@@ -201,9 +282,43 @@ mod imp {
                 debug!("Window::win.copy()");
                 win.copy_song();
             });
+            for (action, lyrics) in [("win.edit-cover", false), ("win.edit-lyrics", true)] {
+                klass.install_action_async(action, None, move |win, _, _| async move {
+                    if let Some(song) = win.player().and_then(|p| p.state().current_song()) {
+                        win.edit_song(song, lyrics).await;
+                    }
+                });
+            }
+            klass.install_action_async("win.metadata", None, |win, _, _| async move {
+                if let Some(song) = win.player().and_then(|p| p.state().current_song()) {
+                    win.review_metadata(song, false).await;
+                }
+            });
             klass.install_action_async("win.open-directory", None, async move |win, _, _| {
                 debug!("Window::win.open-directory()");
                 win.open_song_directory().await
+            });
+            klass.install_action("win.shared-library", None, move |win, _, _| {
+                debug!("Window::win.shared-library()");
+                win.toggle_library();
+            });
+            // The shared music settings, also before joining and with the
+            // panel hidden
+            klass.install_action_async("win.library-settings", None, async move |win, _, _| {
+                win.imp().library_panel.edit_settings().await;
+            });
+            klass.install_action_async("win.import-music", None, async move |win, _, _| {
+                win.imp().library_panel.import_music().await;
+            });
+            klass.install_action_async("win.my-albums", None, async move |win, _, _| {
+                win.show_collections().await;
+            });
+            klass.install_action("win.import-progress", None, |win, _, _| {
+                win.imp().library_panel.show_import_job();
+            });
+            klass.install_action_async("win.toggle-favorite", None, async move |win, _, _| {
+                debug!("Window::win.toggle-favorite()");
+                win.toggle_current_favorite().await;
             });
             klass.install_action("queue.clear", None, move |win, _, _| {
                 debug!("Window::queue.clear()");
@@ -238,6 +353,29 @@ mod imp {
                 song_details: TemplateChild::default(),
                 song_cover: TemplateChild::default(),
                 split_view: TemplateChild::default(),
+                library_split: TemplateChild::default(),
+                library_sheet: TemplateChild::default(),
+                narrow_breakpoint: TemplateChild::default(),
+                library_panel: TemplateChild::default(),
+                import_progress_start: TemplateChild::default(),
+                import_progress_main: TemplateChild::default(),
+                for_you_button: TemplateChild::default(),
+                my_music_button: TemplateChild::default(),
+                player_header: TemplateChild::default(),
+                audition_bar: TemplateChild::default(),
+                audition: RefCell::new(None),
+                mode_switch: TemplateChild::default(),
+                mode_switch_narrow: TemplateChild::default(),
+                cover_stack: TemplateChild::default(),
+                lyrics_stack: TemplateChild::default(),
+                lyrics_scroller: TemplateChild::default(),
+                lyrics_box: TemplateChild::default(),
+                lyrics_none_label: TemplateChild::default(),
+                lyrics_online_box: TemplateChild::default(),
+                lyrics_online_button: TemplateChild::default(),
+                player_stack: TemplateChild::default(),
+                for_you_play_button: TemplateChild::default(),
+                queue_mode_page: TemplateChild::default(),
                 toast_overlay: TemplateChild::default(),
                 drag_overlay: TemplateChild::default(),
                 playback_control: TemplateChild::default(),
@@ -261,22 +399,28 @@ mod imp {
                 notify_position_id: RefCell::new(None),
                 notify_song_id: RefCell::new(None),
                 notify_cover_id: RefCell::new(None),
+                notify_favorite_id: RefCell::new(None),
                 notify_nsongs_id: RefCell::new(None),
                 notify_current_id: RefCell::new(None),
                 notify_peaks_id: RefCell::new(None),
+                in_for_you: Cell::default(),
+                my_music_songs: RefCell::default(),
+                for_you_songs: RefCell::default(),
+                for_you_refilling: Cell::default(),
+                metadata_reviewing: Cell::default(),
+                for_you_checking: Cell::default(),
+                prefetched: RefCell::default(),
+                looking_for_wanted: Cell::default(),
+                lyrics: RefCell::default(),
+                lyrics_labels: RefCell::default(),
+                lyrics_line: Cell::default(),
+                lyrics_scroll_animation: RefCell::default(),
+                lyrics_generation: Cell::default(),
             }
         }
     }
 
     impl ObjectImpl for Window {
-        fn constructed(&self) {
-            self.parent_constructed();
-
-            if APPLICATION_ID.ends_with("Devel") {
-                self.obj().add_css_class("devel");
-            }
-        }
-
         fn properties() -> &'static [ParamSpec] {
             static PROPERTIES: Lazy<Vec<ParamSpec>> = Lazy::new(|| {
                 vec![
@@ -329,6 +473,25 @@ glib::wrapper! {
 }
 
 impl Window {
+    pub fn set_import_active(&self, active: bool) {
+        self.imp().import_progress_start.set_visible(active);
+        self.imp().import_progress_main.set_visible(active);
+    }
+
+    pub fn show_import_result_toast(&self) {
+        let toast = adw::Toast::builder()
+            .title(i18n("Import finished"))
+            .button_label(i18n("View Result"))
+            .action_name("win.import-progress")
+            .timeout(0)
+            .build();
+        self.imp().toast_overlay.add_toast(toast);
+    }
+
+    pub fn import_panel(&self) -> crate::library_panel::LibraryPanel {
+        self.imp().library_panel.get()
+    }
+
     pub fn new<P: IsA<gtk::Application>>(application: &P) -> Self {
         let win = glib::Object::builder::<Window>()
             .property("application", application)
@@ -342,13 +505,19 @@ impl Window {
         win.bind_state();
         win.bind_queue();
         win.connect_signals();
+        win.setup_library_sheet();
+        win.setup_for_you();
+        win.setup_lyrics();
         win.restore_window_state();
+        win.set_import_active(LibraryPanel::import_is_running());
         win.set_initial_state();
+        win.open_with_music();
+        win.show_rules_once();
 
         win
     }
 
-    fn player(&self) -> Option<Rc<AudioPlayer>> {
+    pub(crate) fn player(&self) -> Option<Rc<AudioPlayer>> {
         if let Some(app) = self.application() {
             let player = app
                 .downcast::<crate::application::Application>()
@@ -431,8 +600,14 @@ impl Window {
     }
 
     fn set_playlist_visible(&self, visible: bool) {
-        if visible != self.imp().playlist_visible.replace(visible) {
+        let visible = visible && !self.is_import_audition();
+        let changed = visible != self.imp().playlist_visible.replace(visible);
+        // Breakpoints can change the widget before this notification arrives.
+        // Keep it synchronized even when our stored state was already false.
+        if self.imp().split_view.shows_sidebar() != visible {
             self.imp().split_view.set_show_sidebar(visible);
+        }
+        if changed {
             self.notify("playlist-visible");
         }
     }
@@ -447,13 +622,14 @@ impl Window {
         if shuffled != imp.playlist_shuffled.replace(shuffled) {
             if let Some(player) = self.player() {
                 let queue = player.queue();
-                let state = player.state();
-                let reset_song = queue.is_first_song() && !state.playing();
-
                 queue.set_shuffled(shuffled);
-
-                if reset_song {
-                    player.skip_to(0);
+                if shuffled && queue.n_songs() > 0 {
+                    // One model replacement, then one explicit scroll target.
+                    // Do not preserve an old row anchor in the new permutation.
+                    imp.playlist_view.scroll().vadjustment().set_value(0.0);
+                    imp.playlist_view
+                        .queue_view()
+                        .scroll_to(0, gtk::ListScrollFlags::NONE, None);
                 }
             }
 
@@ -503,13 +679,123 @@ impl Window {
 
     fn restore_playlist(&self) {
         if let Some(songs) = utils::load_cached_songs() {
-            self.queue_songs(songs);
+            self.queue_songs_with_feedback(songs, false);
         }
     }
 
+    /// Restore the saved playlist and leave search closed until explicitly opened.
+    fn open_with_music(&self) {
+        if self.player().is_some_and(|p| p.queue().is_empty()) && utils::has_cached_playlist() {
+            self.restore_playlist();
+        }
+        self.imp().library_split.set_show_sidebar(false);
+        self.imp().library_sheet.set_open(false);
+    }
+
+    /// The first time the app starts, explains what matters when sharing
+    /// music with everyone: names others can find, and sharing back.
+    fn show_rules_once(&self) {
+        let settings = utils::settings_manager();
+        if settings.boolean("library-rules-seen") {
+            return;
+        }
+        glib::idle_add_local_once(clone!(
+            #[weak(rename_to = win)]
+            self,
+            move || {
+                let alert = adw::AlertDialog::builder()
+                    .heading(i18n("Sharing Music Together"))
+                    .body(i18n(
+                        "Everyone here shares the music they keep, so a few things matter.\n\n• Name songs properly. Others find music only by its title and artist: set them in the song’s tags, or name the file “Artist - Title”. Songs whose title and artist together have fewer than 5 letters aren’t shared.\n\n• Don’t be greedy. What you download and star is shared from your computer in turn. Keep sharing on, also with the window closed (the app stays in the tray), and don’t limit sharing far below downloading.\n\n• Share only music, and only what you may share. Every file is checked, and anything that isn’t clean audio is refused.\n\n• Others see the address you share from. A VPN shows them its address instead: see Shared Music Settings.",
+                    ))
+                    .default_response("ok")
+                    .close_response("ok")
+                    .build();
+                use adw::prelude::AlertDialogExt;
+                alert.add_response("ok", &i18n("_Got It"));
+                alert.set_response_appearance("ok", adw::ResponseAppearance::Suggested);
+                AlertDialogExt::connect_response(&alert, None, |_, _| {
+                    if let Err(err) =
+                        utils::settings_manager().set_boolean("library-rules-seen", true)
+                    {
+                        log::warn!("Unable to remember that the rules were shown: {err}");
+                    }
+                });
+                adw::prelude::AdwDialogExt::present(&alert, Some(&win));
+            }
+        ));
+    }
+
+    /// Whether the shared music panel is in the bottom sheet, as on phones.
+    fn library_in_sheet(&self) -> bool {
+        self.imp().library_sheet.sheet().is_some()
+    }
+
+    /// Moves the shared music panel into the bottom sheet when the window is
+    /// as narrow as a phone, and back to the right side when it widens.
+    fn setup_library_sheet(&self) {
+        let imp = self.imp();
+        imp.narrow_breakpoint.connect_apply(clone!(
+            #[weak(rename_to = win)]
+            self,
+            move |_| {
+                let imp = win.imp();
+                let panel = imp.library_panel.get();
+                imp.library_split.set_show_sidebar(false);
+                imp.library_split.set_sidebar(gtk::Widget::NONE);
+                panel.add_css_class("in-sheet");
+                imp.library_sheet.set_sheet(Some(&panel));
+                imp.player_header.set_title_widget(gtk::Widget::NONE);
+                imp.mode_switch_narrow.append(&imp.mode_switch.get());
+                imp.player_header.set_show_title(false);
+                imp.mode_switch.set_visible(true);
+                win.enforce_import_audition();
+            }
+        ));
+        imp.narrow_breakpoint.connect_unapply(clone!(
+            #[weak(rename_to = win)]
+            self,
+            move |_| {
+                let imp = win.imp();
+                let panel = imp.library_panel.get();
+                let was_open = imp.library_sheet.is_open();
+                imp.library_sheet.set_open(false);
+                imp.library_sheet.set_sheet(gtk::Widget::NONE);
+                panel.remove_css_class("in-sheet");
+                imp.library_split.set_sidebar(Some(&panel));
+                imp.library_split.set_show_sidebar(was_open);
+                imp.mode_switch_narrow.remove(&imp.mode_switch.get());
+                imp.player_header.set_show_title(true);
+                imp.player_header
+                    .set_title_widget(Some(&imp.mode_switch.get()));
+                win.enforce_import_audition();
+            }
+        ));
+    }
+
     fn queue_songs(&self, queue: Vec<gio::File>) {
+        self.queue_songs_with_feedback(queue, true);
+    }
+
+    fn queue_songs_with_feedback(&self, queue: Vec<gio::File>, feedback: bool) {
+        if queue.iter().any(|file| file.path().is_none()) {
+            let window = self.clone();
+            glib::spawn_future_local(async move {
+                let mut local = Vec::with_capacity(queue.len());
+                for file in queue {
+                    match crate::document_file::local_audio(&file).await {
+                        Ok(file) => local.push(file),
+                        Err(_) => window.add_toast(i18n("Unable to read this audio document")),
+                    }
+                }
+                window.queue_songs_with_feedback(local, feedback);
+            });
+            return;
+        }
         if queue.is_empty() {
-            self.add_toast(i18n("No available song found"));
+            if feedback {
+                self.add_toast(i18n("No available song found"));
+            }
             return;
         }
 
@@ -545,6 +831,9 @@ impl Window {
                     .map(|f| {
                         win.imp().playlist_view.update_loading(cur_file, n_files);
                         if let Ok(s) = Song::from_uri(f.uri().as_str()) {
+                            // Opening files explicitly adds them to Favorites; a restored
+                            // playlist contains only previously starred paths.
+                            s.set_property("favorite", true);
                             if let Some(player) = win.player() {
                                 let queue = player.queue();
                                 if queue.contains(&s) {
@@ -570,7 +859,7 @@ impl Window {
                         win.action_set_enabled("queue.clear", true);
 
                         if songs.is_empty() {
-                            if duplicates == 0 {
+                            if duplicates == 0 && feedback {
                                 win.add_toast(i18n("No songs found"));
                             }
                         } else if let Some(player) = win.player() {
@@ -579,11 +868,21 @@ impl Window {
 
                             win.imp().playlist_view.end_loading();
 
-                            // Bulk add to avoid hammering the UI with list model updates
-                            queue.add_songs(&songs);
+                            // Imports while For You plays belong to the saved personal list.
+                            if win.in_for_you() {
+                                win.imp().my_music_songs.borrow_mut().extend(songs.clone());
+                            } else {
+                                queue.add_songs(&songs);
+                            }
+                            let window = win.clone();
+                            glib::spawn_future_local(async move {
+                                window.sync_local_sharing().await;
+                            });
 
                             // Store the current state of the playlist
-                            utils::store_playlist(queue);
+                            if !win.in_for_you() {
+                                utils::store_playlist(queue);
+                            }
 
                             debug!(
                                 "Queue was empty: {}, new size: {}",
@@ -595,7 +894,9 @@ impl Window {
                             }
 
                             // Allow jumping to the song we just added
-                            if songs.len() == 1 {
+                            if !feedback {
+                                // Restoring the saved queue is not a user add action.
+                            } else if songs.len() == 1 {
                                 // If we added a single song, and the queue was empty, we
                                 // dispense with the pleasantries and we start playing
                                 // immediately; otherwise, we let the user choose whether
@@ -693,6 +994,7 @@ impl Window {
                     self,
                     move |_, _| {
                         win.update_position_labels();
+                        win.update_lyrics_line();
                     }
                 ),
             );
@@ -725,6 +1027,17 @@ impl Window {
                 ),
             );
             imp.notify_cover_id.replace(Some(notify_cover_id));
+            let notify_favorite_id = state.connect_notify_local(
+                Some("favorite"),
+                clone!(
+                    #[weak(rename_to = win)]
+                    self,
+                    move |_, _| {
+                        win.update_favorite_button();
+                    }
+                ),
+            );
+            imp.notify_favorite_id.replace(Some(notify_favorite_id));
 
             // Bind the song properties to the UI
             state
@@ -766,6 +1079,9 @@ impl Window {
             if let Some(id) = self.imp().notify_cover_id.take() {
                 state.disconnect(id);
             }
+            if let Some(id) = self.imp().notify_favorite_id.take() {
+                state.disconnect(id);
+            }
         }
     }
 
@@ -782,8 +1098,10 @@ impl Window {
                     move |queue, _| {
                         debug!("queue.n_songs() = {}", queue.n_songs());
                         if queue.is_empty() {
-                            win.set_initial_state();
-                            win.reset_queue();
+                            if !win.player().is_some_and(|p| p.is_previewing()) {
+                                win.set_initial_state();
+                                win.reset_queue();
+                            }
                         } else {
                             win.action_set_enabled("queue.toggle", true);
                             win.action_set_enabled("queue.shuffle", queue.n_songs() > 1);
@@ -795,7 +1113,9 @@ impl Window {
 
                         if queue.n_songs() == 1 {
                             if let Some(p) = win.player() {
-                                p.skip_next();
+                                if !p.is_previewing() {
+                                    p.skip_next();
+                                }
                             }
                         }
 
@@ -970,7 +1290,9 @@ impl Window {
                         }
 
                         // Store the current state of the playlist
-                        utils::store_playlist(queue);
+                        if !win.in_for_you() {
+                            utils::store_playlist(queue);
+                        }
                     }
                 }
             ));
@@ -1009,6 +1331,7 @@ impl Window {
         let _dummy = self.imp().settings.boolean("enable-recoloring");
 
         self.connect_close_request(move |window| {
+            window.finish_import_audition(false);
             debug!("Saving window state");
             let width = window.default_size().0;
             let height = window.default_size().1;
@@ -1061,7 +1384,7 @@ impl Window {
             // Manually update the icon on the initial empty state
             // to avoid generating the UI definition file at build
             // time
-            self.imp().status_page.set_icon_name(Some(APPLICATION_ID));
+            self.imp().status_page.set_icon_name(Some(APPLICATION_ICON));
 
             if utils::has_cached_playlist() {
                 self.imp().restore_playlist_button.set_visible(true);
@@ -1081,18 +1404,16 @@ impl Window {
                     .add_css_class("suggested-action");
             }
 
-            let state = player.state();
-            if state.playing() || !queue.is_empty() {
-                self.switch_mode(WindowMode::MainView);
-            } else {
-                self.switch_mode(WindowMode::InitialView);
-            }
+            // There is no start screen in this fork: the player is always
+            // shown, with the shared music next to it
+            self.switch_mode(WindowMode::MainView);
         }
     }
 
     fn setup_playlist(&self) {
         let imp = self.imp();
 
+        self.setup_queue_reorder();
         let factory = gtk::SignalListItemFactory::new();
         factory.connect_setup(clone!(
             #[weak(rename_to = win)]
@@ -1142,6 +1463,14 @@ impl Window {
                     .property_expression("item")
                     .chain_property::<Song>("selected")
                     .bind(&row, "selected", gtk::Widget::NONE);
+                list_item
+                    .property_expression("item")
+                    .chain_property::<Song>("status")
+                    .bind(&row, "song-status", gtk::Widget::NONE);
+                list_item
+                    .property_expression("item")
+                    .chain_property::<Song>("progress")
+                    .bind(&row, "song-progress", gtk::Widget::NONE);
             }
         ));
         imp.playlist_view
@@ -1190,7 +1519,9 @@ impl Window {
                         if let Some(real_pos) = real_pos {
                             if win.playlist_selection() {
                                 queue.select_song_at(real_pos);
-                            } else if queue.current_song_index() != Some(real_pos) {
+                            } else if queue.current_song_index() != Some(real_pos)
+                                || player.is_previewing()
+                            {
                                 player.skip_to(real_pos);
                                 player.play();
                             } else if !player.state().playing() {
@@ -1268,9 +1599,9 @@ impl Window {
             let state = player.state();
             let play_button = self.imp().playback_control.play_button();
             if state.playing() {
-                play_button.set_icon_name("media-playback-pause-symbolic");
+                play_button.set_icon_name("hopea-media-playback-pause-symbolic");
             } else {
-                play_button.set_icon_name("media-playback-start-symbolic");
+                play_button.set_icon_name("hopea-media-playback-start-symbolic");
             }
         }
     }
@@ -1297,9 +1628,1118 @@ impl Window {
         if let Some(player) = self.player() {
             let state = player.state();
             self.scroll_playlist_to_song();
+            self.action_set_enabled("win.play", state.current_song().is_some());
+            if let Some(has_next) = player.album_preview_next() {
+                self.action_set_enabled("win.next", has_next);
+                self.action_set_enabled("win.previous", true);
+            }
+            self.action_set_enabled("win.edit-cover", state.current_song().is_some());
+            self.action_set_enabled("win.edit-lyrics", state.current_song().is_some());
             self.update_playlist_time();
             self.update_title(state.current_song().as_ref());
             self.update_style(state.current_song().as_ref());
+            self.update_favorite_button();
+            if let Some(song) = state.current_song().filter(|s| s.is_mine()) {
+                glib::spawn_future_local(async move {
+                    if let Some(text) = crate::lyrics::raw_on_this_computer(&song).await {
+                        let _ = crate::lyrics::publish(&song, &text).await;
+                    }
+                });
+            }
+            self.prepare_next_song();
+            if !self.is_import_audition() && utils::settings_manager().boolean("popular-metadata") {
+                if let Some(song) = state.current_song().filter(|s| s.library_id().is_some()) {
+                    glib::spawn_future_local(clone!(
+                        #[weak(rename_to=win)]
+                        self,
+                        async move {
+                            win.review_metadata(song, true).await;
+                        }
+                    ));
+                }
+            }
+            if let (Some(song), Some(client)) = (state.current_song(), library::client()) {
+                if let Some(id) = song.remote_id().filter(|_| song.cover_texture().is_none()) {
+                    glib::spawn_future_local(async move {
+                        if let Ok(bytes) = client.cover(id).await {
+                            song.set_cover_bytes(&bytes);
+                        }
+                    });
+                }
+            }
+            if self.lyrics_shown() {
+                glib::spawn_future_local(clone!(
+                    #[weak(rename_to = win)]
+                    self,
+                    async move { win.load_lyrics().await }
+                ));
+            }
+        }
+    }
+
+    /// Shows whether the song playing is in the library. The star is always
+    /// there, and only unavailable while nothing is playing.
+    fn update_favorite_button(&self) {
+        let song = self.player().and_then(|p| p.state().current_song());
+        let state = song.map(|s| s.property::<bool>("favorite"));
+        self.imp().playback_control.set_favorite_state(state);
+    }
+
+    /// Puts the song playing in the library, or takes it out.
+    async fn toggle_current_favorite(&self) {
+        if self.is_import_audition() {
+            return;
+        }
+        let Some(song) = self.player().and_then(|p| p.state().current_song()) else {
+            return;
+        };
+        match song.library_id() {
+            Some(id) if song.property::<bool>("favorite") => {
+                self.take_out_of_library(id, &song.title(), song.is_mine())
+            }
+            _ => self.add_song_to_library(&song).await,
+        }
+    }
+
+    /// Puts a playlist song in the library, where everything is kept on this
+    /// computer and shared: a file from here is shared, a song from the
+    /// network is downloaded and shared on.
+    pub async fn add_song_to_library(&self, song: &Song) {
+        let Some(client) = library::client() else {
+            self.add_toast(i18n(
+                "Join the network in Shared Music to keep and share songs",
+            ));
+            self.show_library();
+            return;
+        };
+        if let Some(id) = song.library_id() {
+            match client.set_favorite(id, true).await {
+                Ok(track) => {
+                    self.set_library_state(id, track.favorite);
+                    self.add_remote_track(&track, false).await;
+                    self.offer_metadata(&track);
+                    self.add_toast(i18n_k(
+                        // Translators: `{title}` is replaced by the title of a song
+                        "Added “{title}” to your library",
+                        &[("title", &song.title())],
+                    ));
+                }
+                Err(err) => self.add_toast(err.to_string()),
+            }
+            return;
+        }
+        // A file on this computer: sharing it puts it in the library
+        let file = song.file();
+        if file.path().is_none() {
+            return;
+        }
+        match self.imp().library_panel.share_file(&file).await {
+            Ok(track) => {
+                self.add_shared_file(&file, track.id);
+                self.add_toast(i18n_k(
+                    // Translators: `{title}` is replaced by the title of a song
+                    "Added “{title}” to your library and sharing it",
+                    &[("title", &song.title())],
+                ));
+            }
+            Err(reason) => self.add_toast(reason),
+        }
+    }
+
+    /// Adds an imported file to My Music after the node has accepted it.
+    /// Importing while recommendations play must leave that queue alone.
+    pub fn add_shared_file(&self, file: &gio::File, id: i64) {
+        let file = file.clone();
+        let win = self.clone();
+        glib::spawn_future_local(async move {
+            let Some(client) = library::client() else {
+                return;
+            };
+            match client.set_favorite(id, true).await {
+                Ok(_) => win.add_starred_file(&file, id),
+                Err(error) => win.add_toast(error.to_string()),
+            }
+        });
+    }
+
+    fn add_starred_file(&self, file: &gio::File, id: i64) {
+        self.mark_shared_file(&file.uri(), id);
+        self.set_library_state(id, true);
+        let Ok(song) = Song::from_uri(&file.uri()) else {
+            return;
+        };
+        song.set_library(Some(id), true, true);
+        if self.in_for_you() {
+            let mut songs = self.imp().my_music_songs.borrow_mut();
+            if let Some(existing) = songs.iter().find(|s| s.uri() == file.uri()) {
+                existing.set_library(Some(id), true, true);
+            } else {
+                songs.push(song);
+            }
+        } else if let Some(player) = self.player() {
+            let queue = player.queue();
+            let queued = (0..queue.n_songs())
+                .filter_map(|i| queue.song_at(i))
+                .any(|s| s.uri() == file.uri());
+            if !queued {
+                self.switch_mode(WindowMode::MainView);
+                queue.add_song(&song);
+                utils::store_playlist(&queue);
+            }
+        }
+    }
+
+    /// Register music already added to Hopea. No scan of unrelated user folders.
+    pub(crate) async fn sync_local_sharing(&self) {
+        let Some(client) = library::client() else {
+            return;
+        };
+        let mut songs = self.imp().my_music_songs.borrow().clone();
+        if let Some(player) = self.player().filter(|_| !self.in_for_you()) {
+            songs.extend((0..player.queue().n_songs()).filter_map(|i| player.queue().song_at(i)));
+        }
+        for song in songs {
+            if song.file().path().is_none() {
+                continue;
+            }
+            let track = if let Some(id) = song.library_id() {
+                client.track(id).await.ok()
+            } else {
+                self.imp().library_panel.share_file(&song.file()).await.ok()
+            };
+            if let Some(track) = track {
+                library::shared_files::remember(&song.uri(), track.id);
+                let favorite = song.property::<bool>("favorite");
+                if favorite && !track.favorite {
+                    if let Err(err) = client.set_favorite(track.id, true).await {
+                        self.add_toast(err.to_string());
+                        continue;
+                    }
+                }
+                song.set_library(Some(track.id), track.mine, favorite);
+            }
+        }
+        // Albums can contain unstarred local files. Register them too, without
+        // adding their songs to the personal playlist.
+        if let Ok(albums) = library::collections::list().await {
+            for mut album in albums {
+                let mut changed = false;
+                for entry in &mut album.tracks {
+                    if entry.node_id.is_some() {
+                        continue;
+                    }
+                    let Some(uri) = &entry.local_uri else {
+                        continue;
+                    };
+                    let file = gio::File::for_uri(uri);
+                    if let Ok(track) = self.imp().library_panel.share_file(&file).await {
+                        library::shared_files::remember(uri, track.id);
+                        entry.node_id = Some(track.id);
+                        entry.sha256 = Some(track.sha256);
+                        changed = true;
+                    }
+                }
+                if changed {
+                    if let Err(err) = library::collections::save(album).await {
+                        self.add_toast(err);
+                    }
+                }
+            }
+        }
+        self.update_favorite_button();
+    }
+
+    pub fn refresh_import_cover(&self, id: i64, bytes: &glib::Bytes) {
+        library::thumbnails::invalidate(id);
+        let mut songs = self.imp().my_music_songs.borrow().clone();
+        songs.extend(self.imp().for_you_songs.borrow().iter().cloned());
+        if let Some(player) = self.player() {
+            songs.extend((0..player.queue().n_songs()).filter_map(|i| player.queue().song_at(i)));
+            for song in songs.iter().filter(|s| s.library_id() == Some(id)) {
+                song.set_cover_bytes(bytes);
+            }
+            if player
+                .state()
+                .current_song()
+                .is_some_and(|s| s.library_id() == Some(id))
+            {
+                player.state().notify("cover");
+            }
+        }
+    }
+
+    /// Marks the playlist songs of a file shared from here as in the library.
+    pub fn mark_shared_file(&self, uri: &str, id: i64) {
+        library::shared_files::remember(uri, id);
+        if let Some(player) = self.player() {
+            if let Some(song) = player
+                .state()
+                .current_song()
+                .filter(|song| song.uri() == uri)
+            {
+                song.set_library(Some(id), true, song.property::<bool>("favorite"));
+            }
+            let queue = player.queue();
+            for song in (0..queue.n_songs()).filter_map(|i| queue.song_at(i)) {
+                if song.uri() == uri {
+                    song.set_library(Some(id), true, song.property::<bool>("favorite"));
+                }
+            }
+        }
+        self.update_favorite_button();
+    }
+
+    /// A star controls the personal playlist; local audio keeps being shared.
+    pub fn take_out_of_library(&self, id: i64, title: &str, _mine: bool) {
+        let win = self.clone();
+        let title = title.to_string();
+        glib::spawn_future_local(async move {
+            let Some(client) = library::client() else {
+                return;
+            };
+            match client.set_favorite(id, false).await {
+                Ok(_) => {
+                    win.set_library_state(id, false);
+                    win.remove_library_songs(id);
+                    if win.in_for_you() {
+                        utils::store_songs(&win.imp().my_music_songs.borrow());
+                    } else if let Some(player) = win.player() {
+                        utils::store_playlist(player.queue());
+                    }
+                    let toast = adw::Toast::builder()
+                        .title(i18n_k(
+                            "Removed “{title}” from favorites",
+                            &[("title", &title)],
+                        ))
+                        .use_markup(false)
+                        .button_label(i18n("_Undo"))
+                        .timeout(5)
+                        .build();
+                    toast.connect_button_clicked(clone!(
+                        #[weak]
+                        win,
+                        move |_| {
+                            let win = win.clone();
+                            glib::spawn_future_local(async move {
+                                if let Some(client) = library::client() {
+                                    match client.set_favorite(id, true).await {
+                                        Ok(track) => {
+                                            win.set_library_state(id, true);
+                                            win.add_remote_track(&track, false).await;
+                                        }
+                                        Err(error) => win.add_toast(error.to_string()),
+                                    }
+                                }
+                            });
+                        }
+                    ));
+                    win.imp().toast_overlay.add_toast(toast);
+                }
+                Err(error) => win.add_toast(error.to_string()),
+            }
+        });
+    }
+
+    pub fn remove_replaced_library_track(&self, id: i64) {
+        self.set_library_state(id, false);
+        self.remove_library_songs(id);
+        self.imp()
+            .my_music_songs
+            .borrow_mut()
+            .retain(|s| s.library_id() != Some(id));
+        self.imp()
+            .for_you_songs
+            .borrow_mut()
+            .retain(|s| s.library_id() != Some(id));
+        if let Some(player) = self.player() {
+            utils::store_playlist(&player.queue());
+        }
+    }
+
+    /// Takes every song of a library track out of the playlist, but the one
+    /// playing, which plays on.
+    fn remove_library_songs(&self, id: i64) {
+        let Some(player) = self.player() else {
+            return;
+        };
+        let queue = player.queue();
+        let songs: Vec<Song> = (0..queue.n_songs())
+            .filter_map(|i| queue.song_at(i))
+            .filter(|s| s.library_id() == Some(id))
+            .collect();
+        for song in songs {
+            if !player.is_previewing()
+                && player
+                    .state()
+                    .current_song()
+                    .is_some_and(|s| s.equals(&song))
+            {
+                player.detach_current();
+            }
+            queue.remove_song(&song);
+        }
+        self.imp()
+            .my_music_songs
+            .borrow_mut()
+            .retain(|s| s.library_id() != Some(id));
+    }
+
+    /// Shows a track's new place in or out of the library everywhere: its
+    /// playlist songs, the star of the song playing, and the panel's stars.
+    pub fn set_library_state(&self, id: i64, favorite: bool) {
+        if let Some(song) = self
+            .player()
+            .and_then(|p| p.state().current_song())
+            .filter(|s| s.library_id() == Some(id))
+        {
+            song.set_property("favorite", favorite);
+        }
+        if let Some(player) = self.player() {
+            player.update_preview_favorite(id, favorite);
+            let queue = player.queue();
+            for song in (0..queue.n_songs()).filter_map(|i| queue.song_at(i)) {
+                if song.library_id() == Some(id) {
+                    song.set_property("favorite", favorite);
+                }
+            }
+        }
+        for song in self
+            .imp()
+            .my_music_songs
+            .borrow()
+            .iter()
+            .chain(self.imp().for_you_songs.borrow().iter())
+        {
+            if song.library_id() == Some(id) {
+                song.set_property("favorite", favorite);
+            }
+        }
+        self.update_favorite_button();
+        self.imp().library_panel.set_star_state(id, favorite);
+    }
+
+    /// Puts the library in the playlist, so it is there every time the app
+    /// starts: files shared from here as they are, everything else from the
+    /// network.
+    pub async fn show_favorites_in_playlist(&self, tracks: Vec<Track>) {
+        let Some(player) = self.player() else {
+            return;
+        };
+        for track in &tracks {
+            if !track.favorite {
+                continue;
+            }
+            let original = library::shared_files::uri_for(track.id)
+                .map(|uri| gio::File::for_uri(&uri))
+                .filter(|f| f.query_exists(gio::Cancellable::NONE));
+            let Some(file) = original else {
+                self.add_remote_track(track, false).await;
+                continue;
+            };
+            let queue = player.queue();
+            let queued = (0..queue.n_songs())
+                .filter_map(|i| queue.song_at(i))
+                .any(|s| s.uri() == file.uri());
+            if !queued {
+                if let Ok(song) = Song::from_uri(&file.uri()) {
+                    song.set_library(Some(track.id), track.mine, track.favorite);
+                    self.switch_mode(WindowMode::MainView);
+                    queue.add_song(&song);
+                }
+            }
+        }
+    }
+
+    /// Follows the app joining or leaving the network by itself, as when a
+    /// VPN goes off or comes back.
+    pub fn library_connection_changed(&self, message: String) {
+        self.imp().library_panel.connection_changed();
+        self.add_toast(message);
+    }
+
+    /// The "My Music" and "For You" switch above the player. For You plays
+    /// recommendations, in a queue of its own, so that the listener's own
+    /// playlist is left as it was.
+    fn setup_for_you(&self) {
+        let imp = self.imp();
+        glib::timeout_add_seconds_local(
+            60,
+            clone!(
+                #[weak(rename_to=win)]
+                self,
+                #[upgrade_or]
+                glib::ControlFlow::Break,
+                move || {
+                    win.refresh_current_metadata();
+                    glib::ControlFlow::Continue
+                }
+            ),
+        );
+        imp.settings.connect_changed(
+            Some("popular-metadata"),
+            clone!(
+                #[weak(rename_to=win)]
+                self,
+                move |_, _| {
+                    glib::timeout_add_local_once(
+                        std::time::Duration::from_millis(300),
+                        move || win.refresh_current_metadata(),
+                    );
+                }
+            ),
+        );
+        imp.for_you_button.connect_toggled(clone!(
+            #[weak(rename_to = win)]
+            self,
+            move |button| win.set_for_you(button.is_active())
+        ));
+        imp.for_you_play_button.connect_clicked(clone!(
+            #[weak(rename_to = win)]
+            self,
+            move |_| {
+                if win.imp().for_you_button.is_active() {
+                    glib::spawn_future_local(async move { win.start_for_you().await });
+                } else {
+                    win.switch_playback_queue(false);
+                    if let Some(player) = win.player() {
+                        player.play();
+                    }
+                    win.set_for_you(false);
+                }
+            }
+        ));
+        // Songs from other services not found yet, looked for again
+        glib::timeout_add_seconds_local(
+            60 * 60,
+            clone!(
+                #[weak(rename_to = win)]
+                self,
+                #[upgrade_or]
+                glib::ControlFlow::Break,
+                move || {
+                    win.look_for_wanted();
+                    glib::ControlFlow::Continue
+                }
+            ),
+        );
+        // How songs from the network are coming along, for the playlist
+        glib::timeout_add_seconds_local(
+            15,
+            clone!(
+                #[weak(rename_to = win)]
+                self,
+                #[upgrade_or]
+                glib::ControlFlow::Break,
+                move || {
+                    glib::spawn_future_local(async move {
+                        win.refresh_recommendation_availability().await;
+                    });
+                    glib::ControlFlow::Continue
+                }
+            ),
+        );
+        glib::timeout_add_seconds_local(
+            2,
+            clone!(
+                #[weak(rename_to = win)]
+                self,
+                #[upgrade_or]
+                glib::ControlFlow::Break,
+                move || {
+                    win.refresh_transfers();
+                    glib::ControlFlow::Continue
+                }
+            ),
+        );
+    }
+
+    /// Whether the player plays recommendations rather than the listener's
+    /// own playlist.
+    fn in_for_you(&self) -> bool {
+        self.imp().in_for_you.get()
+    }
+
+    /// Browsing a tab must not alter the queue or playback position.
+    fn set_for_you(&self, for_you: bool) {
+        let imp = self.imp();
+        if !for_you {
+            imp.playlist_view.show_playlist();
+        }
+        let showing_playing_queue =
+            imp.in_for_you.get() == for_you && self.player().is_some_and(|p| !p.queue().is_empty());
+        if for_you {
+            imp.queue_mode_page.set_title(&i18n("Music for You"));
+            imp.queue_mode_page.set_description(Some(&i18n("Songs picked from the genres and artists you star and listen to. Your current music keeps playing until you press Play.")));
+            imp.for_you_play_button
+                .set_tooltip_text(Some(&i18n("Play Music for You")));
+        } else {
+            imp.queue_mode_page.set_title(&i18n("Your Music"));
+            imp.queue_mode_page.set_description(Some(&i18n("Press Play to return to your playlist. Your current music keeps playing while you browse.")));
+            imp.for_you_play_button
+                .set_tooltip_text(Some(&i18n("Play My Music")));
+        }
+        imp.player_stack.set_visible_child_name(
+            if showing_playing_queue || !for_you && !self.in_for_you() {
+                "player"
+            } else {
+                "for-you"
+            },
+        );
+    }
+
+    /// Replaces the playing queue only after an explicit Play request.
+    fn switch_playback_queue(&self, for_you: bool) {
+        let imp = self.imp();
+        if imp.in_for_you.get() == for_you {
+            return;
+        }
+        let Some(player) = self.player() else {
+            return;
+        };
+        let queue = player.queue();
+        let leaving: Vec<Song> = (0..queue.n_songs())
+            .filter_map(|i| queue.song_at(i))
+            .collect();
+        player.stop();
+        if for_you {
+            imp.my_music_songs.replace(leaving);
+        } else {
+            imp.for_you_songs.replace(leaving);
+        }
+        imp.in_for_you.set(for_you);
+        queue.clear();
+        let coming = if for_you {
+            imp.for_you_songs.take()
+        } else {
+            imp.my_music_songs.take()
+        };
+        queue.add_songs(&coming);
+        if !coming.is_empty() {
+            player.skip_to(0);
+        }
+    }
+
+    /// Fills the For You queue with recommendations and starts playing.
+    async fn start_for_you(&self) {
+        let imp = self.imp();
+        let Some(client) = library::client() else {
+            self.add_toast(i18n(
+                "Join the network in Shared Music to get music picked for you",
+            ));
+            self.show_library();
+            return;
+        };
+        while imp.for_you_checking.get() {
+            glib::timeout_future(std::time::Duration::from_millis(50)).await;
+        }
+        self.refresh_recommendation_availability().await;
+        if !imp.for_you_button.is_active() {
+            return;
+        }
+        loop {
+            if !imp.for_you_button.is_active() {
+                return;
+            }
+            let first = imp.for_you_songs.borrow().first().cloned();
+            let Some(id) = first.and_then(|s| s.remote_id()) else {
+                break;
+            };
+            match client.prefetch(id).await {
+                Ok(()) => break,
+                Err(library::ClientError::Unavailable | library::ClientError::NotFound) => {
+                    imp.for_you_songs
+                        .borrow_mut()
+                        .retain(|s| s.remote_id() != Some(id));
+                }
+                Err(error) => {
+                    self.add_toast(error.to_string());
+                    return;
+                }
+            }
+        }
+        if !imp.for_you_button.is_active() {
+            return;
+        }
+        if !imp.for_you_songs.borrow().is_empty() {
+            self.switch_playback_queue(true);
+            if let Some(player) = self.player() {
+                player.play();
+            }
+            self.set_for_you(true);
+            return;
+        }
+        imp.for_you_play_button.set_sensitive(false);
+        let tracks = self.more_for_you(&client).await;
+        imp.for_you_play_button.set_sensitive(true);
+        if !imp.for_you_button.is_active() {
+            return;
+        }
+        if tracks.is_empty() {
+            self.add_toast(i18n(
+                "Nothing to recommend yet: star songs you like or listen to some, and music like them shows up here when someone who has it is online",
+            ));
+            return;
+        }
+        self.switch_playback_queue(true);
+        imp.player_stack.set_visible_child_name("player");
+        for track in tracks {
+            if !self.in_for_you() || !imp.for_you_button.is_active() {
+                break;
+            }
+            let play = self.player().is_some_and(|p| p.queue().is_empty());
+            self.add_remote_track(&track, play).await;
+        }
+        self.set_for_you(imp.for_you_button.is_active());
+    }
+
+    /// Recommendations not in the queue yet, searching the network for new
+    /// ones when the known ones run out.
+    async fn refresh_recommendation_availability(&self) {
+        let (Some(player), Some(client)) = (self.player(), library::client()) else {
+            return;
+        };
+        let imp = self.imp();
+        if player.is_previewing() || imp.for_you_checking.replace(true) {
+            return;
+        }
+        let mut songs = imp.for_you_songs.borrow().clone();
+        if self.in_for_you() {
+            let queue = player.queue();
+            songs.extend((0..queue.n_songs()).filter_map(|i| queue.song_at(i)));
+        }
+        let ids: Vec<_> = songs.iter().filter_map(|s| s.remote_id()).collect();
+        if !ids.is_empty() {
+            if let Ok(available) = client.available_recommendations(&ids).await {
+                let unavailable: std::collections::HashSet<_> = ids
+                    .into_iter()
+                    .filter(|id| !available.contains(id))
+                    .collect();
+                imp.for_you_songs
+                    .borrow_mut()
+                    .retain(|s| !s.remote_id().is_some_and(|id| unavailable.contains(&id)));
+                imp.prefetched
+                    .borrow_mut()
+                    .retain(|id| !unavailable.contains(id));
+                if self.in_for_you() && !player.is_previewing() {
+                    let queue = player.queue();
+                    let mut removed: Vec<_> = (0..queue.n_songs())
+                        .filter_map(|i| queue.song_at(i))
+                        .filter(|s| s.remote_id().is_some_and(|id| unavailable.contains(&id)))
+                        .collect();
+                    removed.sort_by_key(|s| s.playing());
+                    for song in removed {
+                        player.remove_song(&song);
+                    }
+                    if queue.is_empty() {
+                        player.stop();
+                        self.set_for_you(true);
+                    }
+                }
+            }
+        }
+        imp.for_you_checking.set(false);
+    }
+
+    async fn more_for_you(&self, client: &library::LibraryClient) -> Vec<Track> {
+        let queued: std::collections::HashSet<i64> = self
+            .player()
+            .map(|p| {
+                let queue = p.queue();
+                (0..queue.n_songs())
+                    .filter_map(|i| queue.song_at(i))
+                    .filter_map(|s| s.library_id())
+                    .collect()
+            })
+            .unwrap_or_default();
+        for refresh in [false, true] {
+            let fresh: Vec<Track> = match client.recommendations(refresh).await {
+                Ok(page) => page
+                    .tracks
+                    .into_iter()
+                    .filter(|t| !queued.contains(&t.id) && (t.local || t.sources > 0))
+                    .take(FOR_YOU_BATCH)
+                    .collect(),
+                Err(err) => {
+                    debug!("No recommendations: {err}");
+                    Vec::new()
+                }
+            };
+            if !fresh.is_empty() {
+                return fresh;
+            }
+        }
+        Vec::new()
+    }
+
+    /// Gets the next song ready while this one plays: a song from the
+    /// network starts downloading, and For You fetches more songs before
+    /// it runs out.
+    fn prepare_next_song(&self) {
+        let (Some(player), Some(client)) = (self.player(), library::client()) else {
+            return;
+        };
+        if player.is_previewing() {
+            return;
+        }
+        let queue = player.queue();
+        let Some(current) = queue.current_song_index() else {
+            return;
+        };
+        let next = if current + 1 < queue.n_songs() {
+            queue.song_at(current + 1)
+        } else if queue.repeat_mode() == RepeatMode::RepeatAll {
+            queue.song_at(0)
+        } else {
+            None
+        };
+        if let Some(id) = next
+            .filter(|s| s.remote_id().is_some() && s.progress() < 1.0)
+            .and_then(|s| s.library_id())
+        {
+            if self.imp().prefetched.borrow_mut().insert(id) {
+                let client = client.clone();
+                let win = self.downgrade();
+                glib::spawn_future_local(async move {
+                    if let Err(err) = client.prefetch(id).await {
+                        debug!("Unable to fetch track {id} ahead: {err}");
+                        if let Some(win) = win.upgrade() {
+                            win.imp().prefetched.borrow_mut().remove(&id);
+                            if matches!(
+                                err,
+                                library::ClientError::Unavailable | library::ClientError::NotFound
+                            ) && win.in_for_you()
+                            {
+                                if let Some(player) = win.player().filter(|p| !p.is_previewing()) {
+                                    let queue = player.queue();
+                                    let missing = (0..queue.n_songs())
+                                        .filter_map(|i| queue.song_at(i))
+                                        .find(|s| s.remote_id() == Some(id));
+                                    if let Some(song) = missing {
+                                        player.remove_song(&song);
+                                    }
+                                    if queue.is_empty() {
+                                        player.stop();
+                                        win.set_for_you(true);
+                                    } else {
+                                        win.prepare_next_song();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+        }
+
+        let imp = self.imp();
+        if self.in_for_you() && current + 2 >= queue.n_songs() && !imp.for_you_refilling.get() {
+            imp.for_you_refilling.set(true);
+            glib::spawn_future_local(clone!(
+                #[weak(rename_to = win)]
+                self,
+                async move {
+                    for track in win.more_for_you(&client).await {
+                        if !win.in_for_you() {
+                            break;
+                        }
+                        win.add_remote_track(&track, false).await;
+                    }
+                    win.imp().for_you_refilling.set(false);
+                }
+            ));
+        }
+    }
+
+    /// Asks the node how the songs from the network in the playlist are
+    /// coming along, for the playlist to show. Songs that are all here are
+    /// only asked about while they play, to show their sharing.
+    fn refresh_transfers(&self) {
+        let (Some(player), Some(client)) = (self.player(), library::client()) else {
+            return;
+        };
+        let queue = player.queue();
+        let current = player.state().current_song();
+        let songs: Vec<Song> = (0..queue.n_songs())
+            .filter_map(|i| queue.song_at(i))
+            .filter(|s| s.remote_id().is_some())
+            .filter(|s| s.progress() < 1.0 || current.as_ref().is_some_and(|c| c.equals(s)))
+            .take(MAX_TRANSFERS_ASKED)
+            .collect();
+        for song in songs {
+            let Some(id) = song.remote_id() else {
+                continue;
+            };
+            let client = client.clone();
+            glib::spawn_future_local(async move {
+                if let Ok(transfer) = client.transfer(id).await {
+                    song.set_property("progress", f64::from(transfer.progress).clamp(0.0, 1.0));
+                    song.set_property("status", transfer_text(&transfer));
+                }
+            });
+        }
+    }
+
+    /// The lyrics view, in place of the cover art (see [`crate::lyrics`]).
+    fn setup_lyrics(&self) {
+        let action = gio::SimpleAction::new_stateful("lyrics", None, &false.to_variant());
+        action.connect_activate(clone!(
+            #[weak(rename_to = win)]
+            self,
+            move |action, _| {
+                let show = !action
+                    .state()
+                    .and_then(|s| s.get::<bool>())
+                    .unwrap_or(false);
+                action.set_state(&show.to_variant());
+                win.show_lyrics(show);
+            }
+        ));
+        self.add_action(&action);
+        self.imp().lyrics_online_button.connect_clicked(clone!(
+            #[weak(rename_to = win)]
+            self,
+            move |_| {
+                glib::spawn_future_local(async move { win.find_lyrics_online().await });
+            }
+        ));
+    }
+
+    fn lyrics_shown(&self) -> bool {
+        self.imp().cover_stack.visible_child_name().as_deref() == Some("lyrics")
+    }
+
+    fn show_lyrics(&self, show: bool) {
+        self.imp()
+            .cover_stack
+            .set_visible_child_name(if show { "lyrics" } else { "cover" });
+        if show {
+            glib::spawn_future_local(clone!(
+                #[weak(rename_to = win)]
+                self,
+                async move { win.load_lyrics().await }
+            ));
+        }
+    }
+
+    fn show_no_lyrics(&self, title: &str, can_look_online: bool) {
+        let imp = self.imp();
+        imp.lyrics.replace(None);
+        imp.lyrics_none_label.set_label(title);
+        imp.lyrics_online_box.set_visible(can_look_online);
+        imp.lyrics_stack.set_visible_child_name("none");
+    }
+
+    /// Shows the lyrics of the song playing that are on this computer.
+    async fn load_lyrics(&self) {
+        let imp = self.imp();
+        let generation = imp.lyrics_generation.get() + 1;
+        imp.lyrics_generation.set(generation);
+        let Some(song) = self.player().and_then(|p| p.state().current_song()) else {
+            self.show_no_lyrics(&i18n("Nothing Playing"), false);
+            return;
+        };
+        let audition_text = imp
+            .audition
+            .borrow()
+            .as_ref()
+            .and_then(|a| a.lyrics.clone());
+        if let Some(text) = audition_text {
+            if let Some(lyrics) = crate::lyrics::parse(&text) {
+                self.set_lyrics(lyrics);
+            }
+            return;
+        }
+        imp.lyrics_stack.set_visible_child_name("loading");
+        let found = crate::lyrics::on_this_computer(&song).await;
+        if imp.lyrics_generation.get() != generation {
+            return;
+        }
+        match found {
+            Some(lyrics) => self.set_lyrics(lyrics),
+            None => self.show_no_lyrics(&i18n("No Lyrics for This Song"), true),
+        }
+    }
+
+    /// Looks the lyrics of the song playing up online, as the listener asked.
+    async fn find_lyrics_online(&self) {
+        let imp = self.imp();
+        let generation = imp.lyrics_generation.get() + 1;
+        imp.lyrics_generation.set(generation);
+        let Some(song) = self.player().and_then(|p| p.state().current_song()) else {
+            return;
+        };
+        imp.lyrics_stack.set_visible_child_name("loading");
+        let found = crate::lyrics::look_up_online(&song).await;
+        if imp.lyrics_generation.get() != generation {
+            return;
+        }
+        match found {
+            Ok(Some(lyrics)) => self.set_lyrics(lyrics),
+            Ok(None) => self.show_no_lyrics(&i18n("No Lyrics Found Online Either"), false),
+            Err(err) => {
+                self.add_toast(err);
+                self.show_no_lyrics(&i18n("No Lyrics for This Song"), true);
+            }
+        }
+    }
+
+    fn set_lyrics(&self, lyrics: crate::lyrics::Lyrics) {
+        let imp = self.imp();
+        if let Some(animation) = imp.lyrics_scroll_animation.take() {
+            animation.pause();
+        }
+        while let Some(child) = imp.lyrics_box.first_child() {
+            imp.lyrics_box.remove(&child);
+        }
+        let labels: Vec<gtk::Label> = lyrics
+            .lines
+            .iter()
+            .map(|line| {
+                // Text from others: never markup
+                let label = gtk::Label::builder()
+                    .label(line.text.as_str())
+                    .use_markup(false)
+                    .wrap(true)
+                    .wrap_mode(gtk::pango::WrapMode::WordChar)
+                    .justify(gtk::Justification::Center)
+                    .build();
+                imp.lyrics_box.append(&label);
+                label
+            })
+            .collect();
+        let synced = lyrics.synced();
+        imp.lyrics_box.set_css_classes(if synced {
+            &["lyrics", "synced"]
+        } else {
+            &["lyrics"]
+        });
+        imp.lyrics_labels.replace(labels);
+        imp.lyrics_line.set(None);
+        imp.lyrics.replace(Some(lyrics));
+        imp.lyrics_scroller.vadjustment().set_value(0.0);
+        imp.lyrics_stack.set_visible_child_name("lines");
+        self.update_lyrics_line();
+    }
+
+    /// Lights up the line being sung, for synced lyrics, and keeps it in
+    /// the middle of the view.
+    fn update_lyrics_line(&self) {
+        let imp = self.imp();
+        if !self.lyrics_shown() {
+            return;
+        }
+        let Some(position) = self.player().map(|p| p.state().position_ms()) else {
+            return;
+        };
+        let line = imp
+            .lyrics
+            .borrow()
+            .as_ref()
+            .and_then(|l| l.line_at(position));
+        if line == imp.lyrics_line.get() {
+            return;
+        }
+        let labels = imp.lyrics_labels.borrow();
+        if let Some(old) = imp.lyrics_line.get().and_then(|i| labels.get(i)) {
+            old.remove_css_class("current");
+        }
+        imp.lyrics_line.set(line);
+        let Some(label) = line.and_then(|i| labels.get(i)) else {
+            return;
+        };
+        label.add_css_class("current");
+        let adjustment = imp.lyrics_scroller.vadjustment();
+        if let Some(point) = label.compute_point(
+            &imp.lyrics_box.get(),
+            &gtk::graphene::Point::new(0.0, label.height() as f32 / 2.0),
+        ) {
+            let target = f64::from(point.y()) - adjustment.page_size() / 2.0;
+            self.scroll_lyrics_to(target);
+        }
+    }
+
+    fn scroll_lyrics_to(&self, value: f64) {
+        let imp = self.imp();
+        if let Some(animation) = imp.lyrics_scroll_animation.take() {
+            animation.pause();
+        }
+        let adjustment = imp.lyrics_scroller.vadjustment();
+        let value = value.clamp(
+            adjustment.lower(),
+            (adjustment.upper() - adjustment.page_size()).max(adjustment.lower()),
+        );
+        let target = adw::CallbackAnimationTarget::new(clone!(
+            #[weak]
+            adjustment,
+            move |value| adjustment.set_value(value)
+        ));
+        let animation = adw::TimedAnimation::builder()
+            .widget(&imp.lyrics_scroller.get())
+            .value_from(adjustment.value())
+            .value_to(value)
+            .duration(320)
+            .easing(adw::Easing::EaseOutCubic)
+            .target(&target)
+            .build();
+        animation.play();
+        imp.lyrics_scroll_animation.replace(Some(animation));
+    }
+
+    /// Looks for the songs brought over from other services, a few seconds
+    /// apart, and stars the ones someone shares. Runs once at a time; the
+    /// ones not found are looked for again later.
+    pub fn look_for_wanted(&self) {
+        let imp = self.imp();
+        if imp.looking_for_wanted.replace(true) {
+            return;
+        }
+        glib::spawn_future_local(clone!(
+            #[weak(rename_to = win)]
+            self,
+            async move {
+                let now = glib::DateTime::now_utc().map(|d| d.to_unix()).unwrap_or(0);
+                let due = library::import::due(now);
+                let mut results = Vec::new();
+                let mut found = 0;
+                for song in due {
+                    let Some(client) = library::client() else {
+                        break;
+                    };
+                    let track = library::import::look_for(&client, &song).await;
+                    if let Some(track) = &track {
+                        if let Ok(starred) = client.set_favorite(track.id, true).await {
+                            found += 1;
+                            win.set_library_state(starred.id, starred.favorite);
+                            win.add_remote_track(&starred, false).await;
+                        }
+                    }
+                    results.push((song, track.is_some()));
+                    if results.len() >= 10 {
+                        library::import::record(&std::mem::take(&mut results), now);
+                    }
+                    glib::timeout_future(WANTED_SEARCH_GAP).await;
+                }
+                library::import::record(&results, now);
+                win.imp().looking_for_wanted.set(false);
+                if found > 0 {
+                    win.add_toast(ni18n_f(
+                        "Found {} of your songs on the network and starred it",
+                        "Found {} of your songs on the network and starred them",
+                        found,
+                        &[&found.to_string()],
+                    ));
+                }
+            }
+        ));
+    }
+
+    /// Shows the shared music panel, wherever it is.
+    fn show_library(&self) {
+        let imp = self.imp();
+        if self.library_in_sheet() {
+            imp.library_sheet.set_open(true);
+        } else {
+            imp.library_split.set_show_sidebar(true);
         }
     }
 
@@ -1453,7 +2893,7 @@ impl Window {
         if let Some(song) = song {
             self.set_title(Some(&format!("{} - {}", song.artist(), song.title())));
         } else {
-            self.set_title(Some("Amberol"));
+            self.set_title(Some("Hopea"));
         }
     }
 
@@ -1496,11 +2936,141 @@ impl Window {
     }
 
     pub fn remove_song(&self, song: &Song) {
+        if !self.in_for_you() {
+            if let Some(id) = song.library_id() {
+                self.take_out_of_library(id, &song.title(), song.is_mine());
+                return;
+            }
+            song.set_property("favorite", false);
+        }
         if let Some(p) = self.player() {
             p.remove_song(song);
         }
         self.update_selected_count();
         self.update_playlist_time();
+    }
+
+    /// Shows or hides the shared music panel at the right of the window.
+    fn toggle_library(&self) {
+        if self.is_import_audition() {
+            return;
+        }
+        let imp = self.imp();
+        if self.library_in_sheet() {
+            let open = !imp.library_sheet.is_open();
+            imp.library_sheet.set_open(open);
+            if open {
+                imp.library_panel.refresh_protection_notice();
+                imp.library_panel.focus_search();
+            }
+            return;
+        }
+        let show = !imp.library_split.shows_sidebar();
+        imp.library_split.set_show_sidebar(show);
+        if show {
+            imp.library_panel.refresh_protection_notice();
+            imp.library_panel.focus_search();
+        }
+    }
+
+    /// Hides the shared music panel if it covers the rest of the window,
+    /// so that what was just played can be seen.
+    pub fn hide_library_if_overlaid(&self) {
+        if self.library_in_sheet() {
+            self.imp().library_sheet.set_open(false);
+            return;
+        }
+        let split = &self.imp().library_split;
+        if split.is_collapsed() {
+            split.set_show_sidebar(false);
+        }
+    }
+
+    /// Search audition uses the main transport without adding to either queue.
+    pub fn preview_remote_track(&self, track: &Track) {
+        let (Some(player), Some(client)) = (self.player(), library::client()) else {
+            return;
+        };
+        let song = Song::from_remote(track, &client.audio_uri(track.id), None);
+        player.preview(song.clone());
+        if track.has_cover {
+            let id = track.id;
+            glib::spawn_future_local(async move {
+                if let Ok(bytes) = client.cover(id).await {
+                    song.set_cover_bytes(&bytes);
+                }
+            });
+        }
+        self.switch_mode(WindowMode::MainView);
+    }
+
+    /// Adds a song from the shared library to the playlist, and optionally
+    /// starts playing it right away; playback starts while it streams.
+    pub async fn add_remote_track(&self, track: &Track, play: bool) {
+        if !track.favorite && !self.in_for_you() {
+            if play {
+                self.preview_remote_track(track);
+            }
+            return;
+        }
+        let (Some(player), Some(client)) = (self.player(), library::client()) else {
+            return;
+        };
+
+        if self.in_for_you() && !track.local && (play || player.queue().is_empty()) {
+            if let Err(error) = client.prefetch(track.id).await {
+                debug!("Skipping unavailable recommendation {}: {error}", track.id);
+                return;
+            }
+            if !self.in_for_you() {
+                return;
+            }
+        }
+        let cover = if track.has_cover {
+            match client.cover(track.id).await {
+                Ok(bytes) => Some(bytes),
+                Err(err) => {
+                    debug!("Unable to fetch cover art: {err}");
+                    None
+                }
+            }
+        } else {
+            None
+        };
+        let song = Song::from_remote(track, &client.audio_uri(track.id), cover.as_ref());
+
+        if !play && track.favorite && self.in_for_you() {
+            let mut songs = self.imp().my_music_songs.borrow_mut();
+            if let Some(existing) = songs.iter().find(|s| s.equals(&song)) {
+                existing.set_library(Some(track.id), track.mine, track.favorite);
+            } else {
+                songs.push(song);
+            }
+            return;
+        }
+
+        let queue = player.queue();
+        let was_empty = queue.is_empty();
+        let find = |song: &Song| {
+            (0..queue.n_songs()).find(|&i| queue.song_at(i).is_some_and(|s| s.equals(song)))
+        };
+        match find(&song).and_then(|i| queue.song_at(i)) {
+            Some(existing) => existing.set_library(Some(track.id), track.mine, track.favorite),
+            None => {
+                queue.add_song(&song);
+            }
+        }
+        let Some(pos) = find(&song) else {
+            return;
+        };
+
+        self.switch_mode(WindowMode::MainView);
+        if play || (was_empty && !player.is_previewing()) {
+            player.skip_to(pos);
+        }
+        if play {
+            player.play();
+        }
     }
 
     pub fn add_toast(&self, msg: String) {
@@ -1537,6 +3107,11 @@ impl Window {
             let state = player.state();
 
             if let Some(song) = state.current_song() {
+                // Songs from the shared library have no local folder
+                if song.remote_id().is_some() {
+                    return;
+                }
+
                 let file = song.file();
 
                 match file
@@ -1625,5 +3200,50 @@ impl Window {
 
     pub fn set_song_position(&self, position: f64) {
         self.imp().waveform_view.set_position(position);
+    }
+}
+
+/// The folder songs taken out of the library are moved to: as set, or
+/// "Unliked" in the music folder.
+/// Time between two searches for songs from other services, to spare
+/// the network
+const WANTED_SEARCH_GAP: std::time::Duration = std::time::Duration::from_secs(3);
+/// Recommendations queued at once in For You
+const FOR_YOU_BATCH: usize = 20;
+/// Songs asked about at once for the playlist's transfer status
+const MAX_TRANSFERS_ASKED: usize = 20;
+
+/// How a song from the network is coming along, in words.
+fn transfer_text(transfer: &hopea_common::api::Transfer) -> String {
+    let speed = |bps: u64| format!("{}/s", glib::format_size(bps));
+    if transfer.progress >= 1.0 {
+        if transfer.upload_bps > 0 {
+            i18n_k(
+                // Translators: `{speed}` is a speed, such as "1.2 MB/s"
+                "On this computer · sharing ↑ {speed}",
+                &[("speed", &speed(transfer.upload_bps))],
+            )
+        } else {
+            i18n("On this computer")
+        }
+    } else if transfer.peers == 0 {
+        i18n_k(
+            // Translators: `{percent}` is a number from 0 to 100
+            "{percent}% here · looking for people who have it",
+            &[("percent", &((transfer.progress * 100.0) as u32).to_string())],
+        )
+    } else {
+        ni18n_k(
+            // Translators: `{percent}` is a number from 0 to 100, `{n}` a
+            // count of people, `{speed}` a speed such as "1.2 MB/s"
+            "Downloading {percent}% · from {n} person · ↓ {speed}",
+            "Downloading {percent}% · from {n} people · ↓ {speed}",
+            transfer.peers,
+            &[
+                ("percent", &((transfer.progress * 100.0) as u32).to_string()),
+                ("n", &transfer.peers.to_string()),
+                ("speed", &speed(transfer.download_bps)),
+            ],
+        )
     }
 }

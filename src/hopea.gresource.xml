@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gresources>
+  <gresource prefix="/io/hopea/Hopea/icons/256x256/apps/">
+    <file alias="io.hopea.Hopea.Cat.png">../data/icons/cat-kz/256.png</file>
+    <file alias="io.hopea.Hopea.Devel.Cat.png">../data/icons/cat-kz/256.png</file>
+  </gresource>
+  <gresource prefix="/io/hopea/Hopea/icons/64x64/apps/">
+    <file alias="io.hopea.Hopea.Cat.png">../data/icons/cat-kz/64.png</file>
+    <file alias="io.hopea.Hopea.Devel.Cat.png">../data/icons/cat-kz/64.png</file>
+  </gresource>
+  <gresource prefix="/io/hopea/Hopea/icons/scalable/actions/">
+    <file alias="hopea-audio-speakers-symbolic.svg">assets/icons/adwaita/audio-speakers-symbolic.svg</file>
+    <file alias="hopea-audio-volume-high-symbolic.svg">assets/icons/adwaita/audio-volume-high-symbolic.svg</file>
+    <file alias="hopea-audio-volume-low-symbolic.svg">assets/icons/adwaita/audio-volume-low-symbolic.svg</file>
+    <file alias="hopea-audio-volume-muted-symbolic.svg">assets/icons/adwaita/audio-volume-muted-symbolic.svg</file>
+    <file alias="hopea-dialog-warning-symbolic.svg">assets/icons/adwaita/dialog-warning-symbolic.svg</file>
+    <file alias="hopea-document-open-symbolic.svg">assets/icons/adwaita/document-open-symbolic.svg</file>
+    <file alias="hopea-emblem-system-symbolic.svg">assets/icons/adwaita/emblem-system-symbolic.svg</file>
+    <file alias="hopea-folder-download-symbolic.svg">assets/icons/adwaita/folder-download-symbolic.svg</file>
+    <file alias="hopea-go-down-symbolic.svg">assets/icons/adwaita/go-down-symbolic.svg</file>
+    <file alias="hopea-go-next-symbolic.svg">assets/icons/adwaita/go-next-symbolic.svg</file>
+    <file alias="hopea-go-up-symbolic.svg">assets/icons/adwaita/go-up-symbolic.svg</file>
+    <file alias="hopea-list-add-symbolic.svg">assets/icons/adwaita/list-add-symbolic.svg</file>
+    <file alias="hopea-list-remove-symbolic.svg">assets/icons/adwaita/list-remove-symbolic.svg</file>
+    <file alias="hopea-media-optical-symbolic.svg">assets/icons/adwaita/media-optical-symbolic.svg</file>
+    <file alias="hopea-media-playback-stop-symbolic.svg">assets/icons/adwaita/media-playback-stop-symbolic.svg</file>
+    <file alias="hopea-media-record-symbolic.svg">assets/icons/adwaita/media-record-symbolic.svg</file>
+    <file alias="hopea-media-view-subtitles-symbolic.svg">assets/icons/adwaita/media-view-subtitles-symbolic.svg</file>
+    <file alias="hopea-network-offline-symbolic.svg">assets/icons/adwaita/network-offline-symbolic.svg</file>
+    <file alias="hopea-network-vpn-symbolic.svg">assets/icons/adwaita/network-vpn-symbolic.svg</file>
+    <file alias="hopea-network-workgroup-symbolic.svg">assets/icons/adwaita/network-workgroup-symbolic.svg</file>
+    <file alias="hopea-open-menu-symbolic.svg">assets/icons/adwaita/open-menu-symbolic.svg</file>
+    <file alias="hopea-sidebar-show-right-symbolic.svg">assets/icons/adwaita/sidebar-show-right-symbolic.svg</file>
+    <file alias="hopea-system-search-symbolic.svg">assets/icons/adwaita/system-search-symbolic.svg</file>
+    <file alias="hopea-view-more-symbolic.svg">assets/icons/adwaita/view-more-symbolic.svg</file>
+    <file alias="hopea-web-browser-symbolic.svg">assets/icons/adwaita/web-browser-symbolic.svg</file>
+    <file alias="hopea-app-remove-symbolic.svg">assets/icons/app-remove-symbolic.svg</file>
+    <file alias="hopea-audio-only-symbolic.svg">assets/icons/audio-only-symbolic.svg</file>
+    <file alias="hopea-edit-clear-all-symbolic.svg">assets/icons/edit-clear-all-symbolic.svg</file>
+    <file alias="hopea-edit-select-all-symbolic.svg">assets/icons/edit-select-all-symbolic.svg</file>
+    <file alias="hopea-folder-music-symbolic.svg">assets/icons/folder-music-symbolic.svg</file>
+    <file alias="hopea-go-previous-symbolic.svg">assets/icons/go-previous-symbolic.svg</file>
+    <file alias="hopea-media-playback-pause-symbolic.svg">assets/icons/media-playback-pause-symbolic.svg</file>
+    <file alias="hopea-media-playback-start-symbolic.svg">assets/icons/media-playback-start-symbolic.svg</file>
+    <file alias="hopea-media-playlist-consecutive-symbolic.svg">assets/icons/media-playlist-consecutive-symbolic.svg</file>
+    <file alias="hopea-media-playlist-repeat-song-symbolic.svg">assets/icons/media-playlist-repeat-song-symbolic.svg</file>
+    <file alias="hopea-media-playlist-repeat-symbolic.svg">assets/icons/media-playlist-repeat-symbolic.svg</file>
+    <file alias="hopea-media-playlist-shuffle-symbolic.svg">assets/icons/media-playlist-shuffle-symbolic.svg</file>
+    <file alias="hopea-media-skip-backward-symbolic.svg">assets/icons/media-skip-backward-symbolic.svg</file>
+    <file alias="hopea-media-skip-forward-symbolic.svg">assets/icons/media-skip-forward-symbolic.svg</file>
+    <file alias="hopea-non-starred-symbolic.svg">assets/icons/non-starred-symbolic.svg</file>
+    <file alias="hopea-selection-mode-symbolic.svg">assets/icons/selection-mode-symbolic.svg</file>
+    <file alias="hopea-starred-symbolic.svg">assets/icons/starred-symbolic.svg</file>
+    <file alias="hopea-view-queue-rtl-symbolic.svg">assets/icons/view-queue-rtl-symbolic.svg</file>
+    <file alias="hopea-view-queue-symbolic.svg">assets/icons/view-queue-symbolic.svg</file>
+  </gresource>
+  <gresource prefix="/io/hopea/Hopea">
+    <file alias="style.css">gtk/style.css</file>
+    <!-- All UI files are generated in the builddir/src/gtk directory -->
+    <file preprocess="xml-stripblanks">library-panel.ui</file>
+    <file preprocess="xml-stripblanks">playback-control.ui</file>
+    <file preprocess="xml-stripblanks">playlist-view.ui</file>
+    <file preprocess="xml-stripblanks">queue-row.ui</file>
+    <file preprocess="xml-stripblanks">shortcuts-dialog.ui</file>
+    <file preprocess="xml-stripblanks">song-cover.ui</file>
+    <file preprocess="xml-stripblanks">song-details.ui</file>
+    <file preprocess="xml-stripblanks">volume-control.ui</file>
+    <file preprocess="xml-stripblanks">window.ui</file>
+  </gresource>
+</gresources>

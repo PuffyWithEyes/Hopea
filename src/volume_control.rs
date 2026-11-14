@@ -15,7 +15,7 @@ mod imp {
     use super::*;
 
     #[derive(Debug, Default, CompositeTemplate)]
-    #[template(resource = "/io/bassi/Amberol/volume-control.ui")]
+    #[template(resource = "/io/hopea/Hopea/volume-control.ui")]
     pub struct VolumeControl {
         // Template widgets
         #[template_child]
@@ -31,7 +31,7 @@ mod imp {
 
     #[glib::object_subclass]
     impl ObjectSubclass for VolumeControl {
-        const NAME: &'static str = "AmberolVolumeControl";
+        const NAME: &'static str = "HopeaVolumeControl";
         type Type = super::VolumeControl;
         type ParentType = gtk::Widget;
 
@@ -151,11 +151,11 @@ impl VolumeControl {
                     if value == adj.lower() {
                         this.imp()
                             .volume_low_button
-                            .set_icon_name("audio-volume-muted-symbolic");
+                            .set_icon_name("hopea-audio-volume-muted-symbolic");
                     } else {
                         this.imp()
                             .volume_low_button
-                            .set_icon_name("audio-volume-low-symbolic");
+                            .set_icon_name("hopea-audio-volume-low-symbolic");
                     }
                     this.notify("volume");
                     this.emit_by_name::<()>("volume-changed", &[&value]);

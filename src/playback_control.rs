@@ -10,7 +10,7 @@ mod imp {
     use super::*;
 
     #[derive(Debug, Default, CompositeTemplate)]
-    #[template(resource = "/io/bassi/Amberol/playback-control.ui")]
+    #[template(resource = "/io/hopea/Hopea/playback-control.ui")]
     pub struct PlaybackControl {
         // Template widgets
         #[template_child]
@@ -35,6 +35,8 @@ mod imp {
         #[template_child]
         pub shuffle_button: TemplateChild<gtk::ToggleButton>,
         #[template_child]
+        pub favorite_button: TemplateChild<gtk::Button>,
+        #[template_child]
         pub repeat_button: TemplateChild<gtk::Button>,
         #[template_child]
         pub menu_button: TemplateChild<gtk::MenuButton>,
@@ -42,7 +44,7 @@ mod imp {
 
     #[glib::object_subclass]
     impl ObjectSubclass for PlaybackControl {
-        const NAME: &'static str = "AmberolPlaybackControl";
+        const NAME: &'static str = "HopeaPlaybackControl";
         type Type = super::PlaybackControl;
         type ParentType = gtk::Widget;
 
@@ -91,6 +93,12 @@ impl Default for PlaybackControl {
 }
 
 impl PlaybackControl {
+    pub fn set_audition(&self, active: bool) {
+        // Keep the transport and volume; hide library/menu controls.
+        if let Some(controls) = self.imp().center_box.last_child() {
+            controls.set_visible(!active);
+        }
+    }
     pub fn new() -> Self {
         Self::default()
     }
@@ -103,6 +111,22 @@ impl PlaybackControl {
         self.imp().repeat_button.get()
     }
 
+    /// Shows whether the current song is in the library; `None`, when
+    /// nothing plays, makes the star unavailable.
+    pub fn set_favorite_state(&self, favorite: Option<bool>) {
+        let button = &self.imp().favorite_button;
+        button.set_sensitive(favorite.is_some());
+        if favorite == Some(true) {
+            button.add_css_class("suggested-action");
+            button.set_icon_name("hopea-starred-symbolic");
+            button.set_tooltip_text(Some(&i18n("Remove From Your Library")));
+        } else {
+            button.remove_css_class("suggested-action");
+            button.set_icon_name("hopea-non-starred-symbolic");
+            button.set_tooltip_text(Some(&i18n("Keep and Share")));
+        }
+    }
+
     pub fn volume_control(&self) -> VolumeControl {
         self.imp().volume_control.get()
     }
@@ -111,15 +135,15 @@ impl PlaybackControl {
         let repeat_button = self.imp().repeat_button.get();
         match repeat_mode {
             RepeatMode::Consecutive => {
-                repeat_button.set_icon_name("media-playlist-consecutive-symbolic");
+                repeat_button.set_icon_name("hopea-media-playlist-consecutive-symbolic");
                 repeat_button.set_tooltip_text(Some(&i18n("Do Not Repeat")));
             }
             RepeatMode::RepeatAll => {
-                repeat_button.set_icon_name("media-playlist-repeat-symbolic");
+                repeat_button.set_icon_name("hopea-media-playlist-repeat-symbolic");
                 repeat_button.set_tooltip_text(Some(&i18n("Repeat All Songs")));
             }
             RepeatMode::RepeatOne => {
-                repeat_button.set_icon_name("media-playlist-repeat-song-symbolic");
+                repeat_button.set_icon_name("hopea-media-playlist-repeat-song-symbolic");
                 repeat_button.set_tooltip_text(Some(&i18n("Repeat the Current Song")));
             }
         }

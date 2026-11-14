@@ -1,11 +1,11 @@
-# Azerbaijani translation for amberol.
-# Copyright (C) 2026 amberol's COPYRIGHT HOLDER
-# This file is distributed under the same license as the amberol package.
+# Azerbaijani translation for hopea.
+# Copyright (C) 2026 hopea's COPYRIGHT HOLDER
+# This file is distributed under the same license as the hopea package.
 # Ramal Rəhimov <jhoaluman@gmail.com>, 2026.
 #
 msgid ""
 msgstr ""
-"Project-Id-Version: amberol main\n"
+"Project-Id-Version: hopea main\n"
 "Report-Msgid-Bugs-To: https://gitlab.gnome.org/World/amberol/-/issues/\n"
 "POT-Creation-Date: 2026-07-08 19:26+0000\n"
 "PO-Revision-Date: 2026-09-20 17:40+0300\n"
@@ -18,61 +18,61 @@ msgstr ""
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 "X-Generator: Google Antigravity / Gtranslator\n"
 
-#: data/io.bassi.Amberol.desktop.in.in:2
-#: data/io.bassi.Amberol.metainfo.xml.in.in:6
-msgid "Amberol"
-msgstr "Amberol"
+#: data/io.hopea.Hopea.desktop.in.in:2
+#: data/io.hopea.Hopea.metainfo.xml.in.in:6
+msgid "Hopea"
+msgstr "Hopea"
 
-#: data/io.bassi.Amberol.desktop.in.in:3
+#: data/io.hopea.Hopea.desktop.in.in:3
 msgid "Music Player"
 msgstr "Musiqi Pleyeri"
 
 #. Translators: Search terms to find this application. Do NOT translate or
 #. localize the semicolons! The list MUST also end with a semicolon!
-#: data/io.bassi.Amberol.desktop.in.in:11
+#: data/io.hopea.Hopea.desktop.in.in:11
 msgid "music;player;media;audio;playlist;"
 msgstr "musiqi;pleyer;media;audio;pleylist;"
 
-#: data/io.bassi.Amberol.metainfo.xml.in.in:7
+#: data/io.hopea.Hopea.metainfo.xml.in.in:7
 msgid "Plays music, and nothing else"
 msgstr "Musiqi çalır, başqa heç nə"
 
-#: data/io.bassi.Amberol.metainfo.xml.in.in:9
+#: data/io.hopea.Hopea.metainfo.xml.in.in:9
 msgid ""
-"Amberol is a music player with no delusions of grandeur. If you just want to"
-" play music available on your local system then Amberol is the music player "
+"Hopea is a music player with no delusions of grandeur. If you just want to"
+" play music available on your local system then Hopea is the music player "
 "you are looking for."
 msgstr ""
-"Amberol, böyük iddiaları olmayan bir musiqi pleyeridir. Əgər sadəcə yerli "
-"sisteminizdəki musiqiləri çalmaq istəyirsinizsə, Amberol axtardığınız musiqi"
+"Hopea, böyük iddiaları olmayan bir musiqi pleyeridir. Əgər sadəcə yerli "
+"sisteminizdəki musiqiləri çalmaq istəyirsinizsə, Hopea axtardığınız musiqi"
 " pleyeridir."
 
-#: data/io.bassi.Amberol.metainfo.xml.in.in:14
+#: data/io.hopea.Hopea.metainfo.xml.in.in:14
 msgid "Current features:"
 msgstr "Cari xüsusiyyətlər:"
 
-#: data/io.bassi.Amberol.metainfo.xml.in.in:16
+#: data/io.hopea.Hopea.metainfo.xml.in.in:16
 msgid "adaptive UI"
 msgstr "adaptiv istifadəçi interfeysi"
 
-#: data/io.bassi.Amberol.metainfo.xml.in.in:17
+#: data/io.hopea.Hopea.metainfo.xml.in.in:17
 msgid "UI recoloring using the album art"
 msgstr "Albom şəkli ilə interfeysin rənglərinin dəyişdirilməsi"
 
-#: data/io.bassi.Amberol.metainfo.xml.in.in:18
+#: data/io.hopea.Hopea.metainfo.xml.in.in:18
 msgid "drag and drop support to queue songs"
 msgstr "musiqiləri növbəyə əlavə etmək üçün sürüklə və burax dəstəyi"
 
-#: data/io.bassi.Amberol.metainfo.xml.in.in:19
+#: data/io.hopea.Hopea.metainfo.xml.in.in:19
 msgid "shuffle and repeat"
 msgstr "qarışdırma və təkrarlama"
 
-#: data/io.bassi.Amberol.metainfo.xml.in.in:20
+#: data/io.hopea.Hopea.metainfo.xml.in.in:20
 msgid "MPRIS integration"
 msgstr "MPRIS inteqrasiyası"
 
-#: data/io.bassi.Amberol.metainfo.xml.in.in:48
-#: data/io.bassi.Amberol.metainfo.xml.in.in:50
+#: data/io.hopea.Hopea.metainfo.xml.in.in:48
+#: data/io.hopea.Hopea.metainfo.xml.in.in:50
 msgid "Emmanuele Bassi"
 msgstr "Emmanuele Bassi"
 
@@ -191,8 +191,8 @@ msgid "_Keyboard Shortcuts"
 msgstr "_Klaviatura Qısayolları"
 
 #: src/gtk/playback-control.blp:222
-msgid "_About Amberol"
-msgstr "Amberol _haqqında"
+msgid "_About Hopea"
+msgstr "Hopea _haqqında"
 
 #: src/gtk/playback-control.blp:227
 msgid "_Quit"
@@ -379,8 +379,8 @@ msgid "translator-credits"
 msgstr "Ramal Rəhimov <jhoaluman@gmail.com>"
 
 #: src/application.rs:255
-msgid "Amberol needs to run in the background to play music"
-msgstr "Musiqi çalmaq üçün Amberol arxa planda işləməlidir"
+msgid "Hopea needs to run in the background to play music"
+msgstr "Musiqi çalmaq üçün Hopea arxa planda işləməlidir"
 
 #: src/audio/inhibit_controller.rs:40
 msgid "Playback in progress"

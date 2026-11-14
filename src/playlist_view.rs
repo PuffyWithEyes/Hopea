@@ -8,8 +8,16 @@ mod imp {
     use super::*;
 
     #[derive(Debug, Default, CompositeTemplate)]
-    #[template(resource = "/io/bassi/Amberol/playlist-view.ui")]
+    #[template(resource = "/io/hopea/Hopea/playlist-view.ui")]
     pub struct PlaylistView {
+        #[template_child]
+        pub navigation: TemplateChild<adw::NavigationView>,
+        #[template_child]
+        pub playlist_page: TemplateChild<adw::NavigationPage>,
+        #[template_child]
+        pub playlist_overlay: TemplateChild<gtk::Overlay>,
+        #[template_child]
+        pub playlist_scroll: TemplateChild<gtk::ScrolledWindow>,
         #[template_child]
         pub back_button: TemplateChild<gtk::Button>,
         #[template_child]
@@ -34,7 +42,7 @@ mod imp {
 
     #[glib::object_subclass]
     impl ObjectSubclass for PlaylistView {
-        const NAME: &'static str = "AmberolPlaylistView";
+        const NAME: &'static str = "HopeaPlaylistView";
         type Type = super::PlaylistView;
         type ParentType = gtk::Widget;
 
@@ -82,6 +90,28 @@ impl Default for PlaylistView {
 }
 
 impl PlaylistView {
+    #[cfg(test)]
+    pub fn visible_page(&self) -> Option<adw::NavigationPage> {
+        self.imp().navigation.visible_page()
+    }
+
+    pub fn show_page(&self, title: &str, content: &impl IsA<gtk::Widget>) -> adw::NavigationPage {
+        let toolbar = adw::ToolbarView::new();
+        let header = adw::HeaderBar::new();
+        header.set_show_end_title_buttons(false);
+        toolbar.add_top_bar(&header);
+        toolbar.set_content(Some(content));
+        let page = adw::NavigationPage::new(&toolbar, title);
+        self.imp().navigation.push(&page);
+        page
+    }
+
+    pub fn show_playlist(&self) {
+        self.imp()
+            .navigation
+            .pop_to_page(&self.imp().playlist_page.get());
+    }
+
     pub fn new() -> Self {
         Self::default()
     }
@@ -109,6 +139,14 @@ impl PlaylistView {
 
     pub fn queue_selected_label(&self) -> gtk::Label {
         self.imp().queue_selected_label.get()
+    }
+
+    pub fn drag_overlay(&self) -> gtk::Overlay {
+        self.imp().playlist_overlay.get()
+    }
+
+    pub fn scroll(&self) -> gtk::ScrolledWindow {
+        self.imp().playlist_scroll.get()
     }
 
     pub fn queue_view(&self) -> gtk::ListView {

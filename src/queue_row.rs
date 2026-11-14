@@ -10,13 +10,15 @@ use gtk::{gdk, gio, glib, prelude::*, CompositeTemplate};
 use crate::{audio::Song, cover_picture::CoverPicture};
 
 mod imp {
-    use glib::{ParamSpec, ParamSpecBoolean, ParamSpecObject, ParamSpecString, Value};
+    use glib::{
+        ParamSpec, ParamSpecBoolean, ParamSpecDouble, ParamSpecObject, ParamSpecString, Value,
+    };
     use once_cell::sync::Lazy;
 
     use super::*;
 
     #[derive(Debug, Default, CompositeTemplate)]
-    #[template(resource = "/io/bassi/Amberol/queue-row.ui")]
+    #[template(resource = "/io/hopea/Hopea/queue-row.ui")]
     pub struct QueueRow {
         // Template widgets
         #[template_child]
@@ -29,6 +31,10 @@ mod imp {
         pub song_title_label: TemplateChild<gtk::Inscription>,
         #[template_child]
         pub song_artist_label: TemplateChild<gtk::Inscription>,
+        #[template_child]
+        pub song_status_label: TemplateChild<gtk::Inscription>,
+        #[template_child]
+        pub song_progress_bar: TemplateChild<gtk::ProgressBar>,
         #[template_child]
         pub song_playing_image: TemplateChild<gtk::Image>,
         #[template_child]
@@ -43,11 +49,13 @@ mod imp {
         pub song: RefCell<Option<Song>>,
         pub playing: Cell<bool>,
         pub selection_mode: Cell<bool>,
+        pub drag_offset: Cell<f64>,
+        pub drag_hidden: Cell<bool>,
     }
 
     #[glib::object_subclass]
     impl ObjectSubclass for QueueRow {
-        const NAME: &'static str = "AmberolQueueRow";
+        const NAME: &'static str = "HopeaQueueRow";
         type Type = super::QueueRow;
         type ParentType = gtk::Widget;
 
@@ -87,6 +95,11 @@ mod imp {
                     ParamSpecBoolean::builder("playing").build(),
                     ParamSpecBoolean::builder("selection-mode").build(),
                     ParamSpecBoolean::builder("selected").build(),
+                    ParamSpecString::builder("song-status").build(),
+                    ParamSpecDouble::builder("song-progress")
+                        .minimum(0.0)
+                        .maximum(1.0)
+                        .build(),
                 ]
             });
             PROPERTIES.as_ref()
@@ -95,6 +108,7 @@ mod imp {
         fn set_property(&self, _id: usize, value: &Value, pspec: &ParamSpec) {
             match pspec.name() {
                 "song" => {
+                    self.obj().set_drag_visual(0.0, false);
                     let song = value.get::<Option<Song>>().unwrap();
                     self.song.replace(song);
                 }
@@ -115,6 +129,27 @@ mod imp {
                         .get::<bool>()
                         .expect("The value needs to be a boolean");
                     self.obj().set_playing(p);
+                }
+                "song-status" => {
+                    // Made by the player, not taken from anyone's file
+                    let p = value
+                        .get::<Option<String>>()
+                        .ok()
+                        .flatten()
+                        .unwrap_or_default();
+                    self.song_status_label.set_visible(!p.is_empty());
+                    self.song_status_label.set_text(Some(&p));
+                }
+                "song-progress" => {
+                    let p = value.get::<f64>().expect("The value needs to be a double");
+                    let song_from_network = self
+                        .song
+                        .borrow()
+                        .as_ref()
+                        .is_some_and(|s| s.remote_id().is_some());
+                    self.song_progress_bar
+                        .set_visible(song_from_network && p < 1.0);
+                    self.song_progress_bar.set_fraction(p);
                 }
                 "selection-mode" => {
                     let p = value
@@ -139,6 +174,13 @@ mod imp {
                 "song-title" => self.song_title_label.text().to_value(),
                 "song-cover" => self.song_cover_image.cover().to_value(),
                 "playing" => self.playing.get().to_value(),
+                "song-status" => self
+                    .song_status_label
+                    .text()
+                    .map(|t| t.to_string())
+                    .unwrap_or_default()
+                    .to_value(),
+                "song-progress" => self.song_progress_bar.fraction().to_value(),
                 "selection-mode" => self.selection_mode.get().to_value(),
                 "selected" => self.selected_button.is_active().to_value(),
                 _ => unimplemented!(),
@@ -146,7 +188,20 @@ mod imp {
         }
     }
 
-    impl WidgetImpl for QueueRow {}
+    impl WidgetImpl for QueueRow {
+        fn snapshot(&self, snapshot: &gtk::Snapshot) {
+            if self.drag_hidden.get() {
+                return;
+            }
+            snapshot.save();
+            snapshot.translate(&gtk::graphene::Point::new(
+                0.0,
+                self.drag_offset.get() as f32,
+            ));
+            self.parent_snapshot(snapshot);
+            snapshot.restore();
+        }
+    }
 }
 
 glib::wrapper! {
@@ -163,6 +218,21 @@ impl Default for QueueRow {
 }
 
 impl QueueRow {
+    // Move the existing render tree, without measuring another copy of the
+    // text or changing the ListView's allocations/hit-testing coordinates.
+    pub(crate) fn set_drag_visual(&self, offset: f64, hidden: bool) {
+        let moved = self.imp().drag_offset.replace(offset) != offset;
+        let visibility_changed = self.imp().drag_hidden.replace(hidden) != hidden;
+        if moved || visibility_changed {
+            self.queue_draw();
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn drag_visual(&self) -> (f64, bool) {
+        (self.imp().drag_offset.get(), self.imp().drag_hidden.get())
+    }
+
     pub fn new() -> Self {
         Self::default()
     }

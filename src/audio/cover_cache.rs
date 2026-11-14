@@ -7,7 +7,7 @@ use std::{
     sync::Mutex,
 };
 
-use gtk::{gdk, gio, glib, prelude::*};
+use gtk::{gdk, glib};
 use log::debug;
 use once_cell::sync::OnceCell;
 use sha2::{Digest, Sha256};
@@ -93,7 +93,7 @@ impl CoverCache {
         // playlist model
         if let Some(p) = path {
             let ext_cover_basename = vec!["Cover", "cover", "Folder", "folder"];
-            let ext_cover_ext = vec!["jpg", "png"];
+            let ext_cover_ext = vec!["jpg", "jpeg", "png"];
 
             let ext_covers = ext_cover_basename
                 .iter()
@@ -112,20 +112,27 @@ impl CoverCache {
                 cover_file.push(name);
                 debug!("Looking for external cover file: {:?}", &cover_file);
 
-                let f = gio::File::for_path(&cover_file);
-                if let Ok((res, _)) = f.load_bytes(None::<&gio::Cancellable>) {
+                if let Some(res) = utils::read_cover_file(&cover_file) {
                     debug!("Loading cover from external cover file");
                     return Some(res);
                 }
             }
         }
 
-        debug!("No cover art");
-
         None
     }
 
     pub fn cover_art(&mut self, path: &Path, tag: &lofty::tag::Tag) -> Option<(CoverArt, String)> {
+        // Imported covers are per-track sidecars, and can change independently
+        // of the audio tags. Read them before consulting the album cache.
+        let sidecar = path.with_extension("cover.jpg");
+        if let Some(bytes) = utils::read_cover_file(&sidecar) {
+            let uuid = format!("hopea-import-cover-{}", hex::encode(Sha256::digest(&bytes)));
+            if let Some(art) = self.cover_art_from_bytes(&uuid, &bytes) {
+                debug!("Loaded imported cover sidecar");
+                return Some((art, uuid));
+            }
+        }
         let mut album_artist = None;
         let mut track_artist = None;
         let mut album = None;
@@ -166,7 +173,7 @@ impl CoverCache {
             hasher.update(path.to_str().unwrap());
         }
 
-        let uuid = format!("{:x}", hasher.finalize());
+        let uuid = hex::encode(hasher.finalize());
 
         match self.lookup(&uuid) {
             Some(c) => {
@@ -197,11 +204,11 @@ impl CoverCache {
                 let texture = cover_pixbuf.as_ref().map(gdk::Texture::for_pixbuf);
 
                 // The color palette we use for styling the UI
-                let palette = if let Some(ref pixbuf) = cover_pixbuf {
+                let palette = cover_pixbuf.as_ref().map(|pixbuf| {
                     utils::load_palette(pixbuf)
-                } else {
-                    None
-                };
+                        .filter(|p| !p.is_empty())
+                        .unwrap_or_else(|| vec![gdk::RGBA::new(0.5, 0.5, 0.5, 1.0)])
+                });
 
                 // We want both texture and palette
                 if texture.is_some() && palette.is_some() {
@@ -219,6 +226,28 @@ impl CoverCache {
                 }
             }
         }
+    }
+
+    // Cover art fetched from the shared library; the server has already
+    // re-encoded it as a plain JPEG
+    pub fn cover_art_from_bytes(&mut self, uuid: &str, bytes: &glib::Bytes) -> Option<CoverArt> {
+        if let Some(c) = self.lookup(&uuid.to_string()) {
+            return Some(c.clone());
+        }
+
+        let pixbuf = utils::load_cover_texture(bytes)?;
+        // Palette extraction can fail on white/monochrome images. The image
+        // itself is still valid and must remain visible.
+        let palette = utils::load_palette(&pixbuf)
+            .filter(|p| !p.is_empty())
+            .unwrap_or_else(|| vec![gdk::RGBA::new(0.5, 0.5, 0.5, 1.0)]);
+        let res = CoverArt {
+            texture: gdk::Texture::for_pixbuf(&pixbuf),
+            palette,
+            cache: utils::cache_cover_art(uuid, &pixbuf),
+        };
+
+        Some(self.add_entry(uuid, res).clone())
     }
 
     pub fn clear(&mut self) {

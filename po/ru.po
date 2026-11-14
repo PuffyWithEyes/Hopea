@@ -5,7 +5,7 @@
 #
 msgid ""
 msgstr ""
-"Project-Id-Version: amberol main\n"
+"Project-Id-Version: hopea main\n"
 "Report-Msgid-Bugs-To: https://gitlab.gnome.org/World/amberol/-/issues/\n"
 "POT-Creation-Date: 2026-03-29 14:16+0000\n"
 "PO-Revision-Date: 2026-03-30 19:02+0300\n"
@@ -19,62 +19,62 @@ msgstr ""
 "n%10<=4 && (n%100<12 || n%100>14) ? 1 : 2);\n"
 "X-Generator: Poedit 3.9\n"
 
-#: data/io.bassi.Amberol.desktop.in.in:2
-#: data/io.bassi.Amberol.metainfo.xml.in.in:6
-msgid "Amberol"
-msgstr "Amberol"
+#: data/io.hopea.Hopea.desktop.in.in:2
+#: data/io.hopea.Hopea.metainfo.xml.in.in:6
+msgid "Hopea"
+msgstr "Hopea"
 
-#: data/io.bassi.Amberol.desktop.in.in:3
+#: data/io.hopea.Hopea.desktop.in.in:3
 msgid "Music Player"
 msgstr "Музыкальный проигрыватель"
 
 #. Translators: Search terms to find this application. Do NOT translate or localize the semicolons! The list MUST also end with a semicolon!
-#: data/io.bassi.Amberol.desktop.in.in:11
+#: data/io.hopea.Hopea.desktop.in.in:11
 msgid "music;player;media;audio;playlist;"
 msgstr ""
 "music;player;media;audio;playlist;музыка;проигрыватель;медиа;аудио;список "
 "воспроизведения;"
 
-#: data/io.bassi.Amberol.metainfo.xml.in.in:7
+#: data/io.hopea.Hopea.metainfo.xml.in.in:7
 msgid "Plays music, and nothing else"
 msgstr "Воспроизводит музыку и ничего больше"
 
-#: data/io.bassi.Amberol.metainfo.xml.in.in:9
+#: data/io.hopea.Hopea.metainfo.xml.in.in:9
 msgid ""
-"Amberol is a music player with no delusions of grandeur. If you just want to "
-"play music available on your local system then Amberol is the music player "
+"Hopea is a music player with no delusions of grandeur. If you just want to "
+"play music available on your local system then Hopea is the music player "
 "you are looking for."
 msgstr ""
-"Amberol - это музыкальный проигрыватель без мании величия. Если вы просто "
+"Hopea - это музыкальный проигрыватель без мании величия. Если вы просто "
 "хотите воспроизводить музыку, доступную в вашей локальной системе, то "
-"Amberol - это тот музыкальный проигрыватель, который вы ищете."
+"Hopea - это тот музыкальный проигрыватель, который вы ищете."
 
-#: data/io.bassi.Amberol.metainfo.xml.in.in:14
+#: data/io.hopea.Hopea.metainfo.xml.in.in:14
 msgid "Current features:"
 msgstr "Текущие функции:"
 
-#: data/io.bassi.Amberol.metainfo.xml.in.in:16
+#: data/io.hopea.Hopea.metainfo.xml.in.in:16
 msgid "adaptive UI"
 msgstr "адаптивный пользовательский интерфейс"
 
-#: data/io.bassi.Amberol.metainfo.xml.in.in:17
+#: data/io.hopea.Hopea.metainfo.xml.in.in:17
 msgid "UI recoloring using the album art"
 msgstr ""
 "перекрашивание пользовательского интерфейса с использованием обложки альбома"
 
-#: data/io.bassi.Amberol.metainfo.xml.in.in:18
+#: data/io.hopea.Hopea.metainfo.xml.in.in:18
 msgid "drag and drop support to queue songs"
 msgstr "поддержка перетаскивания для создания очереди песен"
 
-#: data/io.bassi.Amberol.metainfo.xml.in.in:19
+#: data/io.hopea.Hopea.metainfo.xml.in.in:19
 msgid "shuffle and repeat"
 msgstr "перемешивание и повторение"
 
-#: data/io.bassi.Amberol.metainfo.xml.in.in:20
+#: data/io.hopea.Hopea.metainfo.xml.in.in:20
 msgid "MPRIS integration"
 msgstr "интеграция с MPRIS"
 
-#: data/io.bassi.Amberol.metainfo.xml.in.in:48
+#: data/io.hopea.Hopea.metainfo.xml.in.in:48
 msgid "Emmanuele Bassi"
 msgstr "Emmanuele Bassi"
 
@@ -193,7 +193,7 @@ msgid "_Keyboard Shortcuts"
 msgstr "_Комбинации клавиш"
 
 #: src/gtk/playback-control.blp:222
-msgid "_About Amberol"
+msgid "_About Hopea"
 msgstr "_О приложении"
 
 #: src/gtk/playback-control.blp:227
@@ -378,8 +378,8 @@ msgid "translator-credits"
 msgstr "Aleksandr Melman <alexmelman88@gmail.com>, 2022-2023"
 
 #: src/application.rs:255
-msgid "Amberol needs to run in the background to play music"
-msgstr "Amberol должен работать в фоновом режиме для воспроизведения музыки"
+msgid "Hopea needs to run in the background to play music"
+msgstr "Hopea должен работать в фоновом режиме для воспроизведения музыки"
 
 #: src/audio/inhibit_controller.rs:40
 msgid "Playback in progress"
@@ -539,8 +539,8 @@ msgstr "Невозможно открыть папку"
 #~ msgid "Plays music and nothing else"
 #~ msgstr "Воспроизводит музыку и ничего больше"
 
-#~ msgid "Amberol cannot run in the background"
-#~ msgstr "Amberol не может работать в фоновом режиме"
+#~ msgid "Hopea cannot run in the background"
+#~ msgstr "Hopea не может работать в фоновом режиме"
 
 #~ msgid "{} hour"
 #~ msgid_plural "{} hours"
@@ -554,8 +554,8 @@ msgstr "Невозможно открыть папку"
 #~ msgid "Unrecognized file type for “{}”"
 #~ msgstr "Нераспознанный тип файла для \"{}\""
 
-#~ msgid "Amberol is running in the background"
-#~ msgstr "Amberol работает в фоновом режиме"
+#~ msgid "Hopea is running in the background"
+#~ msgstr "Hopea работает в фоновом режиме"
 
 #~ msgid "Playing next"
 #~ msgstr "Играет следующим"
@@ -593,3 +593,193 @@ msgstr "Невозможно открыть папку"
 
 #~ msgid "Choose a folder"
 #~ msgstr "Выбрать папку"
+
+#: src/library_panel.rs
+msgid "Start Searching"
+msgstr "Начните поиск"
+
+#: src/library_panel.rs
+msgid "Start a search to discover songs, albums and artists."
+msgstr "Начните поиск, чтобы найти музыку, альбомы и исполнителей."
+
+#: src/library_panel/search_results.rs
+msgid "No Songs Available Now"
+msgstr "Сейчас нет доступных треков"
+
+#: src/library_panel/search_results.rs
+msgid "Try another search. Songs already on this computer and songs with no reachable sources are hidden."
+msgstr "Попробуйте другой запрос. Уже имеющиеся треки и музыка без доступных источников скрыты."
+
+#: src/language.rs
+msgid "Language"
+msgstr "Язык"
+
+#: src/language.rs
+msgid "System language"
+msgstr "Язык системы"
+
+#: src/language.rs
+msgid "Language changes apply after restarting Hopea. Some translations are incomplete."
+msgstr "Язык изменится после перезапуска Hopea. Некоторые переводы неполные."
+
+#: src/language.rs
+msgid "Unable to save language"
+msgstr "Не удалось сохранить язык"
+
+#: src/dialogs.rs
+msgid "Cancel"
+msgstr "Отмена"
+
+#: src/dialogs.rs
+msgid "Save"
+msgstr "Сохранить"
+
+#: src/library/client.rs
+msgid "This song has no available sources right now"
+msgstr "Сейчас у этого трека нет доступных источников"
+
+#: src/lyrics.rs
+msgid "Reconnect to share the lyrics"
+msgstr "Подключитесь к сети, чтобы передать текст песни"
+
+#: src/window/song_editor.rs
+msgid "Saved on this computer. Reconnect and save again to publish the cover and lyrics."
+msgstr "Сохранено на этом компьютере. Подключитесь к сети и сохраните снова, чтобы передать обложку и текст песни."
+
+msgid "Choose the Most Shared Covers and Lyrics"
+msgstr "Выбирать самые популярные обложки и тексты"
+
+msgid "Use the variants shared by the most peers. When disabled, Hopea offers a choice after adding a song."
+msgstr "Выбирать варианты с наибольшим числом раздающих пиров. Если выключено, Hopea предложит выбор после добавления песни."
+
+msgid "Choose Cover and Lyrics…"
+msgstr "Выбрать обложку и текст…"
+
+msgid "Choose Cover and Lyrics"
+msgstr "Выбор обложки и текста"
+
+msgid "Reconnect to choose covers and lyrics"
+msgstr "Подключитесь к сети, чтобы выбрать обложку и текст"
+
+msgid "Share this song first"
+msgstr "Сначала добавьте песню в общую медиатеку"
+
+msgid "Lyrics could not be read"
+msgstr "Не удалось прочитать текст песни"
+
+msgid "No shared covers or lyrics found"
+msgstr "Обложки и тексты в сети не найдены"
+
+msgid "Alternative covers or lyrics are available"
+msgstr "Доступны другие обложки или тексты"
+
+msgid "Choose…"
+msgstr "Выбрать…"
+
+msgid "One audio track, different covers and lyrics. Counts show recently confirmed peers sharing each variant."
+msgstr "Одна аудиодорожка — разные обложки и тексты. Числа показывают количество недавно проверенных пиров, раздающих каждый вариант."
+
+msgid "{count} peers"
+msgstr "Пиров: {count}"
+
+msgid "Play and Compare Lyrics"
+msgstr "Послушать и сравнить текст"
+
+msgid "Use Selected"
+msgstr "Использовать выбранное"
+
+msgid "To keep a manual choice, turn off automatic selection in Settings."
+msgstr "Чтобы сохранить ручной выбор, выключите автоматический выбор в настройках."
+
+msgid "Accent Color"
+msgstr "Акцентный цвет"
+
+msgid "Standard Accent Color"
+msgstr "Стандартный акцентный цвет"
+
+msgid "Custom Accent Color"
+msgstr "Свой акцентный цвет"
+
+msgid "Color Code (#RGB or #RRGGBB)"
+msgstr "Код цвета (#RGB или #RRGGBB)"
+
+msgid "Choose from Palette…"
+msgstr "Выбрать на палитре…"
+
+msgid "Preview changes here. Save applies the color; Cancel restores it."
+msgstr "Цвет виден сразу. «Сохранить» применит его, «Отмена» вернёт прежний."
+
+msgid "Enter a color such as #3584E4"
+msgstr "Введите код цвета, например #3584E4"
+
+msgid "Unable to save accent color"
+msgstr "Не удалось сохранить акцентный цвет"
+
+msgid "Choose Accent Color"
+msgstr "Выберите акцентный цвет"
+
+msgid "Hue"
+msgstr "Цветовой тон"
+
+msgid "Use Color"
+msgstr "Выбрать цвет"
+
+msgid "Unable to read this audio document"
+msgstr "Не удалось прочитать этот аудиофайл"
+
+msgid "Game Mode"
+msgstr "Игровой режим"
+
+msgid "Active: P2P downloads up to 512 KiB/s, sharing up to 128 KiB/s. Lower limits are preserved."
+msgstr "Активен: загрузка P2P до 512 КиБ/с, раздача до 128 КиБ/с. Более низкие ограничения сохраняются."
+
+msgid "Automatically reduce P2P traffic and background work for Steam games or games using Feral GameMode."
+msgstr "Автоматически снижать трафик P2P и фоновую нагрузку во время игр из Steam или с Feral GameMode."
+
+msgid "Automatically reduce P2P traffic and background work for detected full-screen games and apps."
+msgstr "Автоматически снижать трафик P2P и фоновую нагрузку при обнаружении полноэкранных игр и приложений."
+
+msgid "Automatic game detection is not available on this platform yet."
+msgstr "Автоматическое обнаружение игр на этой платформе пока недоступно."
+
+msgid "Paused while gaming"
+msgstr "Приостановлено на время игры"
+
+msgid "Import will resume after the game ends"
+msgstr "Импорт продолжится после завершения игры"
+
+msgid "Automatically detect Steam games, Feral GameMode and installed desktop games."
+msgstr "Автоматически распознавать игры Steam, Feral GameMode и установленные игры с ярлыками приложений."
+
+msgid "Automatically reduce traffic and background work while the active app is categorized as a game by macOS."
+msgstr "Автоматически снижать трафик и фоновую нагрузку, если активное приложение относится к игровой категории macOS."
+
+msgid "Automatically detect running games from installed desktop entries. Unclassified games can use the manual override below."
+msgstr "Распознавать запущенные игры по установленным ярлыкам приложений. Для игр без категории используйте ручное включение ниже."
+
+msgid "Automatic detection is unavailable on this platform. Use the manual override below to reduce activity."
+msgstr "Автоматическое обнаружение на этой платформе недоступно. Для снижения нагрузки используйте ручное включение ниже."
+
+msgid "Allow Usage Access below to detect games. Recent app activity is processed only on this device and is not saved or shared."
+msgstr "Для обнаружения игр разрешите доступ к истории использования ниже. Данные обрабатываются только на устройстве, не сохраняются и не передаются."
+
+msgid "Automatically reduce traffic and background work while the foreground Android app is categorized as a game."
+msgstr "Автоматически снижать трафик и фоновую нагрузку, когда открыто Android-приложение игровой категории."
+
+msgid "Keep Game Mode Active"
+msgstr "Держать игровой режим включённым"
+
+msgid "Use reduced activity until you turn this off, including for games that are not detected automatically."
+msgstr "Снижать нагрузку до отключения этой настройки, в том числе для игр, которые не распознаются автоматически."
+
+msgid "Allow Game Detection…"
+msgstr "Разрешить обнаружение игр…"
+
+msgid "Open Android Usage Access settings. App activity stays on this device and is not saved or shared."
+msgstr "Открыть настройки доступа к истории использования Android. Данные остаются на устройстве, не сохраняются и не передаются."
+
+msgid "Unable to open Usage Access settings"
+msgstr "Не удалось открыть настройки доступа к истории использования"
+
+msgid "Game detection is temporarily unavailable. You can use the manual override below."
+msgstr "Обнаружение игр временно недоступно. Можно использовать ручное включение ниже."

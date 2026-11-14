@@ -1,7 +1,46 @@
 version = 1
-SPDX-PackageName = "amberol"
+
+[[annotations]]
+path = "vendor/socket-pktinfo/**"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2025 Pixsper"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "vendor/lofty/**"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2020 Serial <69764315+Serial-ATA@users.noreply.github.com>"
+SPDX-License-Identifier = "MIT OR Apache-2.0"
+
+# Adwaita symbolic artwork bundled from GNOME Platform 51.
+# Attribution requested by upstream: GNOME Project, https://www.gnome.org
+# https://github.com/GNOME/adwaita-icon-theme/blob/master/COPYING
+[[annotations]]
+path = "src/assets/icons/adwaita/*.svg"
+precedence = "override"
+SPDX-FileCopyrightText = "GNOME Project"
+SPDX-License-Identifier = "CC-BY-SA-3.0"
+
+[[annotations]]
+path = ["src/assets/icons/starred-symbolic.svg", "src/assets/icons/non-starred-symbolic.svg"]
+precedence = "override"
+SPDX-FileCopyrightText = "2026 Daniil Klimov"
+SPDX-License-Identifier = "GPL-3.0-or-later"
+
+[[annotations]]
+path = ["build-aux/android/app-links.patch", "build-aux/android/runtime-paths.patch", "build-aux/android/fdk-ndk.patch"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 Daniil Klimov"
+SPDX-License-Identifier = "GPL-3.0-or-later"
+SPDX-PackageName = "hopea"
 SPDX-PackageSupplier = "Emmanuele Bassi"
-SPDX-PackageDownloadLocation = "https://gitlab.gnome.org/ebassi/amberol"
+SPDX-PackageDownloadLocation = "NOASSERTION"
+
+[[annotations]]
+path = ["data/icons/cat-kz/*.png"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026  Daniil Klimov"
+SPDX-License-Identifier = "GPL-3.0-or-later"
 
 [[annotations]]
 path = ".gitignore"
@@ -10,13 +49,7 @@ SPDX-FileCopyrightText = "2022  Emmanuele Bassi"
 SPDX-License-Identifier = "CC0-1.0"
 
 [[annotations]]
-path = ".gitlab-ci.yml"
-precedence = "aggregate"
-SPDX-FileCopyrightText = "2022  Emmanuele Bassi"
-SPDX-License-Identifier = "CC0-1.0"
-
-[[annotations]]
-path = "amberol.doap"
+path = "data/hopea.doap"
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2022  Sophie Herold"
 SPDX-License-Identifier = "CC0-1.0"
@@ -28,43 +61,37 @@ SPDX-FileCopyrightText = "2022  Emmanuele Bassi"
 SPDX-License-Identifier = "GPL-3.0-or-later"
 
 [[annotations]]
-path = ["README.md", "CONTRIBUTING.md", "CHANGES.md", "RELEASING.md"]
+path = ["README.md", "docs/CONTRIBUTING.md", "docs/RELEASING.md"]
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2022  Emmanuele Bassi"
 SPDX-License-Identifier = "CC0-1.0"
 
 [[annotations]]
-path = "io.bassi.Amberol.json"
+path = "build-aux/flatpak/io.hopea.Hopea.Devel.json"
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2022  Emmanuele Bassi"
 SPDX-License-Identifier = "CC0-1.0"
 
 [[annotations]]
-path = "io.bassi.Amberol.Devel.json"
+path = "data/io.hopea.Hopea.metainfo.xml.in.in"
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2022  Emmanuele Bassi"
 SPDX-License-Identifier = "CC0-1.0"
 
 [[annotations]]
-path = "data/io.bassi.Amberol.metainfo.xml.in.in"
+path = "data/io.hopea.Hopea.desktop.in.in"
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2022  Emmanuele Bassi"
 SPDX-License-Identifier = "CC0-1.0"
 
 [[annotations]]
-path = "data/io.bassi.Amberol.desktop.in.in"
+path = "data/io.hopea.Hopea.gschema.xml"
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2022  Emmanuele Bassi"
 SPDX-License-Identifier = "CC0-1.0"
 
 [[annotations]]
-path = "data/io.bassi.Amberol.gschema.xml"
-precedence = "aggregate"
-SPDX-FileCopyrightText = "2022  Emmanuele Bassi"
-SPDX-License-Identifier = "CC0-1.0"
-
-[[annotations]]
-path = "data/io.bassi.Amberol.service.in"
+path = "data/io.hopea.Hopea.service.in"
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2022  Emmanuele Bassi"
 SPDX-License-Identifier = "CC0-1.0"
@@ -76,13 +103,13 @@ SPDX-FileCopyrightText = "2022  Emmanuele Bassi"
 SPDX-License-Identifier = "CC0-1.0"
 
 [[annotations]]
-path = "data/icons/hicolor/scalable/apps/io.bassi.Amberol.**"
+path = "data/icons/hicolor/scalable/apps/io.hopea.Hopea.**"
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2022  Jakub Steiner"
 SPDX-License-Identifier = "CC-BY-SA-3.0"
 
 [[annotations]]
-path = "data/icons/hicolor/symbolic/apps/io.bassi.Amberol.**"
+path = "data/icons/hicolor/symbolic/apps/io.hopea.Hopea.**"
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2022  Jakub Steiner"
 SPDX-License-Identifier = "CC-BY-SA-3.0"
@@ -106,7 +133,7 @@ SPDX-FileCopyrightText = "2022  Translation authors"
 SPDX-License-Identifier = "GPL-3.0-or-later"
 
 [[annotations]]
-path = "src/amberol.gresource.xml"
+path = "src/hopea.gresource.xml"
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2022  Emmanuele Bassi"
 SPDX-License-Identifier = "GPL-3.0-or-later"
@@ -127,4 +154,42 @@ SPDX-License-Identifier = "GPL-3.0-or-later"
 path = "subprojects/blueprint-compiler.wrap"
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2025  Emmanuele Bassi"
+SPDX-License-Identifier = "CC0-1.0"
+
+[[annotations]]
+path = ["AGENTS.md", "docs/ARCHITECTURE.md", "docs/IMPORTING.md", "node/README.md", "nix/README.md"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026  Daniil Klimov"
+SPDX-License-Identifier = "CC0-1.0"
+
+[[annotations]]
+path = "node/Cargo.lock"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026  Daniil Klimov"
+SPDX-License-Identifier = "GPL-3.0-or-later"
+
+# Generated test tones (gst-launch-1.0 audiotestsrc)
+[[annotations]]
+path = "node/tests/fixtures/**"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026  Daniil Klimov"
+SPDX-License-Identifier = "CC0-1.0"
+
+# Packaging: the Nix lock file and the release Flatpak manifest
+[[annotations]]
+path = ["flake.lock", "build-aux/flatpak/io.hopea.Hopea.json"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026  Daniil Klimov"
+SPDX-License-Identifier = "CC0-1.0"
+
+[[annotations]]
+path = "ADDITIONAL-TERMS.md"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026  Daniil Klimov"
+SPDX-License-Identifier = "GPL-3.0-or-later"
+
+[[annotations]]
+path = ["packaging/README.md", "packaging/windows/README.md", "packaging/release-notes.md", "packaging/debian/control", "packaging/debian/changelog.in", "packaging/debian/source/format", "packaging/scoop/hopea.json.in"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 Daniil Klimov"
 SPDX-License-Identifier = "CC0-1.0"

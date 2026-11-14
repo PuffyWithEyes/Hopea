@@ -1,0 +1,27 @@
+--- a/gdk/android/glue/java/org/gtk/android/ToplevelActivity.java
++++ b/gdk/android/glue/java/org/gtk/android/ToplevelActivity.java
+@@ -587,4 +587,24 @@
+ 			setTaskDescription(desc);
+ 		});
+ 	}
++	// Hopea: prefer an installed app for web links, then the user's browser.
++	@Override
++	public void startActivity(Intent intent, Bundle options) {
++		Uri uri = intent.getData();
++		if (Intent.ACTION_VIEW.equals(intent.getAction()) && uri != null
++				&& ("https".equalsIgnoreCase(uri.getScheme()) || "http".equalsIgnoreCase(uri.getScheme()))
++				&& intent.getComponent() == null && intent.getPackage() == null) {
++			Intent appIntent = new Intent(intent);
++			appIntent.addCategory(Intent.CATEGORY_BROWSABLE);
++			appIntent.addFlags(Intent.FLAG_ACTIVITY_REQUIRE_NON_BROWSER);
++			try {
++				super.startActivity(appIntent, options);
++				return;
++			} catch (android.content.ActivityNotFoundException noApp) {
++				// The original intent preserves the user's browser preferences.
++			}
++		}
++		super.startActivity(intent, options);
++	}
++
+ }

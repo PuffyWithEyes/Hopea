@@ -1,0 +1,17 @@
+# SPDX-FileCopyrightText: 2026  Daniil Klimov
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Transitive versions checked with pip-audit on 2026-11-12.
+# Re-audit and run the import tests when updating these pins.
+certifi==2026.10.23
+cffi==2.1.1
+charset-normalizer==3.5.2
+cryptography==50.0.2
+idna==3.20
+jeepney==0.9.0
+pycparser==3.12
+pysocks==1.7.1
+redis==8.1.0
+requests==2.34.2
+soupsieve==4.1
+typing-extensions==4.16.0
+urllib3==2.8.0

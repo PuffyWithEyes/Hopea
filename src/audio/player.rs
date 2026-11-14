@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use std::{
-    cell::RefCell,
+    cell::{Cell, RefCell},
     fmt::{self, Display, Formatter},
     rc::Rc,
 };
@@ -15,8 +15,8 @@ use log::{debug, error};
 use crate::{
     application::ApplicationAction,
     audio::{
-        Controller, CoverCache, GstBackend, InhibitController, MprisController, PlayerState, Queue,
-        Song, WaveformGenerator,
+        Controller, CoverCache, GstBackend, InhibitController, PlayerState, Queue, Song,
+        WaveformGenerator,
     },
 };
 
@@ -28,7 +28,9 @@ pub enum PlaybackAction {
     SkipPrevious,
     SkipNext,
 
+    /// Playback position in milliseconds, and whether this follows a seek.
     UpdatePosition(u64, bool),
+    DurationChanged(u64),
     VolumeChanged(f64),
     Repeat(RepeatMode),
     Seek(i64),
@@ -46,7 +48,7 @@ pub enum PlaybackState {
 }
 
 #[derive(Clone, Copy, Debug, glib::Enum, PartialEq, Default)]
-#[enum_type(name = "AmberolRepeatMode")]
+#[enum_type(name = "HopeaRepeatMode")]
 pub enum RepeatMode {
     #[default]
     Consecutive,
@@ -65,7 +67,7 @@ impl Display for RepeatMode {
 }
 
 #[derive(Clone, Copy, Debug, glib::Enum, PartialEq)]
-#[enum_type(name = "AmberolReplayGainMode")]
+#[enum_type(name = "HopeaReplayGainMode")]
 pub enum ReplayGainMode {
     #[enum_value(name = "album")]
     Album,
@@ -108,6 +110,14 @@ pub enum SeekDirection {
     Backwards,
 }
 
+pub struct PreviewCheckpoint {
+    song: Option<Song>,
+    position: u64,
+    previewing: bool,
+    album: Vec<Song>,
+    index: usize,
+}
+
 pub struct AudioPlayer {
     app_sender: Sender<ApplicationAction>,
     receiver: RefCell<Option<Receiver<PlaybackAction>>>,
@@ -116,6 +126,9 @@ pub struct AudioPlayer {
     queue: Queue,
     state: PlayerState,
     waveform_generator: WaveformGenerator,
+    previewing: Cell<bool>,
+    preview_album: RefCell<Vec<Song>>,
+    preview_index: Cell<usize>,
 }
 
 impl fmt::Debug for AudioPlayer {
@@ -130,9 +143,22 @@ impl AudioPlayer {
         let receiver = RefCell::new(Some(r));
 
         let mut controllers: Vec<Box<dyn Controller>> = Vec::new();
+        #[cfg(target_os = "android")]
+        controllers.push(Box::new(crate::android::MediaController::new(
+            sender.clone(),
+        )));
 
-        let mpris_controller = MprisController::new(sender.clone());
-        controllers.push(Box::new(mpris_controller));
+        #[cfg(any(
+            target_os = "linux",
+            target_os = "freebsd",
+            target_os = "openbsd",
+            target_os = "netbsd",
+            target_os = "dragonfly"
+        ))]
+        {
+            let mpris_controller = crate::audio::MprisController::new(sender.clone());
+            controllers.push(Box::new(mpris_controller));
+        }
 
         let inhibit_controller = InhibitController::new();
         controllers.push(Box::new(inhibit_controller));
@@ -153,6 +179,9 @@ impl AudioPlayer {
             queue,
             state,
             waveform_generator,
+            previewing: Cell::new(false),
+            preview_album: RefCell::new(Vec::new()),
+            preview_index: Cell::new(0),
         });
 
         res.clone().setup_channel();
@@ -177,7 +206,7 @@ impl AudioPlayer {
         ));
     }
 
-    fn process_action(&self, action: PlaybackAction) -> glib::ControlFlow {
+    pub(crate) fn process_action(&self, action: PlaybackAction) -> glib::ControlFlow {
         match action {
             PlaybackAction::Play => self.set_playback_state(PlaybackState::Playing),
             PlaybackAction::Pause => self.set_playback_state(PlaybackState::Paused),
@@ -185,6 +214,11 @@ impl AudioPlayer {
             PlaybackAction::SkipPrevious => self.skip_previous(),
             PlaybackAction::SkipNext => self.skip_next(),
             PlaybackAction::UpdatePosition(pos, notify) => self.update_position(pos, notify),
+            PlaybackAction::DurationChanged(seconds) => {
+                if let Some(song) = self.state.current_song().filter(|s| s.duration() == 0) {
+                    song.set_duration(seconds);
+                }
+            }
             PlaybackAction::VolumeChanged(vol) => self.update_volume(vol),
             PlaybackAction::PlayNext => self.play_next(),
             PlaybackAction::Raise => self.present(),
@@ -249,11 +283,135 @@ impl AudioPlayer {
     }
 
     fn play_next(&self) {
+        if self.previewing.get() {
+            if !self.advance_preview(1) {
+                self.stop();
+            }
+            return;
+        }
         self.skip_next();
     }
 
-    pub fn toggle_play(&self) {
+    /// Listen without changing the queue, its order or its current position.
+    pub fn preview(&self, song: Song) {
+        self.preview_album.borrow_mut().clear();
+        self.start_preview(song);
+    }
+
+    pub fn preview_checkpoint(&self) -> PreviewCheckpoint {
+        PreviewCheckpoint {
+            song: self.state.current_song(),
+            position: self.state.position(),
+            previewing: self.previewing.get(),
+            album: self.preview_album.borrow().clone(),
+            index: self.preview_index.get(),
+        }
+    }
+
+    /// Restore the previous transport paused; never resume unrelated music
+    /// when returning to an import decision or cancelling the import.
+    pub fn restore_preview(&self, checkpoint: PreviewCheckpoint) {
+        self.stop();
+        if let Some(song) = self.state.current_song() {
+            song.set_playing(false);
+        }
+        self.previewing.set(checkpoint.previewing);
+        self.preview_album.replace(checkpoint.album);
+        self.preview_index.set(checkpoint.index);
+        self.backend
+            .set_song_uri(checkpoint.song.as_ref().map(|s| s.uri()).as_deref());
+        if let Some(song) = &checkpoint.song {
+            for controller in &self.controllers {
+                controller.set_song(song);
+            }
+        }
+        self.state.set_current_song(checkpoint.song);
+        if self.state.current_song().is_some() {
+            self.set_playback_state(PlaybackState::Paused);
+            self.backend.seek_position(checkpoint.position);
+        }
+        self.update_position(checkpoint.position.saturating_mul(1000), true);
+    }
+
+    #[cfg(test)]
+    pub fn test_audio_sink(&self, sink: &gst::Element) {
+        self.backend.test_audio_sink(sink);
+    }
+
+    pub fn preview_album(&self, songs: Vec<Song>, start: usize) {
+        let Some(song) = songs.get(start).cloned() else {
+            return;
+        };
+        self.preview_album.replace(songs);
+        self.preview_index.set(start);
+        self.start_preview(song);
+    }
+
+    fn advance_preview(&self, delta: isize) -> bool {
+        let index = self.preview_index.get().checked_add_signed(delta);
+        let song = index.and_then(|i| self.preview_album.borrow().get(i).cloned());
+        if let (Some(index), Some(song)) = (index, song) {
+            self.preview_index.set(index);
+            self.start_preview(song);
+            true
+        } else {
+            false
+        }
+    }
+
+    fn start_preview(&self, song: Song) {
+        self.pause();
+        if let Some(current) = self.state.current_song() {
+            current.set_playing(false);
+        }
+        self.previewing.set(true);
+        for controller in &self.controllers {
+            controller.set_song(&song);
+        }
+        self.backend.set_song_uri(Some(&song.uri()));
+        self.update_position(0, true);
+        song.set_playing(true);
+        self.state.set_current_song(Some(song));
+        self.play();
+    }
+
+    pub fn detach_current(&self) {
+        self.preview_album.borrow_mut().clear();
+        self.previewing.set(true);
+    }
+
+    pub fn album_preview_next(&self) -> Option<bool> {
+        (self.previewing.get() && !self.preview_album.borrow().is_empty())
+            .then(|| self.preview_index.get() + 1 < self.preview_album.borrow().len())
+    }
+
+    pub fn update_preview_favorite(&self, id: i64, favorite: bool) {
+        use gtk::prelude::*;
+        for song in self.preview_album.borrow().iter() {
+            if song.library_id() == Some(id) {
+                song.set_property("favorite", favorite);
+            }
+        }
+    }
+
+    pub fn is_previewing(&self) -> bool {
+        self.previewing.get()
+    }
+
+    fn return_from_preview(&self) -> bool {
+        if !self.previewing.get() {
+            return false;
+        }
         if self.queue.is_empty() {
+            self.stop();
+        } else {
+            self.skip_to(self.queue.current_song_index().unwrap_or(0));
+        }
+        true
+    }
+
+    pub fn toggle_play(&self) {
+        if self.queue.is_empty() && self.state.current_song().is_none() {
             return;
         }
 
@@ -281,6 +439,15 @@ impl AudioPlayer {
     }
 
     pub fn skip_previous(&self) {
+        if self.previewing.get() && !self.preview_album.borrow().is_empty() {
+            if !self.advance_preview(-1) {
+                self.seek_start();
+            }
+            return;
+        }
+        if self.return_from_preview() {
+            return;
+        }
         if self.queue.is_empty() {
             return;
         }
@@ -329,6 +496,15 @@ impl AudioPlayer {
     }
 
     pub fn skip_next(&self) {
+        if self.previewing.get() && !self.preview_album.borrow().is_empty() {
+            if !self.advance_preview(1) {
+                self.stop();
+            }
+            return;
+        }
+        if self.return_from_preview() {
+            return;
+        }
         if self.queue.is_empty() {
             return;
         }
@@ -370,9 +546,10 @@ impl AudioPlayer {
             return;
         }
 
-        if Some(pos) == self.queue.current_song_index() {
+        if Some(pos) == self.queue.current_song_index() && !self.previewing.get() {
             return;
         }
+        self.previewing.set(false);
 
         if let Some(current_song) = self.state.current_song() {
             current_song.set_playing(false);
@@ -469,11 +646,14 @@ impl AudioPlayer {
         self.state.set_current_song(song);
     }
 
-    fn update_position(&self, position: u64, notify: bool) {
-        self.state.set_position(position);
-
-        for c in &self.controllers {
-            c.set_position(position, notify);
+    fn update_position(&self, position_ms: u64, notify: bool) {
+        let previous = self.state.position();
+        self.state.set_position_ms(position_ms);
+        let position = position_ms / 1000;
+        if previous != position || notify {
+            for c in &self.controllers {
+                c.set_position(position, notify);
+            }
         }
     }
 
@@ -517,6 +697,7 @@ impl AudioPlayer {
     }
 
     pub fn clear_queue(&self) {
+        self.previewing.set(false);
         self.stop();
         self.state.set_current_song(None);
         self.queue.clear();

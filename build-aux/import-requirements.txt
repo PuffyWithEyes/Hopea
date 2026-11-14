@@ -1,0 +1,11 @@
+# SPDX-FileCopyrightText: 2026  Daniil Klimov
+# SPDX-License-Identifier: GPL-3.0-or-later
+-c import-constraints.txt
+vk-api==11.10.1
+beautifulsoup4==4.15.0
+yandex-music==3.2.2
+ytmusicapi==1.12.3
+yt-dlp==2026.10.26
+pycryptodomex==3.23.0
+SecretStorage==3.3.3; sys_platform == "linux" or "freebsd" in sys_platform or "openbsd" in sys_platform or "netbsd" in sys_platform or "dragonfly" in sys_platform
+spotipy==2.26.0

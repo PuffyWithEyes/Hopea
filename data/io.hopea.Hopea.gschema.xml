@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist gettext-domain="hopea">
+  <enum id="io.hopea.Hopea.ReplayGainMode">
+    <value nick="album" value="0"/>
+    <value nick="track" value="1"/>
+    <value nick="off" value="2"/>
+  </enum>
+  <!-- Keep the settings storage path so existing preferences survive. -->
+	<schema id="io.hopea.Hopea" path="/io/bassi/Amberol/">
+	  <key name="window-width" type="i">
+	    <default>600</default>
+	  </key>
+	  <key name="window-height" type="i">
+	    <default>300</default>
+	  </key>
+	  <key name="enable-recoloring" type="b">
+	    <default>true</default>
+	  </key>
+    <key name="replay-gain" enum="io.hopea.Hopea.ReplayGainMode">
+      <default>'off'</default>
+    </key>
+	  <key name="background-play" type="b">
+	    <default>true</default>
+	  </key>
+	  <key name="library-enabled" type="b">
+	    <default>false</default>
+	    <summary>Take part in sharing music</summary>
+	    <description>Start the built-in peer-to-peer node with the app</description>
+	  </key>
+	  <key name="library-name" type="s">
+	    <default>''</default>
+	    <summary>Name shown next to shared songs</summary>
+	  </key>
+	  <key name="library-peers" type="as">
+	    <default>[]</default>
+	    <summary>Nodes always searched</summary>
+	    <description>Addresses (host:port) of nodes to search in addition to those found in the DHT, for example friends on the same network</description>
+	  </key>
+	  <key name="library-download-limit" type="u">
+	    <default>20480</default>
+	    <summary>Download speed limit, in KiB/s</summary>
+	    <description>0 means no limit</description>
+	  </key>
+      <key name="game-mode" type="b">
+        <default>true</default>
+        <summary>Reduce background activity while gaming</summary>
+        <description>Temporarily reduce P2P traffic and speculative work when a game is detected. Restore the user's limits after the game exits.</description>
+      </key>
+      <key name="game-mode-force" type="b">
+        <default>false</default>
+        <summary>Keep game mode active without automatic detection</summary>
+        <description>Apply reduced activity while Game Mode is enabled, even when the platform cannot recognize the game.</description>
+      </key>
+	  <key name="library-upload-limit" type="u">
+	    <default>10240</default>
+	    <summary>Sharing speed limit, in KiB/s</summary>
+	    <description>0 means no limit. Only applies with a download limit, and is raised to at least a seventh of it</description>
+	  </key>
+	  <key name="library-join-at-start" type="s">
+	    <choices>
+	      <choice value="auto"/>
+	      <choice value="yes"/>
+	      <choice value="no"/>
+	    </choices>
+	    <default>"auto"</default>
+	    <summary>Whether to join the network when the app starts</summary>
+	    <description>"auto" joins on computers and not on phones and tablets, where it costs battery and mobile data</description>
+	  </key>
+	  <key name="library-rules-seen" type="b">
+	    <default>false</default>
+	    <summary>Whether the rules of sharing music were shown</summary>
+	    <description>They are shown once, the first time the app starts</description>
+	  </key>
+	  <key name="library-only-protected" type="b">
+	    <default>false</default>
+	    <summary>Join the network only through a VPN</summary>
+	    <description>Leaves the network as soon as the connection stops going through a VPN, and joins again when it does</description>
+	  </key>
+	  <key name="library-unliked-action" type="s">
+	    <choices>
+	      <choice value="move"/>
+	      <choice value="delete"/>
+	    </choices>
+	    <default>"move"</default>
+	    <summary>What happens to a song taken out of the library</summary>
+	    <description>"move" saves it to the unliked songs folder, "delete" removes it from this computer (own files go to the trash)</description>
+	  </key>
+	  <key name="library-unliked-folder" type="s">
+	    <default>""</default>
+	    <summary>Where songs taken out of the library are moved</summary>
+	    <description>Empty means "Unliked" in the music folder</description>
+	  </key>
+    <key name="accent-mode" type="s">
+      <choices><choice value="standard"/><choice value="custom"/></choices>
+      <default>'standard'</default>
+      <summary>Standard or custom accent color</summary>
+    </key>
+    <key name="accent-color" type="s">
+      <default>'#3584E4'</default>
+      <summary>Custom accent color in hexadecimal RGB</summary>
+    </key>
+    <key name="popular-metadata" type="b">
+      <default>true</default>
+      <summary>Automatically choose covers and lyrics shared by the most peers</summary>
+    </key>
+    <key name="missing-cover" type="s">
+      <choices><choice value="note"/><choice value="logo"/><choice value="custom"/></choices>
+      <default>'note'</default>
+      <summary>Image shown for songs without cover art</summary>
+    </key>
+    <key name="missing-cover-image" type="s">
+      <default>''</default>
+      <summary>Saved custom image for songs without cover art</summary>
+    </key>
+	</schema>
+</schemalist>

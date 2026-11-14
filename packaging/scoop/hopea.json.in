@@ -1,0 +1,16 @@
+{
+    "version": "@VERSION@",
+    "description": "Music player with peer-to-peer sharing",
+    "homepage": "https://github.com/@REPOSITORY@",
+    "license": "GPL-3.0-or-later",
+    "architecture": {
+        "64bit": {
+            "url": "https://github.com/@REPOSITORY@/releases/download/v@VERSION@/hopea-@VERSION@-windows-x86_64.zip",
+            "hash": "@WINDOWS_SHA256@"
+        }
+    },
+    "extract_dir": "Hopea",
+    "bin": "bin\\hopea.exe",
+    "shortcuts": [["bin\\hopea.exe", "Hopea"]],
+    "checkver": { "github": "https://github.com/@REPOSITORY@" }
+}

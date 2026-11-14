@@ -1,14 +1,10 @@
 # SPDX-FileCopyrightText: 2022  Emmanuele Bassi
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-scalable_dir = 'hicolor/scalable/apps'
-install_data(
-  scalable_dir / ('@0@.svg').format(application_id),
-  install_dir: get_option('datadir') / 'icons' / scalable_dir,
-)
-
-symbolic_dir = 'hicolor/symbolic/apps'
-install_data(
-  symbolic_dir / ('@0@-symbolic.svg').format(application_id),
-  install_dir: get_option('datadir') / 'icons' / symbolic_dir,
-)
+foreach size : [16, 24, 32, 48, 64, 128, 256, 512]
+  install_data(
+    'cat-kz' / '@0@.png'.format(size),
+    rename: application_id + '.Cat.png',
+    install_dir: get_option('datadir') / 'icons/hicolor' / '@0@x@0@/apps'.format(size),
+  )
+endforeach

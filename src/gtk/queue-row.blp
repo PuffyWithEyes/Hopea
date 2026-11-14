@@ -3,7 +3,7 @@
 
 using Gtk 4.0;
 
-template $AmberolQueueRow: Widget {
+template $HopeaQueueRow: Widget {
   Stack row_stack {
     StackPage {
       name: "song-details";
@@ -14,7 +14,7 @@ template $AmberolQueueRow: Widget {
             name: "no-cover";
 
             child: Image {
-              icon-name: "folder-music-symbolic";
+              icon-name: "hopea-folder-music-symbolic";
               pixel-size: 32;
 
               styles [
@@ -32,7 +32,7 @@ template $AmberolQueueRow: Widget {
           StackPage {
             name: "cover";
 
-            child: $AmberolCoverPicture song_cover_image {
+            child: $HopeaCoverPicture song_cover_image {
               cover-size: "1";
               halign: "center";
               valign: "center";
@@ -67,11 +67,32 @@ template $AmberolQueueRow: Widget {
               "song-artist",
             ]
           }
+
+          // For songs from the network: how they are coming along
+          Inscription song_status_label {
+            xalign: 0;
+            text-overflow: ellipsize_end;
+            visible: false;
+
+            styles [
+              "caption",
+              "dim-label",
+            ]
+          }
+
+          ProgressBar song_progress_bar {
+            visible: false;
+
+            styles [
+              "osd",
+              "song-progress",
+            ]
+          }
         }
 
         [end]
         Image song_playing_image {
-          icon-name: "audio-only-symbolic";
+          icon-name: "hopea-audio-only-symbolic";
           pixel-size: 16;
           halign: center;
           valign: center;
@@ -128,7 +149,7 @@ template $AmberolQueueRow: Widget {
 
         [end]
         Image selection_playing_image {
-          icon-name: "audio-only-symbolic";
+          icon-name: "hopea-audio-only-symbolic";
           pixel-size: 16;
           halign: center;
           valign: center;

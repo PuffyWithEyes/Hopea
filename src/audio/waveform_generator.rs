@@ -8,7 +8,10 @@ use gst::prelude::*;
 use gtk::{gio, glib, prelude::*, subclass::prelude::*};
 use log::{debug, warn};
 
-use crate::audio::{Controller, PlaybackState, RepeatMode, Song};
+use crate::{
+    audio::{Controller, PlaybackState, RepeatMode, Song},
+    library,
+};
 
 mod imp {
     use glib::{ParamSpec, ParamSpecBoolean, Value};
@@ -98,8 +101,7 @@ impl WaveformGenerator {
             };
 
             if let Some(uuid) = song.uuid() {
-                let mut cache = glib::user_cache_dir();
-                cache.push("amberol");
+                let mut cache = crate::paths::cache_dir();
                 cache.push("waveforms");
                 glib::mkdir_with_parents(&cache, 0o755);
 
@@ -125,7 +127,7 @@ impl WaveformGenerator {
 
     async fn load_peaks_cache(&self, cache: impl AsRef<std::path::Path>) {
         let file = gio::File::for_path(&cache);
-        if let Ok((bytes, _tag)) = file.load_contents_future().await {
+        if let Ok(bytes) = crate::utils::read_file_limited(&file, 4 * 1024 * 1024).await {
             match serde_json::from_slice(&bytes[..]) {
                 Ok(p) => {
                     debug!("Loaded cached waveform file");
@@ -150,8 +152,7 @@ impl WaveformGenerator {
         };
 
         if let Some(uuid) = song.uuid() {
-            let mut cache = glib::user_cache_dir();
-            cache.push("amberol");
+            let mut cache = crate::paths::cache_dir();
             cache.push("waveforms");
             cache.push(format!("{}.json", uuid));
 
@@ -162,6 +163,49 @@ impl WaveformGenerator {
                 async move { this.load_peaks_cache(&cache).await }
             ));
         }
+    }
+
+    fn fetch_remote_peaks(&self, id: i64) {
+        self.imp().peaks.replace(None);
+
+        let Some(client) = library::client() else {
+            self.notify("has-peaks");
+            return;
+        };
+
+        glib::MainContext::default().spawn_local(clone!(
+            #[weak(rename_to = this)]
+            self,
+            async move {
+                let peaks = client.peaks(id).await;
+
+                // The song may have changed while we were waiting
+                let current = this
+                    .imp()
+                    .song
+                    .borrow()
+                    .as_ref()
+                    .and_then(|s| s.remote_id());
+                if current != Some(id) {
+                    return;
+                }
+
+                match peaks {
+                    Ok(peaks) => {
+                        let peaks = peaks
+                            .into_iter()
+                            .map(|(l, r)| (f64::from(l), f64::from(r)))
+                            .collect();
+                        this.imp().peaks.replace(Some(peaks));
+                        this.save_peaks();
+                    }
+                    Err(err) => {
+                        warn!("Unable to fetch the waveform: {err}");
+                        this.notify("has-peaks");
+                    }
+                }
+            }
+        ));
     }
 
     fn generate_peaks(&self) {
@@ -184,6 +228,13 @@ impl WaveformGenerator {
                 return;
             }
         };
+
+        // The shared library computes waveforms when a song is uploaded, so
+        // there is no need to download the whole song a second time
+        if let Some(id) = song.remote_id() {
+            self.fetch_remote_peaks(id);
+            return;
+        }
 
         // Reset the peaks vector
         let peaks: Vec<(f64, f64)> = Vec::new();

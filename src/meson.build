@@ -5,8 +5,8 @@ subdir('gtk')
 
 pkgdatadir = get_option('prefix') / get_option('datadir') / meson.project_name()
 
-gnome.compile_resources('amberol',
-  'amberol.gresource.xml',
+gnome.compile_resources('hopea',
+  'hopea.gresource.xml',
   gresource_bundle: true,
   dependencies: blueprints,
   install: true,
@@ -15,10 +15,12 @@ gnome.compile_resources('amberol',
 
 conf = configuration_data()
 conf.set_quoted('VERSION', '@0@@1@'.format(meson.project_version(), version_suffix))
-conf.set_quoted('GETTEXT_PACKAGE', 'amberol')
+conf.set_quoted('GETTEXT_PACKAGE', 'hopea')
 conf.set_quoted('LOCALEDIR', get_option('prefix') / get_option('localedir'))
+conf.set_quoted('DEVEL_LOCALEDIR', meson.project_build_root() / 'po')
 conf.set_quoted('PKGDATADIR', pkgdatadir)
 conf.set_quoted('APPLICATION_ID', application_id)
+conf.set_quoted('APPLICATION_ICON', application_id + '.Cat')
 conf.set_quoted('PROFILE', get_option('profile'))
 
 config_rs = configure_file(
@@ -35,8 +37,13 @@ run_command(
   check: true,
 )
 
+cargo_cache = get_option('cargo-cache-dir')
+cargo_target_dir = meson.project_build_root() / 'src'
+if cargo_cache != ''
+  cargo_target_dir = cargo_cache / 'target'
+endif
 cargo_options = [ '--manifest-path', meson.project_source_root() / 'Cargo.toml' ]
-cargo_options += [ '--target-dir', meson.project_build_root() / 'src' ]
+cargo_options += [ '--target-dir', cargo_target_dir, '--locked' ]
 
 if get_option('profile') == 'default'
   cargo_options += [ '--release' ]
@@ -47,13 +54,25 @@ else
   message('Building in debug mode')
 endif
 
-cargo_env = [ 'CARGO_HOME=' + meson.project_build_root() / 'cargo-home' ]
+# Development builds use the crates already downloaded for other Rust builds;
+# release builds (such as Flatpak's) keep their own copy in the build directory
+if cargo_cache != ''
+  cargo_env = [ 'CARGO_HOME=' + cargo_cache / 'home' ]
+elif get_option('profile') == 'default'
+  cargo_env = [ 'CARGO_HOME=' + meson.project_build_root() / 'cargo-home' ]
+else
+  cargo_env = []
+endif
 
+player_binary = meson.project_name()
+if host_machine.system() == 'windows'
+  player_binary += '.exe'
+endif
 cargo_release = custom_target(
   'cargo-build',
   build_by_default: true,
   build_always_stale: true,
-  output: meson.project_name(),
+  output: player_binary,
   console: true,
   install: true,
   install_dir: get_option('bindir'),
@@ -63,6 +82,28 @@ cargo_release = custom_target(
     cargo, 'build',
     cargo_options,
     '&&',
-    'cp', 'src' / rust_target / meson.project_name(), '@OUTPUT@',
+    'cp', cargo_target_dir / rust_target / player_binary, '@OUTPUT@.new',
+    '&&', 'mv', '-f', '@OUTPUT@.new', '@OUTPUT@',
+  ],
+)
+
+# Separate Cargo invocation keeps librespot's features out of the P2P node.
+# Both binaries share Cargo.lock and are installed next to each other.
+spotify_binary = 'hopea-spotify'
+if host_machine.system() == 'windows'
+  spotify_binary += '.exe'
+endif
+custom_target(
+  'spotify-worker',
+  build_by_default: true,
+  build_always_stale: true,
+  output: spotify_binary,
+  console: true,
+  install: true,
+  install_dir: get_option('bindir'),
+  command: [
+    'env', cargo_env, cargo, 'build', cargo_options, '--package', 'hopea-spotify',
+    '&&', 'cp', cargo_target_dir / rust_target / spotify_binary, '@OUTPUT@.new',
+    '&&', 'mv', '-f', '@OUTPUT@.new', '@OUTPUT@',
   ],
 )
