@@ -19,13 +19,20 @@ else
 fi
 # The host extracts the source artifact before mounting the workspace. Keep
 # Cargo, pip and compilation off the guest's small root disk.
+# The VM action mounts /home/runner/work, including the checkout's parent.
+# pip builds independent Rust projects such as maturin: they must be outside
+# both the vendored source and the outer checkout's Cargo workspace/config.
+tools_root=$(mktemp -d "$(dirname "$(pwd)")/hopea-bsd-tools.XXXXXXXX")
+trap 'rm -rf "$tools_root"' EXIT
+mkdir -p "$tools_root/tmp" "$tools_root/cargo-home" "$tools_root/cache"
+export TMPDIR="$tools_root/tmp"
+export CARGO_HOME="$tools_root/cargo-home"
+export XDG_CACHE_HOME="$tools_root/cache"
+# NFS maps guest root to the host runner UID; pip rejects that cache owner.
+# Prepared wheels are retained explicitly by native.sh for offline installation.
+export PIP_NO_CACHE_DIR=1
 cd ".packaging/bsd-source/hopea-${HOPEA_VERSION:?Set release version}"
 test -f .cargo/config.toml
 test -d vendor-registry
-mkdir -p .packaging/tmp .packaging/cargo-home .packaging/cache
-source_root=$(pwd)
-export TMPDIR="$source_root/.packaging/tmp"
-export CARGO_HOME="$source_root/.packaging/cargo-home"
-export XDG_CACHE_HOME="$source_root/.packaging/cache"
 df -h . "$TMPDIR"
-exec bash -o pipefail -c 'bash -x packaging/bsd/build.sh 2>&1 | tee "$HOPEA_DIST_DIR/bsd-build.log"'
+bash -o pipefail -c 'bash -x packaging/bsd/build.sh 2>&1 | tee "$HOPEA_DIST_DIR/bsd-build.log"'

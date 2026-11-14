@@ -53,12 +53,22 @@ sources, compiler output and caches on the runner's disk rather than the guest's
 small root partition. The final install image stays on the guest filesystem to
 preserve root ownership in packages. See the
 [VM action's sharing options](https://github.com/vmactions/openbsd-vm#2-share-code).
+Python build dependencies use a temporary sibling of the checkout on the NFS
+mount, outside both Hopea workspaces. This prevents projects such as
+`maturin` from inheriting Hopea's workspace or offline vendor configuration.
+Pip's persistent cache is disabled in these disposable NFS builds because the
+guest and host UIDs differ; the prepared wheel directory is still retained for
+offline installation.
 FreeBSD and DragonFly install the SQLite module matching the chosen Python/pip
 version and record it as a runtime dependency. Disposable CI guests upgrade
 existing packages before adding dependencies to avoid mixing library versions.
 NetBSD first installs `pkgin` through the base system's `pkg_add`, using the
 release-matched mirrors configured by the VM; see the
 [pkgsrc installation guide](https://www.netbsd.org/docs/pkgsrc/using.html).
+The NetBSD 10.1/amd64 guest also installs the matching `xbase` and `xcomp` sets
+with pinned SHA-512 checksums. Blueprint 0.22.2 is installed from its checksummed
+universal wheel in a dedicated environment using pkgsrc's PyGObject bindings.
+Package-manager failures include the detailed `pkg_install-err.log` in CI output.
 If a repository still lacks the required GTK/libadwaita versions, the build
 reports the installed and required versions and stops.
 

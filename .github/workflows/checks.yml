@@ -19,7 +19,6 @@ jobs:
       - run: sudo apt-get install -y --no-install-recommends python3-venv python3-pip libglib2.0-bin
       - run: bash tests/test_native_install.sh
       - run: python3 tests/test_cargo_build.py
-      - run: python3 tests/test_bsd_ci.py
   linux:
     runs-on: ubuntu-24.04
     timeout-minutes: 120
@@ -29,6 +28,7 @@ jobs:
       - uses: cachix/install-nix-action@d698718aa798980d17dd749f03beae0b51183399
       - run: nix develop --command bash tests/test_nix.sh
       - run: nix develop --command bash tests/test_packaging.sh
+      - run: nix develop --command python3 tests/test_bsd_ci.py
       - name: Check Android build configuration
         run: |
           bash tests/test_android_build.sh

@@ -27,6 +27,7 @@ case "$(uname -s)" in
       ffmpeg python%3.13 py3-pip gettext-tools coreutils jq
     ;;
   NetBSD)
+    sh packaging/bsd/netbsd-x11.sh
     # Base NetBSD provides pkg_add; pkgin is a separately installed frontend.
     if ! command -v pkgin >/dev/null 2>&1; then
       pkg_add pkgin
@@ -36,11 +37,29 @@ case "$(uname -s)" in
     [ -n "$repositories" ] || { echo 'No NetBSD package repository configured' >&2; exit 1; }
     mkdir -p /usr/pkg/etc/pkgin
     printf '%s\n' "$repositories" | tr ';' '\n' > /usr/pkg/etc/pkgin/repositories.conf
-    pkgin -y update
-    pkgin -y upgrade
-    pkgin -y install bash rust meson ninja-build pkgconf blueprint-compiler gtk4 \
+    run_pkgin() {
+      if pkgin -y "$@"; then return 0; else status=$?; fi
+      if [ -f /var/db/pkgin/pkg_install-err.log ]; then
+        cat /var/db/pkgin/pkg_install-err.log >&2
+      fi
+      return "$status"
+    }
+    run_pkgin update
+    run_pkgin upgrade
+    run_pkgin install bash rust meson ninja-build pkgconf gtk4 \
       libadwaita libsoup3 gstreamer1 gst-plugins1-base gst-plugins1-bad \
-      ffmpeg7 python313 py313-pip gettext-tools coreutils jq
+      ffmpeg7 python313 py313-pip py313-gobject3 gettext-tools coreutils jq
+    # Blueprint is absent from some binary pkgsrc repositories. Its universal
+    # wheel uses PyGObject from pkgsrc; keep it out of the system Python tree.
+    python3.13 -m venv --without-pip --system-site-packages /usr/local/lib/hopea-blueprint
+    printf '%s\n' 'blueprint-compiler==0.22.2 --hash=sha256:f6107b34ca21daa209e8e26ce518269e2e332e674da6450ba882ca72d33d2f32' \
+      > /usr/local/lib/hopea-blueprint/requirements.txt
+    python3.13 -m pip --python /usr/local/lib/hopea-blueprint/bin/python3 install \
+      --only-binary=:all: --no-deps --require-hashes \
+      -r /usr/local/lib/hopea-blueprint/requirements.txt
+    mkdir -p /usr/local/bin
+    ln -sf /usr/local/lib/hopea-blueprint/bin/blueprint-compiler /usr/local/bin/blueprint-compiler
+    /usr/local/bin/blueprint-compiler --version
     ;;
   *) exit 2;;
 esac
