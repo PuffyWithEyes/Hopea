@@ -13,7 +13,15 @@ import tempfile
 
 def main():
     source, destination = map(Path, sys.argv[1:3])
-    result = subprocess.run(sys.argv[3:], check=False)
+    command = sys.argv[3:]
+    # Cargo discovers .cargo/config.toml from its working directory, not from
+    # --manifest-path. Portage places the Meson build tree beside the source.
+    cwd = None
+    if "--manifest-path" in command:
+        manifest = Path(command[command.index("--manifest-path") + 1]).resolve()
+        command[command.index("--manifest-path") + 1] = str(manifest)
+        cwd = manifest.parent
+    result = subprocess.run(command, cwd=cwd, check=False)
     if result.returncode:
         return result.returncode
     # Copy to the output directory before replacing: Cargo's cache may live on

@@ -87,10 +87,11 @@ debug = false
 [workspace]
 resolver = "2"
 members = ["spotify"]
-exclude = ["common", "node", "vendor/lofty", "vendor/socket-pktinfo", "vendor/librqbit-dualstack-sockets", "vendor/librqbit"]
+exclude = ["common", "node", "vendor/lofty", "vendor/socket-pktinfo", "vendor/librqbit-dualstack-sockets", "vendor/librqbit", "vendor/dontfrag"]
 default-members = ["."]
 
 [patch.crates-io]
+dontfrag = { path = "vendor/dontfrag" }
 librqbit = { path = "vendor/librqbit" }
 librqbit-dualstack-sockets = { path = "vendor/librqbit-dualstack-sockets" }
 # Pinned upstream source with the no-compression build fix (see node/README.md).

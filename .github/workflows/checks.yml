@@ -17,6 +17,8 @@ jobs:
         with: { persist-credentials: false }
       - shell: pwsh
         run: ./tests/test_windows_shortcuts.ps1
+      - shell: pwsh
+        run: ./tests/test_windows_installer_cleanup.ps1
   debian-clean:
     runs-on: ubuntu-24.04
     steps:
@@ -37,6 +39,7 @@ jobs:
       - run: nix develop --command bash tests/test_nix.sh
       - run: nix develop --command bash tests/test_packaging.sh
       - run: nix develop --command python3 tests/test_bsd_ci.py
+      - run: nix develop --command python3 tests/test_cargo_build.py
       - name: Check Android build configuration
         run: |
           bash tests/test_android_build.sh

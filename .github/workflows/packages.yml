@@ -53,7 +53,7 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
       - run: nix develop --command bash tests/test_nix.sh
       - run: nix develop --command bash packaging/source.sh
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: source
           path: dist/hopea-*-source.tar.gz*
@@ -79,7 +79,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with: { persist-credentials: false }
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with: { name: source, path: dist }
       - name: Build in the target distribution
         env:
@@ -91,7 +91,7 @@ jobs:
           docker run --rm -v "$PWD:/work" -w /work \
             -e HOPEA_CI_CONTAINER=1 -e HOPEA_VERSION -e HOPEA_REPOSITORY -e CARGO_BUILD_JOBS \
             "$BUILD_IMAGE" bash -c 'bash packaging/linux-deps.sh "$1" && bash packaging/linux-build.sh "$1" "dist/hopea-$HOPEA_VERSION-source.tar.gz"' _ "$BUILD_PLATFORM"
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: linux-${{ matrix.platform }}
           path: |
@@ -118,7 +118,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with: { persist-credentials: false }
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with: { name: source, path: dist }
       - name: Build with the distribution's native libc and package tools
         env:
@@ -135,7 +135,7 @@ jobs:
               if [ "$1" = void ]; then xbps-install -Suy xbps; xbps-install -Sy bash; fi
               exec bash "packaging/$1/build.sh" "dist/hopea-$HOPEA_VERSION-source.tar.gz"
             ' _ "$BUILD_SCRIPT"
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: linux-${{ matrix.platform }}
           path: |
@@ -155,7 +155,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with: { persist-credentials: false }
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with: { name: source, path: dist }
       - env:
           HOPEA_VERSION: ${{ needs.source.outputs.version }}
@@ -165,7 +165,7 @@ jobs:
           tar -xzf "dist/hopea-$HOPEA_VERSION-source.tar.gz" -C "$stage"
           (cd "$stage/hopea-$HOPEA_VERSION" && bash packaging/lfs/build.sh)
           cp "$stage/hopea-$HOPEA_VERSION"/dist/*-lfs-*.tar.gz dist/
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: lfs-native
           path: dist/*-lfs-*.tar.gz
@@ -182,13 +182,13 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with: { persist-credentials: false }
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with: { name: source, path: dist }
       - run: |
           docker run --rm -v "$PWD:/work" -w /work \
             -e HOPEA_CI_CONTAINER=1 -e HOPEA_VERSION -e HOPEA_REPOSITORY \
             gentoo/stage3:amd64-openrc bash packaging/gentoo/build.sh "dist/hopea-$HOPEA_VERSION-source.tar.gz"
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: gentoo-amd64
           path: |
@@ -226,7 +226,7 @@ jobs:
           nix copy --to "file://$PWD/.packaging/nix-cache" ./result
           readlink -f result > ".packaging/nix-cache/hopea-store-path"
           tar -cf "dist/hopea-nix-$system.tar" -C .packaging/nix-cache .
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: nix-${{ matrix.runner }}
           path: dist/hopea-nix-*.tar
@@ -261,7 +261,7 @@ jobs:
         run: ./tests/test_windows_installer.ps1
       - name: Keep installer diagnostics on failure
         if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: windows-installer-diagnostics
           path: |
@@ -272,7 +272,7 @@ jobs:
             _windows/setup/test-logs/*.lnk
           if-no-files-found: ignore
           retention-days: 7
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: windows-x86_64
           path: |
@@ -294,16 +294,16 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with: { persist-credentials: false }
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with: { name: source, path: dist }
       - run: bash packaging/macos-build.sh
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()
         with:
           name: macos-logs-${{ matrix.runner }}
           path: ~/Library/Logs/Homebrew/hopea/
           if-no-files-found: warn
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: macos-${{ matrix.runner }}
           path: |
@@ -325,7 +325,7 @@ jobs:
           sudo apt-get install -y flatpak flatpak-builder appstream
           flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
           dbus-run-session -- bash build-aux/flatpak/build.sh
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: flatpak
           path: dist/*.flatpak*
@@ -362,7 +362,7 @@ jobs:
       - run: bash build-aux/android/build.sh /tmp/hopea-android-src
       - if: always()
         run: sudo rm -f /tmp/hopea-android-src/.android-user/debug.keystore
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: android-${{ matrix.arch }}-preview
           path: dist/*.apk
@@ -384,7 +384,7 @@ jobs:
       # The VM is only a build machine; installed BSD binaries run natively.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with: { persist-credentials: false }
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with: { name: source, path: .packaging/bsd-source }
       - name: Prepare vendored sources on the host disk
         run: |
@@ -434,13 +434,13 @@ jobs:
           envs: 'HOPEA_VERSION HOPEA_REPOSITORY CARGO_BUILD_JOBS'
           run: |
             sh packaging/bsd/ci.sh
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: bsd-logs-${{ matrix.os }}
           path: dist/bsd-*.log
           if-no-files-found: warn
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: bsd-${{ matrix.os }}
           path: |
@@ -463,7 +463,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with: { persist-credentials: false }
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with: { path: dist, merge-multiple: true }
       - run: bash packaging/release-files.sh
       - env:

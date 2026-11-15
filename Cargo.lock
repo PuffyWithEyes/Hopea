@@ -1185,8 +1185,6 @@ dependencies = [
 [[package]]
 name = "dontfrag"
 version = "1.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c117949f5a8b25ba471b4dfea927a07a2f8730c585532a2eb4294e18f5155397"
 dependencies = [
  "cfg-if",
  "libc",

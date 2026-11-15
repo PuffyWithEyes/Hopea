@@ -29,6 +29,7 @@ New-Item -ItemType Directory -Force $dataDir | Out-Null
 $sentinel = Join-Path $dataDir "installer-test-$([guid]::NewGuid()).txt"
 'Preserve the user library' | Set-Content -LiteralPath $sentinel
 $expectedData = (Get-FileHash -LiteralPath $sentinel).Hash
+$uninstallCompleted = $false
 
 function Invoke-CheckedProcess([string]$File, [string[]]$Arguments) {
     $process = Start-Process -FilePath $File -ArgumentList $Arguments -PassThru
@@ -121,6 +122,7 @@ try {
     if ($uninstallers.Count -ne 1) { throw 'Reinstall created duplicate uninstallers.' }
     Assert-LibraryPreserved
     Invoke-CheckedProcess $uninstallers[0].FullName ($quiet + @("/LOG=`"$logs/uninstall.log`""))
+    $uninstallCompleted = $true
     if (Test-Path "$destination/bin/hopea.exe") { throw 'Uninstaller left the player installed.' }
     if ((Test-Path $registry) -or (Test-Path -LiteralPath $shortcut)) { throw 'Uninstall registration or shortcut remained.' }
     if (-not (Test-Path "$destination/keep-user-file.txt")) { throw 'Uninstaller deleted an unowned file.' }
@@ -129,12 +131,26 @@ try {
 } finally {
     # Best effort cleanup of this test's installation if an assertion failed.
     $uninstaller = Get-ChildItem "$destination/unins*.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
-    if ($uninstaller) {
-        Invoke-CheckedProcess $uninstaller.FullName @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART')
+    # Inno may leave its executable briefly while its self-delete helper runs.
+    # A successful uninstall must never be invoked a second time.
+    if (-not $uninstallCompleted -and $uninstaller) {
+        try {
+            Invoke-CheckedProcess $uninstaller.FullName @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART')
+        } catch { Write-Warning "Installer cleanup failed: $_" }
     }
     Remove-Item -LiteralPath $sentinel -Force -ErrorAction SilentlyContinue
     if (-not $dataExisted -and @(Get-ChildItem -LiteralPath $dataDir -Force).Count -eq 0) {
         Remove-Item -LiteralPath $dataDir
     }
-    Remove-Item -LiteralPath $work -Recurse -Force
+    # Allow the self-delete helper to release the executable. Cleanup must not
+    # replace an earlier assertion failure with a secondary removal error.
+    for ($attempt = 0; $attempt -lt 20; $attempt++) {
+        try {
+            if (Test-Path -LiteralPath $work) { Remove-Item -LiteralPath $work -Recurse -Force }
+            break
+        } catch {
+            if ($attempt -eq 19) { Write-Warning "Temporary directory cleanup failed: $_" }
+            else { Start-Sleep -Milliseconds 250 }
+        }
+    }
 }

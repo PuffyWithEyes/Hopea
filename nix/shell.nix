@@ -22,6 +22,7 @@ pkgs.mkShell {
     desktop-file-utils
     ffmpeg
     gettext
+    jq
     libxml2
     meson
     ninja

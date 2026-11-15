@@ -47,7 +47,7 @@ if [[ $os == FreeBSD || $os == DragonFly ]]; then
   # Record exact installed dependency versions/origins for this native package.
   command -v jq >/dev/null
   deps='{}'
-  for dependency in gtk4 libadwaita libsoup3 openssl gstreamer1 gstreamer1-plugins \
+  for dependency in gtk4 libadwaita libsoup3 gstreamer1 gstreamer1-plugins \
       gstreamer1-plugins-good gstreamer1-plugins-bad ffmpeg adwaita-icon-theme; do
     # Some ports name GTK4 gtk4, others gtk40: fail rather than emit missing metadata.
     record=$(pkg query -g '%n|%v|%o' "$dependency*")
@@ -57,6 +57,16 @@ if [[ $os == FreeBSD || $os == DragonFly ]]; then
         '. + {($n): {version: $v, origin: $o}}' <<< "$deps")
     done <<< "$record"
   done
+  # OpenSSL may come from the base OS and then has no ports-package identity.
+  # Record a ports OpenSSL when present; other required ports remain mandatory.
+  if pkg info -e -g 'openssl*'; then
+    record=$(pkg query -g '%n|%v|%o' 'openssl*')
+    while IFS='|' read -r name dep_version origin; do
+      [[ -n $name && -n $origin ]] || exit 1
+      deps=$(jq -c --arg n "$name" --arg v "$dep_version" --arg o "$origin" \
+        '. + {($n): {version: $v, origin: $o}}' <<< "$deps")
+    done <<< "$record"
+  fi
   py_record=$(pkg which -q "$(command -v "$HOPEA_BUILD_PYTHON")")
   # SQLite is a separate Python port and must also be installed by pkg users.
   sqlite_record=$(pkg which -q "$("$HOPEA_BUILD_PYTHON" -I -c 'import _sqlite3; print(_sqlite3.__file__)')")
