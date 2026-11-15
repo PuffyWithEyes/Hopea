@@ -12,7 +12,8 @@ Features include background imports with album and playlist selection,
 optional cover-art downloads, favorites, recommendations, lyrics, MPRIS and a
 system tray with the current track, previous/next and play/pause controls on
 Linux and Windows. See [docs/IMPORTING.md](docs/IMPORTING.md) for supported services,
-sign-in instructions and import limitations.
+sign-in instructions and import limitations. Browser authorization for Spotify and
+Yandex Music is described in [Service sign-in](docs/SERVICE_SIGN_IN.md).
 
 Search shows album covers in a horizontal strip above the vertical song list.
 Open a card to see the album's tracks; scrolling down loads more results

@@ -472,7 +472,7 @@ impl Window {
                     if let Some((target, after)) = target {
                         if queue.move_song(&song, &target, after) {
                             if !win.in_for_you() {
-                                utils::store_playlist(&queue);
+                                win.store_personal_playlist();
                             }
                         }
                     }

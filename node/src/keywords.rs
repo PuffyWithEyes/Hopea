@@ -21,7 +21,7 @@ use unicode_normalization::{char::is_combining_mark, UnicodeNormalization};
 pub const MAX_QUERY_WORDS: usize = 3;
 /// Words a node announces at most, to bound its DHT traffic
 pub const MAX_ANNOUNCED_WORDS: usize = 300;
-/// Keys a node announces at most, words and their beginnings together
+/// Total keys a node announces, including overflow routing groups
 pub const MAX_ANNOUNCED_KEYS: usize = 400;
 
 const STOP_WORDS: &[&str] = &[
@@ -107,7 +107,7 @@ pub fn announced_keys<'a>(
     tracks: impl Iterator<Item = [Option<&'a str>; 4]> + Clone,
 ) -> Vec<String> {
     let mut seen = HashSet::new();
-    announced_words(tracks)
+    let legacy: Vec<_> = announced_words(tracks.clone())
         .into_iter()
         .flat_map(|w| {
             let p = prefix(&w);
@@ -115,7 +115,100 @@ pub fn announced_keys<'a>(
         })
         .filter(|k| seen.insert(k.clone()))
         .take(MAX_ANNOUNCED_KEYS)
-        .collect()
+        .collect();
+    // Scan every field, not just the first 300 words. A fixed bitmap bounds
+    // memory even for huge catalogues. Group by the normalized three-character
+    // prefix so partial words and the existing typo tolerance use the same route.
+    let exact: HashSet<_> = legacy.iter().map(String::as_str).collect();
+    let mut groups = [false; 256];
+    let mut overflow = false;
+    for fields in tracks {
+        for text in fields.into_iter().flatten() {
+            for word in short_words(text) {
+                let route = routing_prefix(&word);
+                groups[group_number(&route) as usize] = true;
+                if !exact.contains(route.as_str()) {
+                    overflow = true;
+                }
+            }
+        }
+    }
+    if !overflow {
+        return legacy;
+    }
+    // Reserve space for every occupied group before filling the remaining
+    // budget with precise legacy keys. The relay registration format and its
+    // 400-key validation limit stay unchanged.
+    let coverage = groups
+        .iter()
+        .enumerate()
+        .filter_map(|(n, present)| present.then(|| group_key(n as u8)));
+    bounded_routing_keys(coverage.chain(legacy), MAX_ANNOUNCED_KEYS)
+}
+
+// Alphabetic namespace + two hex digits stays a normalized word in existing
+// relay registrations. This is an address-routing hint, never a track match.
+const GROUP_PREFIX: &str = "hopeacatalogroutev1";
+
+fn routing_prefix(word: &str) -> String {
+    word.chars().take(PREFIX_CHARS).collect()
+}
+
+fn group_number(prefix: &str) -> u8 {
+    dht_key(prefix)[0]
+}
+
+pub fn routing_group(word: &str) -> String {
+    group_key(group_number(&routing_prefix(word)))
+}
+
+fn group_key(number: u8) -> String {
+    format!("{GROUP_PREFIX}{number:02x}")
+}
+
+pub fn is_routing_group(key: &str) -> bool {
+    key.strip_prefix(GROUP_PREFIX).is_some_and(|suffix| {
+        suffix.len() == 2
+            && suffix
+                .bytes()
+                .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+    })
+}
+
+/// Preserve all groups when several relay clients exceed the exact-key budget.
+/// At most 256 groups exist, leaving room for precise legacy announcements.
+pub fn bounded_routing_keys(keys: impl IntoIterator<Item = String>, limit: usize) -> Vec<String> {
+    let mut groups = std::collections::BTreeSet::new();
+    let mut exact = Vec::new();
+    let mut seen = HashSet::new();
+    for key in keys {
+        if is_routing_group(&key) {
+            groups.insert(key);
+        } else if exact.len() < limit && seen.insert(key.clone()) {
+            exact.push(key);
+        }
+    }
+    groups.into_iter().chain(exact).take(limit).collect()
+}
+
+/// Exact/prefix routes remain compatible with old nodes. Overflow groups find
+/// large catalogues whose precise term was outside their announcement budget.
+pub fn query_routing_keys(query: &str) -> Vec<String> {
+    let mut keys = Vec::new();
+    // Start coverage routes before precise lookups can exhaust the shared
+    // deadline. At most three groups leave concurrent slots for legacy keys.
+    for word in query_words(query) {
+        let key = group_key(group_number(&routing_prefix(&word)));
+        if !keys.contains(&key) {
+            keys.push(key);
+        }
+    }
+    for key in query_keys(query) {
+        if !keys.contains(&key) {
+            keys.push(key);
+        }
+    }
+    keys
 }
 
 /// The DHT keys, as words, looked up for a query: its most specific words,
@@ -185,6 +278,66 @@ pub fn announced_words<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn every_title_in_a_large_catalogue_has_a_route_without_exceeding_the_budget() {
+        let titles: Vec<_> = (0..2500)
+            .map(|n| format!("{:x} raretitle{n}", n * 7919))
+            .collect();
+        let artists: Vec<_> = (0..2500).map(|n| format!("artist{n}")).collect();
+        let tracks: Vec<_> = artists
+            .iter()
+            .zip(&titles)
+            .map(|(artist, title)| [Some(artist.as_str()), None, Some(title.as_str()), None])
+            .collect();
+        let advertised: HashSet<_> = announced_keys(tracks.iter().copied()).into_iter().collect();
+        assert!(advertised.len() <= MAX_ANNOUNCED_KEYS);
+        assert!(advertised.iter().any(|k| is_routing_group(k)));
+        for title in &titles {
+            for word in words(title) {
+                assert!(
+                    query_routing_keys(&word)
+                        .iter()
+                        .any(|k| advertised.contains(k)),
+                    "unreachable title term: {word}"
+                );
+            }
+        }
+        // Reversing the catalogue cannot remove any overflow groups.
+        let reversed = announced_keys(tracks.iter().rev().copied());
+        let groups = |keys: Vec<String>| {
+            keys.into_iter()
+                .filter(|k| is_routing_group(k))
+                .collect::<HashSet<_>>()
+        };
+        assert_eq!(groups(advertised.into_iter().collect()), groups(reversed));
+        assert!(query_routing_keys("three separate terms").len() <= 3 * MAX_QUERY_WORDS);
+    }
+
+    #[test]
+    fn routing_groups_keep_normalization_and_short_title_coverage() {
+        let tracks = [[Some("Muse"), None, Some("B"), None]];
+        let keys = announced_keys(tracks.iter().copied());
+        assert!(query_routing_keys("B.mp3").iter().any(|k| keys.contains(k)));
+        assert_eq!(
+            routing_group(&words("Beyoncé").next().unwrap()),
+            routing_group("beyonce")
+        );
+        assert_eq!(routing_group("linkin"), routing_group("linkn"));
+        for key in keys.iter().filter(|k| is_routing_group(k)) {
+            assert!(key.len() <= 64);
+            assert_eq!(plain_words(key).collect::<Vec<_>>(), [key.clone()]);
+        }
+    }
+
+    #[test]
+    fn relay_budget_keeps_all_groups_ahead_of_many_precise_terms() {
+        let exact = (0..5000).map(|i| format!("term{i}"));
+        let groups: Vec<_> = (0..=255).map(group_key).collect();
+        let keys = bounded_routing_keys(exact.chain(groups.iter().cloned()), 1000);
+        assert_eq!(keys.len(), 1000);
+        assert!(groups.iter().all(|group| keys.contains(group)));
+    }
 
     #[test]
     fn normalizes() {

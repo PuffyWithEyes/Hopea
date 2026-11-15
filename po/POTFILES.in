@@ -31,6 +31,7 @@ src/library_panel/import_preview.rs
 src/library_panel/import_review.rs
 src/library_panel/import_warnings.rs
 src/library_panel/search_results.rs
+src/library_panel/service_sign_in.rs
 src/library_panel/sign_in_help.rs
 src/lyrics.rs
 src/playback_control.rs

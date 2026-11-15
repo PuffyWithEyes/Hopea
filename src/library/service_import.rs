@@ -31,6 +31,10 @@ pub use hopea_common::service_import::Collection;
 #[derive(Deserialize)]
 #[serde(tag = "event", rename_all = "snake_case")]
 pub enum Event {
+    AuthPrompt {
+        url: String,
+        user_code: String,
+    },
     CatalogTrack {
         track: CatalogTrack,
     },
@@ -69,6 +73,33 @@ pub struct Worker {
 
 impl Worker {
     pub async fn start(request: Request) -> Result<Self, String> {
+        let value = serde_json::to_value(&request).map_err(|_| i18n("Invalid import request"))?;
+        Self::start_script(
+            value,
+            request.directory,
+            request.browse,
+            include_str!("service_import.py"),
+        )
+        .await
+    }
+
+    #[cfg(not(target_os = "android"))]
+    pub async fn authenticate(service: &str, client_id: &str) -> Result<Self, String> {
+        Self::start_script(
+            serde_json::json!({"service": service, "client_id": client_id}),
+            glib::user_cache_dir(),
+            false,
+            include_str!("service_auth.py"),
+        )
+        .await
+    }
+
+    async fn start_script(
+        request: serde_json::Value,
+        directory: PathBuf,
+        keep_stdin: bool,
+        script: &str,
+    ) -> Result<Self, String> {
         let python = std::env::var_os("HOPEA_IMPORT_PYTHON")
             .or_else(|| std::env::var_os("ANYSIK_IMPORT_PYTHON"))
             .or_else(|| {
@@ -81,14 +112,14 @@ impl Worker {
                 OsStr::new("-I"),
                 OsStr::new("-u"),
                 OsStr::new("-c"),
-                OsStr::new(include_str!("service_import.py")),
+                OsStr::new(script),
             ],
             gio::SubprocessFlags::STDIN_PIPE
                 | gio::SubprocessFlags::STDOUT_PIPE
                 | gio::SubprocessFlags::STDERR_SILENCE,
         )
         .map_err(|_| i18n("Unable to start the service importer. Install its dependencies as described in IMPORTING.md."))?;
-        let worker = Self::from_process(process, request.directory.clone());
+        let worker = Self::from_process(process, directory);
         let mut input = serde_json::to_vec(&request).map_err(|e| e.to_string())?;
         input.push(b'\n');
         if input.len() > 256 * 1024 {
@@ -102,7 +133,7 @@ impl Worker {
         if let Some(error) = error {
             return Err(error.message().to_string());
         }
-        if !request.browse {
+        if !keep_stdin {
             stdin
                 .close_future(glib::Priority::DEFAULT)
                 .await

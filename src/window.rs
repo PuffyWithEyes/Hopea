@@ -138,6 +138,9 @@ mod imp {
         pub settings: gio::Settings,
 
         pub playlist_shuffled: Cell<bool>,
+        pub playlist_loading: Cell<bool>,
+        pub pending_playlist_songs: RefCell<Vec<Song>>,
+        pub pending_playlist_files: RefCell<std::collections::VecDeque<gio::File>>,
         pub playlist_visible: Cell<bool>,
         pub playlist_selection: Cell<bool>,
         pub playlist_search: Cell<bool>,
@@ -388,6 +391,9 @@ mod imp {
                 restore_playlist_button: TemplateChild::default(),
                 playlist_view: TemplateChild::default(),
                 playlist_shuffled: Cell::new(false),
+                playlist_loading: Cell::new(false),
+                pending_playlist_files: RefCell::default(),
+                pending_playlist_songs: RefCell::default(),
                 playlist_visible: Cell::new(true),
                 playlist_selection: Cell::new(false),
                 playlist_search: Cell::new(false),
@@ -622,14 +628,20 @@ impl Window {
         if shuffled != imp.playlist_shuffled.replace(shuffled) {
             if let Some(player) = self.player() {
                 let queue = player.queue();
+                let view = imp.playlist_view.queue_view();
+                // GtkListView otherwise keeps the old visible/focused row as
+                // its anchor when every item changes position. That row may
+                // now be at the very end of the shuffled list.
+                let model = view.model();
+                if shuffled {
+                    view.set_model(gtk::SelectionModel::NONE);
+                }
                 queue.set_shuffled(shuffled);
+                if shuffled {
+                    view.set_model(model.as_ref());
+                }
                 if shuffled && queue.n_songs() > 0 {
-                    // One model replacement, then one explicit scroll target.
-                    // Do not preserve an old row anchor in the new permutation.
-                    imp.playlist_view.scroll().vadjustment().set_value(0.0);
-                    imp.playlist_view
-                        .queue_view()
-                        .scroll_to(0, gtk::ListScrollFlags::NONE, None);
+                    view.scroll_to(0, gtk::ListScrollFlags::NONE, None);
                 }
             }
 
@@ -675,6 +687,28 @@ impl Window {
             imp.playlist_view.set_search(search);
             self.notify("playlist-search");
         }
+    }
+
+    /// Saving while background restoration runs must not drop unread favorites.
+    fn store_personal_playlist(&self) {
+        let mut songs = if self.in_for_you() {
+            self.imp().my_music_songs.borrow().clone()
+        } else if let Some(player) = self.player() {
+            (0..player.queue().n_songs())
+                .filter_map(|i| player.queue().song_at(i))
+                .collect()
+        } else {
+            return;
+        };
+        songs.extend(self.imp().pending_playlist_songs.borrow().iter().cloned());
+        let pending: Vec<_> = self
+            .imp()
+            .pending_playlist_files
+            .borrow()
+            .iter()
+            .cloned()
+            .collect();
+        utils::store_songs_with_pending(&songs, &pending);
     }
 
     fn restore_playlist(&self) {
@@ -778,6 +812,22 @@ impl Window {
     }
 
     fn queue_songs_with_feedback(&self, queue: Vec<gio::File>, feedback: bool) {
+        if self.imp().playlist_loading.get() {
+            let weak = self.downgrade();
+            glib::spawn_future_local(async move {
+                loop {
+                    glib::timeout_future(std::time::Duration::from_millis(25)).await;
+                    let Some(win) = weak.upgrade() else {
+                        return;
+                    };
+                    if !win.imp().playlist_loading.get() {
+                        win.queue_songs_with_feedback(queue, feedback);
+                        break;
+                    }
+                }
+            });
+            return;
+        }
         if queue.iter().any(|file| file.path().is_none()) {
             let window = self.clone();
             glib::spawn_future_local(async move {
@@ -801,134 +851,120 @@ impl Window {
 
         self.switch_mode(WindowMode::MainView);
 
-        // Disable actions on the queue; loading is "atomic"
+        // Keep additions ordered, but let playback and rendering continue while
+        // file I/O runs on a worker. Publish the first song immediately, then
+        // small batches instead of waiting for the entire playlist.
         self.action_set_enabled("queue.add-song", false);
         self.action_set_enabled("queue.add-folder", false);
         self.action_set_enabled("queue.clear", false);
-
         self.set_playlist_visible(true);
+        self.imp()
+            .pending_playlist_files
+            .replace(queue.iter().cloned().collect());
+        self.imp().playlist_loading.set(true);
         self.imp().playlist_view.begin_loading();
-
-        // Begin the trace
-        let now = Instant::now();
-
-        // Turn the list of files into songs one at a time into the main loop
-        let n_files = queue.len() as u32;
-
-        let mut files = queue.into_iter();
-        let mut songs = Vec::new();
-        let mut cur_file: u32 = 0;
-        let mut duplicates: u32 = 0;
-
-        glib::idle_add_local(clone!(
-            #[weak(rename_to = win)]
-            self,
-            #[upgrade_or]
-            glib::ControlFlow::Break,
-            move || {
-                files
-                    .next()
-                    .map(|f| {
-                        win.imp().playlist_view.update_loading(cur_file, n_files);
-                        if let Ok(s) = Song::from_uri(f.uri().as_str()) {
-                            // Opening files explicitly adds them to Favorites; a restored
-                            // playlist contains only previously starred paths.
-                            s.set_property("favorite", true);
-                            if let Some(player) = win.player() {
-                                let queue = player.queue();
-                                if queue.contains(&s) {
-                                    duplicates += 1;
-                                } else {
-                                    songs.push(s);
-                                    cur_file += 1;
-                                }
-                            }
-                        }
-                    })
-                    .map(|_| glib::ControlFlow::Continue)
-                    .unwrap_or_else(|| {
-                        debug!(
-                            "Total loading time for {} files: {} ms",
-                            n_files,
-                            now.elapsed().as_millis()
-                        );
-
-                        // Re-enable the actions
-                        win.action_set_enabled("queue.add-song", true);
-                        win.action_set_enabled("queue.add-folder", true);
-                        win.action_set_enabled("queue.clear", true);
-
-                        if songs.is_empty() {
-                            if duplicates == 0 && feedback {
-                                win.add_toast(i18n("No songs found"));
-                            }
-                        } else if let Some(player) = win.player() {
+        let weak = self.downgrade();
+        glib::spawn_future_local(async move {
+            let now = Instant::now();
+            let n_files = queue.len() as u32;
+            let mut added = 0;
+            let mut duplicates = 0;
+            let mut batch = Vec::new();
+            let mut last_added = None;
+            for (index, file) in queue.into_iter().enumerate() {
+                let loaded = Song::load_local(file.uri().to_string()).await;
+                let Some(win) = weak.upgrade() else {
+                    return;
+                };
+                let Some(player) = win.player() else {
+                    return;
+                };
+                win.imp().pending_playlist_files.borrow_mut().pop_front();
+                if let Ok(song) = loaded {
+                    song.set_property("favorite", true);
+                    let exists = if win.in_for_you() {
+                        win.imp()
+                            .my_music_songs
+                            .borrow()
+                            .iter()
+                            .any(|s| s.equals(&song))
+                    } else {
+                        player.queue().contains(&song)
+                    };
+                    if exists || batch.iter().any(|s: &Song| s.equals(&song)) {
+                        duplicates += 1;
+                    } else {
+                        batch.push(song);
+                    }
+                }
+                win.imp()
+                    .playlist_view
+                    .update_loading(index as u32 + 1, n_files);
+                if added == 0 || batch.len() >= 8 || index as u32 + 1 == n_files {
+                    if !batch.is_empty() {
+                        added += batch.len();
+                        last_added = batch.last().cloned();
+                        if win.in_for_you() {
+                            win.imp().my_music_songs.borrow_mut().append(&mut batch);
+                        } else {
                             let queue = player.queue();
                             let was_empty = queue.is_empty();
-
-                            win.imp().playlist_view.end_loading();
-
-                            // Imports while For You plays belong to the saved personal list.
-                            if win.in_for_you() {
-                                win.imp().my_music_songs.borrow_mut().extend(songs.clone());
-                            } else {
-                                queue.add_songs(&songs);
-                            }
-                            let window = win.clone();
-                            glib::spawn_future_local(async move {
-                                window.sync_local_sharing().await;
-                            });
-
-                            // Store the current state of the playlist
-                            if !win.in_for_you() {
-                                utils::store_playlist(queue);
-                            }
-
-                            debug!(
-                                "Queue was empty: {}, new size: {}",
-                                was_empty,
-                                queue.n_songs()
-                            );
-                            if was_empty {
+                            queue.add_songs(&batch);
+                            batch.clear();
+                            if was_empty && queue.current_song_index().is_none() {
                                 player.skip_to(0);
                             }
-
-                            // Allow jumping to the song we just added
-                            if !feedback {
-                                // Restoring the saved queue is not a user add action.
-                            } else if songs.len() == 1 {
-                                // If we added a single song, and the queue was empty, we
-                                // dispense with the pleasantries and we start playing
-                                // immediately; otherwise, we let the user choose whether
-                                // to jump to the newly added song
-                                if was_empty {
-                                    player.play();
-                                } else {
-                                    win.add_skip_to_toast(
-                                        i18n("Added a new song"),
-                                        i18n("Play"),
-                                        queue.n_songs() - 1,
-                                    );
-                                }
-                            } else {
-                                let msg = ni18n_f(
-                                    // Translators: the `{}` must be left unmodified;
-                                    // it will be expanded to the number of songs added
-                                    // to the playlist
-                                    "Added one song",
-                                    "Added {} songs",
-                                    songs.len() as u32,
-                                    &[&songs.len().to_string()],
-                                );
-
-                                win.add_toast(msg);
+                            if was_empty && feedback && n_files == 1 {
+                                player.play();
                             }
                         }
-
-                        glib::ControlFlow::Break
-                    })
+                    }
+                }
+                win.imp().pending_playlist_songs.replace(batch.clone());
+                // Give GTK an idle cycle even if the next read hits a hot cache.
+                glib::timeout_future(std::time::Duration::from_millis(1)).await;
             }
-        ));
+            let Some(win) = weak.upgrade() else {
+                return;
+            };
+            win.imp().playlist_loading.set(false);
+            win.imp().playlist_view.end_loading();
+            win.action_set_enabled("queue.add-song", true);
+            win.action_set_enabled("queue.add-folder", true);
+            win.action_set_enabled("queue.clear", true);
+            debug!(
+                "Total loading time for {} files: {} ms",
+                n_files,
+                now.elapsed().as_millis()
+            );
+            if added == 0 {
+                if duplicates == 0 && feedback {
+                    win.add_toast(i18n("No songs found"));
+                }
+                return;
+            }
+            if win.in_for_you() {
+                win.store_personal_playlist();
+            } else if let Some(player) = win.player() {
+                win.store_personal_playlist();
+                if feedback && added == 1 && player.queue().n_songs() > 1 {
+                    if let Some(position) = (0..player.queue().n_songs())
+                        .find(|&i| player.queue().song_at(i) == last_added)
+                    {
+                        win.add_skip_to_toast(i18n("Added a new song"), i18n("Play"), position);
+                    }
+                }
+            }
+            if feedback && added > 1 {
+                win.add_toast(ni18n_f(
+                    "Added one song",
+                    "Added {} songs",
+                    added as u32,
+                    &[&added.to_string()],
+                ));
+            }
+            win.sync_local_sharing().await;
+        });
     }
 
     fn add_files_to_queue(&self, model: &gio::ListModel) {
@@ -1291,7 +1327,7 @@ impl Window {
 
                         // Store the current state of the playlist
                         if !win.in_for_you() {
-                            utils::store_playlist(queue);
+                            win.store_personal_playlist();
                         }
                     }
                 }
@@ -1784,7 +1820,7 @@ impl Window {
             if !queued {
                 self.switch_mode(WindowMode::MainView);
                 queue.add_song(&song);
-                utils::store_playlist(&queue);
+                self.store_personal_playlist();
             }
         }
     }
@@ -1901,11 +1937,7 @@ impl Window {
                 Ok(_) => {
                     win.set_library_state(id, false);
                     win.remove_library_songs(id);
-                    if win.in_for_you() {
-                        utils::store_songs(&win.imp().my_music_songs.borrow());
-                    } else if let Some(player) = win.player() {
-                        utils::store_playlist(player.queue());
-                    }
+                    win.store_personal_playlist();
                     let toast = adw::Toast::builder()
                         .title(i18n_k(
                             "Removed “{title}” from favorites",
@@ -1951,9 +1983,7 @@ impl Window {
             .for_you_songs
             .borrow_mut()
             .retain(|s| s.library_id() != Some(id));
-        if let Some(player) = self.player() {
-            utils::store_playlist(&player.queue());
-        }
+        self.store_personal_playlist();
     }
 
     /// Takes every song of a library track out of the playlist, but the one

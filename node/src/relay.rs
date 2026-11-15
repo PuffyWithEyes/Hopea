@@ -169,6 +169,7 @@ pub struct Server {
     /// Fetches waiting for a track to be uploaded and validated
     waiting: Mutex<HashMap<String, Vec<oneshot::Sender<bool>>>>,
     next_id: AtomicU64,
+    search_round: AtomicU64,
 }
 
 struct PendingAnswers<'a> {
@@ -199,14 +200,17 @@ impl Server {
     /// The words this node announces for its clients.
     pub fn relayed_words(&self) -> Vec<String> {
         let sessions = lock(&self.sessions);
-        let mut seen = HashSet::new();
-        sessions
-            .values()
-            .flat_map(|s| s.words.iter())
-            .filter(|w| seen.insert(w.as_str()))
-            .take(MAX_RELAYED_WORDS)
-            .cloned()
-            .collect()
+        keywords::bounded_routing_keys(
+            sessions
+                .values()
+                .flat_map(|s| s.words.iter())
+                .flat_map(|word| {
+                    let group =
+                        (!keywords::is_routing_group(word)).then(|| keywords::routing_group(word));
+                    std::iter::once(word.clone()).chain(group)
+                }),
+            MAX_RELAYED_WORDS,
+        )
     }
 
     pub fn clients(&self) -> usize {
@@ -216,7 +220,7 @@ impl Server {
     /// Asks the clients that have any word of `query`, and returns their
     /// verified entries and the info hashes among them.
     pub async fn forward_search(&self, state: &AppState, query: &str) -> Vec<(String, WireEntry)> {
-        let words: HashSet<String> = keywords::query_keys(query).into_iter().collect();
+        let words: HashSet<String> = keywords::query_routing_keys(query).into_iter().collect();
         if words.is_empty() {
             return Vec::new();
         }
@@ -227,13 +231,29 @@ impl Server {
         };
         {
             let sessions = lock(&self.sessions);
+            let exact: HashSet<_> = keywords::query_keys(query).into_iter().collect();
+            let mut precise = Vec::new();
+            let mut grouped = Vec::new();
             for (token, session) in sessions.iter() {
-                if pending.len() >= MAX_FORWARDED_CLIENTS {
-                    break;
+                if !session.words.is_disjoint(&exact) {
+                    precise.push((token, session));
+                } else if !session.words.is_disjoint(&words) {
+                    grouped.push((token, session));
                 }
-                if session.words.is_disjoint(&words) {
-                    continue;
+            }
+            let round = self.search_round.fetch_add(1, Ordering::Relaxed) as usize;
+            for candidates in [&mut precise, &mut grouped] {
+                candidates.sort_unstable_by(|a, b| a.0.cmp(b.0));
+                if !candidates.is_empty() {
+                    let offset = round % candidates.len();
+                    candidates.rotate_left(offset);
                 }
+            }
+            for (token, session) in precise
+                .into_iter()
+                .chain(grouped)
+                .take(MAX_FORWARDED_CLIENTS)
+            {
                 let task_id = self.next_id.fetch_add(1, Ordering::Relaxed);
                 let (tx, rx) = oneshot::channel();
                 lock(&self.answers).insert(task_id, (token.clone(), tx));
@@ -367,6 +387,65 @@ mod security_tests {
         request.words.pop();
         request.session = Some("a".repeat(32));
         assert!(!request.valid(1000));
+        request.session = None;
+        request.words = vec![keywords::routing_group("music"); MAX_WORDS_PER_CLIENT + 1];
+        request.signature = hex::encode(identity.sign(&request.signing_bytes()));
+        assert!(
+            !request.valid(1000),
+            "routing groups cannot bypass key limits"
+        );
+    }
+
+    #[tokio::test]
+    async fn overflow_forwarding_is_bounded_rotates_and_cleans_cancelled_tasks() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = AppState::new(
+            crate::config::Config::isolated(dir.path().join("node")),
+            &crate::auth::generate_token(),
+        )
+        .await
+        .unwrap();
+        let mut receivers = Vec::new();
+        for index in 0..10 {
+            let (tx, rx) = mpsc::channel(16);
+            let rx = Arc::new(tokio::sync::Mutex::new(rx));
+            lock(&state.relay.sessions).insert(
+                format!("client-{index:02}"),
+                Session {
+                    node: format!("{index:064x}"),
+                    words: [keywords::routing_group("obscure")].into_iter().collect(),
+                    tx,
+                    rx: rx.clone(),
+                    last_seen: Instant::now(),
+                },
+            );
+            receivers.push(rx);
+        }
+        assert!(state
+            .relay
+            .relayed_words()
+            .contains(&keywords::routing_group("obscure")));
+        let mut visited = HashSet::new();
+        for _ in 0..3 {
+            assert!(tokio::time::timeout(
+                Duration::from_millis(20),
+                state.relay.forward_search(&state, "obscure"),
+            )
+            .await
+            .is_err());
+            assert!(lock(&state.relay.answers).is_empty());
+            let mut sent = 0;
+            for (index, receiver) in receivers.iter().enumerate() {
+                let mut receiver = receiver.lock().await;
+                while let Ok(task) = receiver.try_recv() {
+                    assert!(matches!(task, Task::Search { q, .. } if q == "obscure"));
+                    visited.insert(index);
+                    sent += 1;
+                }
+            }
+            assert_eq!(sent, MAX_FORWARDED_CLIENTS);
+        }
+        assert_eq!(visited.len(), receivers.len());
     }
 
     #[tokio::test]

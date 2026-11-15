@@ -8,10 +8,7 @@ use color_thief::{get_palette, ColorFormat};
 use gtk::{gdk, gio, glib, prelude::*};
 use log::{debug, warn};
 
-use crate::{
-    audio::{Queue, Song},
-    config::APPLICATION_ID,
-};
+use crate::{audio::Song, config::APPLICATION_ID};
 
 pub fn settings_manager() -> gio::Settings {
     // We ship a single schema for both default and development profiles
@@ -281,29 +278,29 @@ pub fn load_files_from_folder(folder: &gio::File, recursive: bool) -> Vec<gio::F
     res
 }
 
-pub fn store_playlist(queue: &Queue) {
-    store_songs(
-        &(0..queue.n_songs())
-            .filter_map(|i| queue.song_at(i))
-            .collect::<Vec<_>>(),
-    );
-}
-
-pub fn store_songs(songs: &[Song]) {
+pub fn store_songs_with_pending(songs: &[Song], pending: &[gio::File]) {
     let pls = glib::KeyFile::new();
     pls.set_string("playlist", "X-GNOME-Title", "Hopea's current playlist");
 
     // Songs streamed from the shared library have no local path, and are not
     // restored
+    let files = songs
+        .iter()
+        .filter(|song| song.property::<bool>("favorite"))
+        .map(Song::file)
+        .chain(pending.iter().cloned());
+    let mut paths = std::collections::HashSet::new();
     let mut n_entries = 0;
-    for song in songs {
-        if !song.property::<bool>("favorite") {
-            continue;
-        }
-        if let Some(path) = song.file().path() {
-            let path_str = path.to_string_lossy();
-            pls.set_value("playlist", &format!("File{n_entries}"), &path_str);
-            n_entries += 1;
+    for file in files {
+        if let Some(path) = file.path() {
+            if paths.insert(path.clone()) {
+                pls.set_value(
+                    "playlist",
+                    &format!("File{n_entries}"),
+                    &path.to_string_lossy(),
+                );
+                n_entries += 1;
+            }
         }
     }
 

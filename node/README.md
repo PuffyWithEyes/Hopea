@@ -14,14 +14,15 @@ the window header, or Ctrl+U), and stops it when the app quits.
   1 KiB in all.
 - **Being found.** Nothing on the network holds a list of everyone's
   music. A node announces itself in the public BitTorrent DHT (BEP 5) under one
-  key per word of the artists, genres, titles and albums it has, and one per
-  first three letters of each longer word, at most 400 own keys, every 24–25
+  keys for words of the artists, genres, titles and albums it has, and their
+  three-letter prefixes. Catalogues exceeding precise-key coverage also use
+  up to 256 prefix-hash routing groups within the same 400-key budget, every 24–25
   minutes after initial retries. Relays can advertise up to 1,000 additional
   keys. Deadlines are tracked per key: importing one track does not reannounce
   the entire library. Batches contain at most 64 due keys with 16 lookups in
   parallel; starts and refreshes have jitter. The DHT only stores addresses.
 - **Searching.** A search looks up the DHT keys of the query's longest words
-  and of their first three letters, then asks the nodes found there
+  and of their first three letters, plus routing groups, then asks the nodes found there
   (`GET /p2p/v1/search?q=…`). They answer with signed entries of matching
   tracks. Matching forgives (`src/fuzzy.rs`): "link" and "linkn prak" both
   find Linkin Park, since a word may be the start or part of another, or
@@ -39,8 +40,11 @@ the window header, or Ctrl+U), and stops it when the app quits.
   Results are ordered by how closely they match; of equally close ones, the
   most shared (by the number of nodes known to have them) comes first.
   `order=popular` puts the most shared first.
-  For popular words the DHT returns a sample of the nodes that have them,
-  so such searches show part of what exists, not all of it.
+  For popular words and routing groups the DHT returns a sample of nodes;
+  collisions and finite candidate budgets can still miss online sources.
+  Groups remove the deterministic omission of later catalogue terms, without
+  making discovery exhaustive. Both sides need the updated routing logic for
+  overflow coverage; legacy precise keys and wire messages remain compatible.
 - **Playing.** Playing a track first gets its info dictionary (the bulk of a
   `.torrent`, up to 20 KiB of piece hashes) from a node that answered
   (`GET /p2p/v1/info`), and accepts it only if both hashes match the signed
@@ -107,6 +111,12 @@ processes at most 4,096 replies, and periodically yields even if a peer stream
 keeps producing duplicates. Announcements drive lookups without collecting
 unused peer addresses. These bounds do not change librqbit's internal queues or
 constitute a guarantee about its total memory use.
+
+A search has at most nine DHT routes for three query words, with six lookups
+running concurrently under one four-second deadline. These routes share the
+existing 40-node request budget, without recursive forwarding to more nodes.
+Relays still ask at most eight registered clients and rotate candidates between
+requests. Routing hints do not relax signature, ingress or response-size checks.
 
 The embedded player's default-on Game Mode applies temporary BitTorrent caps
 of 512 KiB/s down and 128 KiB/s up, preserves lower fair limits, and restores the

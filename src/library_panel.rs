@@ -7,6 +7,8 @@ mod import_preview;
 mod import_review;
 mod import_warnings;
 mod search_results;
+#[cfg(not(target_os = "android"))]
+mod service_sign_in;
 mod sign_in_help;
 
 use std::{
@@ -840,6 +842,9 @@ impl LibraryPanel {
         &self,
         service: &str,
     ) -> Result<Option<(String, String)>, String> {
+        if matches!(service, "spotify" | "yandex") {
+            return self.sign_in_service(service).await;
+        }
         library::browser_import::require_browser_portal().await?;
         let url = if service == "vk" {
             "https://vk.ru/audio"
@@ -1009,17 +1014,15 @@ impl LibraryPanel {
             #[weak]
             default_browser_button,
             move |service: &adw::ComboRow| {
-                default_browser_button.set_visible(
-                    cfg!(target_os = "android") || matches!(service.selected(), 0 | 3),
-                );
+                default_browser_button.set_visible(true);
                 account.set_visible(service.selected() == 0);
                 secret.set_text("");
                 download.set_sensitive(true);
                 download.set_active(true);
                 hint.set_text(&match service.selected() {
                     0 => i18n("Sign in with your browser, then enter the profile ID whose music you want to import. This can be your own profile or another profile whose audio you can access. Signing in keeps the ID you entered."),
-                    1 => i18n("Enter your Yandex Music OAuth token. The importer reads liked songs, playlists and saved albums. Audio availability depends on your account."),
-                    2 => i18n("Enter a Spotify OAuth access token with user-library-read, playlist-read-private, playlist-read-collaborative and streaming permissions. Direct audio import uses librespot and requires Premium; some accounts are incompatible with Spotify's current audio access. Turn off audio download to import song names only."),
+                    1 => i18n("Sign in with your browser and confirm the displayed device code, or enter a Yandex Music OAuth token. The importer reads liked songs, playlists and saved albums. Audio availability depends on your account."),
+                    2 => i18n("Sign in with your browser using your Spotify application’s public Client ID, or enter an OAuth access token with user-library-read, playlist-read-private, playlist-read-collaborative and streaming permissions. Direct audio import uses librespot and requires Premium; some accounts are incompatible with Spotify's current audio access. Turn off audio download to import song names only."),
                     _ => i18n("Sign in with your browser, or paste the JSON session headers used by ytmusicapi. The importer reads library songs, likes, playlists and albums."),
                 });
             }
@@ -1586,9 +1589,8 @@ impl LibraryPanel {
         self.load_page(0);
     }
 
-    /// Loads a page of results. The first page of a search shows what this
-    /// computer already knows right away, then asks other people's
-    /// computers and shows the combined results.
+    /// The first page performs one bounded network search. Later pages read
+    /// the collected results without starting another network search.
     fn load_page(&self, offset: u32) {
         let imp = self.imp();
         if offset > 0 && imp.page_loading.get() {

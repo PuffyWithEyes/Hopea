@@ -115,7 +115,7 @@ The import dialog now has **Your Online Library → Import Account…**. Rust in
 
 The root workspace includes the player and `spotify/`, excluding the standalone `node/` and `common/` workspaces. Default members contain only the player. Build/test Spotify with `-p hopea-spotify` in a separate Cargo invocation: `--workspace` unifies incompatible governor clock features from librespot and librqbit. Meson builds and installs both binaries next to each other. System TLS is intentional: librespot's Rustls feature also pulls an old vulnerable TLS stack through hyper-proxy2. Keep vergen at the compatible 9.0.6 lockfile version. See docs/IMPORTING.md for the remaining audit findings and their applicability; do not describe the full dependency audit as clean.
 
-`src/library/browser_import.rs` detects the default HTTPS browser and its saved profile. VK and YouTube Music open only the system browser; after Continue the adapter reads that profile's cookies through yt-dlp. Zen uses the Firefox cookie database format, without a Firefox executable or geckodriver. Multiple profiles or browser encryption may require choosing a default profile or pasting the session manually. Other services use OAuth access tokens. No browser extensions are required. Credentials go to the worker through stdin and are not stored in application settings or logs. The worker's stderr is suppressed to avoid provider exception messages leaking secrets. VK's source profile ID is separate from the signed-in viewer ID and is preserved during login; metadata is read even for songs without download hashes. Failures and empty VK results use persistent dialogs.
+`src/library/browser_import.rs` detects the default HTTPS browser and its saved profile. VK and YouTube Music open only the system browser; after Continue the adapter reads that profile's cookies through yt-dlp. Zen uses the Firefox cookie database format, without a Firefox executable or geckodriver. Multiple profiles or browser encryption may require choosing a default profile or pasting the session manually. Spotify uses authorization code with PKCE and a loopback callback, with a public Client ID supplied in the dialog. Yandex Music uses the adapter library’s Device Flow: the user approves a code in the browser. `service_auth.py` performs provider authorization in a disposable worker; Rust owns the dialog, browser launch, timeout and cancellation. Manual token entry remains available. See [Service sign-in](SERVICE_SIGN_IN.md) for setup and verification limits. No browser extensions are required. Credentials go to the worker through stdin and are not stored in application settings or logs. The worker's stderr is suppressed to avoid provider exception messages leaking secrets. VK's source profile ID is separate from the signed-in viewer ID and is preserved during login; metadata is read even for songs without download hashes. Failures and empty VK results use persistent dialogs.
 
 See `docs/IMPORTING.md` and `build-aux/import-requirements.txt` for optional runtime dependencies. `nix/shell.nix` supplies FFmpeg and Python, and selects `.venv-import/bin/python` through `HOPEA_IMPORT_PYTHON` if present. The Python portion is limited to adapting service libraries; keep product logic in Rust. Meson runs offline adapter tests with `meson test -C _builddir --suite import`. Set `HOPEA_TEST_DOWNLOAD=1` when invoking `tests/test_service_import.py` with the import environment to also test real yt-dlp/FFmpeg conversion against a local fixture server. Live account tests require explicit user authorization and remain ignored by default. The Zen/VK path has been checked through real catalogue reading, audio download, Rust HTTPS cover fetching and isolated GTK display; this does not verify other services.
 
@@ -227,3 +227,68 @@ Back preserves scope and decisions. An Incoming replacement retires the old
 entry only after successful import and a verified size/SHA-256 backup in durable
 `replaced-audio` storage. On failure keep both entries; never use trash settings
 or delete the user's source file. Candidate IDs must be verified against hashes.
+
+### Progressive local playlist loading
+
+`Window::queue_songs_with_feedback` reads tags and computes or loads the file
+hash through `Song::load_local` on a blocking worker. GTK objects and artwork
+textures are created on the main thread. The first valid song is published
+immediately; following songs are appended in batches of eight, with main-loop
+yields between files. Playback can start while the remaining files load.
+Concurrent file-open requests are serialized. Duplicate detection covers the
+current personal queue and the pending batch, including while For You plays.
+The loading indicator counts attempted files, including missing and invalid
+ones, and is cleared even when no songs can be added. Sharing starts after the
+load completes. This improves time to the first playable row; artwork decoding
+still runs on the main thread, so total indexing time depends on the files.
+
+Shuffling temporarily detaches the view's selection model before permuting the
+queue and reattaches the same model afterwards. This discards GTK's previous
+row anchor; scrolling to row zero then shows the current song at the beginning.
+The audio player and current playback position are preserved.
+
+### Search budgets and pages
+
+The player requests 50 tracks per page. The first page waits for one bounded
+network search; scrolling near the bottom requests the next page from the local
+result database with `network=false`. Loading stops at the reported total or an
+empty page. Each network search asks at most 40 nodes, up to eight concurrently
+(two during Game Mode). DHT lookups have a four-second budget after an initial
+bootstrap wait of up to five seconds; each HTTP search group has an eight-second
+default deadline. There are at most three active network searches. These are
+separate phase limits, not a single eight-second end-to-end deadline.
+
+While the search page is visible, a 30-second timer rechecks known sources to
+remove unavailable songs. This uses bounded peer requests without another DHT
+lookup. Typing another query invalidates stale UI responses; it does not cancel
+an HTTP request that has already reached the node.
+
+### Catalogue discovery coverage
+
+Precise announcements retain the legacy normalized words and three-character
+prefixes. When these cannot represent every searchable term, the node also
+announces occupied routing groups: the first byte of the existing word-key hash
+of each normalized three-character prefix, encoded as `hopeacatalogroutev1XX`.
+Scanning the full held catalogue into a 256-bit map avoids permanently omitting
+tracks beyond the old 300-word cutoff. Groups take precedence within the existing
+400-key announcement and signed relay-registration limit; the remaining slots
+retain precise legacy keys. Relays derive groups for their clients' precise keys
+and retain all occupied groups within their existing 1,000-key budget.
+
+A query uses at most three words and nine distinct routes (group, exact and
+prefix). Groups start first; no more than six lookups run concurrently and all
+share the four-second DHT deadline. Discovered addresses are interleaved across
+routes, deduplicated, and share the same 40-node HTTP budget. With DHT enabled,
+at most half those slots go to configured, LAN and remembered nodes. A relay
+still forwards to at most eight clients, prioritizing precise matches and rotating
+eligible clients between requests. Cancellation removes outstanding answer slots.
+Routing groups neither trigger recursive network searches nor bypass ingress
+rate limits, body limits, signature checks or the final fuzzy result filtering.
+
+Groups are routing hints, not proof that a node has a matching track. Collisions,
+crowded groups, DHT sampling and finite candidate budgets can still miss an online
+source; this removes deterministic catalogue truncation, not the possibility of
+every discovery miss. There is no tested hundred-million-user guarantee. Existing
+wire messages and signatures remain compatible, but both publisher and searcher
+need the updated routing logic to benefit from overflow coverage. Older searchers
+can still use retained precise keys.

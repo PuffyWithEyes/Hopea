@@ -48,6 +48,62 @@ pub struct SongData {
     remote_id: Option<i64>,
 }
 
+/// File I/O and tag parsing can run outside GTK's main thread.
+struct PreparedSong {
+    file: gio::File,
+    path: PathBuf,
+    tagged_file: lofty::file::TaggedFile,
+    content_hash: Option<String>,
+}
+
+impl PreparedSong {
+    fn read(uri: &str) -> Option<Self> {
+        let file = gio::File::for_uri(uri);
+        let path = match file.path() {
+            Some(path) => path,
+            None => {
+                warn!("Not a local file: {}", uri);
+                return None;
+            }
+        };
+
+        let (mime_type, _) = gio::content_type_guess(Some(&path), None);
+        if !mime_type.starts_with("audio") || mime_type.ends_with("x-mpegurl") {
+            return None;
+        }
+
+        let file_probe = match Probe::open(&path) {
+            Ok(p) => p,
+            Err(e) => {
+                warn!("Unable to open file {:?}: {}", path, e);
+                return None;
+            }
+        };
+
+        let tagged_file = match file_probe.guess_file_type() {
+            Ok(t) => match t.read() {
+                Ok(f) => f,
+                Err(e) => {
+                    warn!("Unable to read parsed file {:?}: {}", path, e);
+                    return None;
+                }
+            },
+            Err(e) => {
+                warn!("Unable to parse file type {:?}: {}", path, e);
+                return None;
+            }
+        };
+
+        let content_hash = file_hash(&path);
+        Some(Self {
+            file,
+            path,
+            tagged_file,
+            content_hash,
+        })
+    }
+}
+
 impl SongData {
     pub fn artist(&self) -> Option<&str> {
         self.artist.as_deref()
@@ -98,43 +154,20 @@ impl SongData {
     }
 
     pub fn from_uri(uri: &str) -> Self {
+        PreparedSong::read(uri)
+            .map(Self::from_prepared)
+            .unwrap_or_default()
+    }
+
+    fn from_prepared(prepared: PreparedSong) -> Self {
         let now = Instant::now();
-
-        let file = gio::File::for_uri(uri);
-        let path = match file.path() {
-            Some(path) => path,
-            None => {
-                warn!("Not a local file: {}", uri);
-                return SongData::default();
-            }
-        };
-
-        let (mime_type, _) = gio::content_type_guess(Some(&path), None);
-        if !mime_type.starts_with("audio") || mime_type.ends_with("x-mpegurl") {
-            return SongData::default();
-        }
-
-        let file_probe = match Probe::open(&path) {
-            Ok(p) => p,
-            Err(e) => {
-                warn!("Unable to open file {:?}: {}", path, e);
-                return SongData::default();
-            }
-        };
-
-        let tagged_file = match file_probe.guess_file_type() {
-            Ok(t) => match t.read() {
-                Ok(f) => f,
-                Err(e) => {
-                    warn!("Unable to read parsed file {:?}: {}", path, e);
-                    return SongData::default();
-                }
-            },
-            Err(e) => {
-                warn!("Unable to parse file type {:?}: {}", path, e);
-                return SongData::default();
-            }
-        };
+        let PreparedSong {
+            file,
+            path,
+            tagged_file,
+            content_hash,
+        } = prepared;
+        let uri = file.uri();
 
         let mut cover_cache = CoverCache::global().lock().unwrap();
 
@@ -219,7 +252,7 @@ impl SongData {
             cover_art,
             cover_uuid,
             uuid,
-            content_hash: file_hash(&path),
+            content_hash,
             duration,
             duration_ms: properties.duration().as_millis().try_into().ok(),
             file,
@@ -494,6 +527,24 @@ impl Song {
             }
             Ok(res)
         }
+    }
+
+    /// Only the parsed file data crosses threads; GTK objects stay on the UI thread.
+    pub async fn load_local(uri: String) -> Result<Song, &'static str> {
+        let prepared = gio::spawn_blocking(move || PreparedSong::read(&uri))
+            .await
+            .map_err(|_| "Unable to read song")?
+            .ok_or("Invalid song")?;
+        let song = Self::empty();
+        song.imp().data.replace(SongData::from_prepared(prepared));
+        crate::artwork::watch_song(&song);
+        crate::song_edits::apply_cover(&song);
+        song.set_property("progress", 1.0_f64);
+        song.set_property("status", i18n("On this computer"));
+        if let Some(id) = crate::library::shared_files::id_for(&song.uri()) {
+            song.set_library(Some(id), true, false);
+        }
+        Ok(song)
     }
 
     pub fn empty() -> Self {

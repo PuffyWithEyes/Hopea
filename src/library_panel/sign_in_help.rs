@@ -14,13 +14,13 @@ impl LibraryPanel {
             ),
             1 => (
                 "Yandex Music",
-                i18n("This importer needs a Yandex Music OAuth access token, not browser cookies. Session_id, sessionid2 and yandexuid cannot be pasted here as a replacement.\n\n1. Open the yandex-music library’s token instructions using the link below.\n2. Follow its authorization instructions for your account.\n3. Paste only the resulting access token into Hopea, without quotes or the prefix OAuth.\n\nA successful sign-in on music.yandex.ru alone does not produce this token. Access to audio depends on your account."),
+                i18n("Use Sign In with Browser to get a confirmation code. Enter it on the Yandex page and approve access; Hopea receives the token automatically.\n\nFor manual sign-in, this importer needs a Yandex Music OAuth access token, not browser cookies. Session_id, sessionid2 and yandexuid cannot be pasted here as a replacement.\n\n1. Open the yandex-music library’s token instructions using the link below.\n2. Follow its authorization instructions for your account.\n3. Paste only the resulting access token into Hopea, without quotes or the prefix OAuth.\n\nA successful sign-in on music.yandex.ru alone does not produce this token. Access to audio depends on your account."),
                 "",
-                Some("https://yandex-music.readthedocs.io/en/main/token.html"),
+                Some("https://ym.marshal.dev/token/"),
             ),
             2 => (
                 "Spotify",
-                i18n("This importer needs a Spotify OAuth access token, not cookies such as sp_dc or sp_key.\n\n1. Use a Spotify developer application and its user authorization flow, described at the link below. Client Credentials tokens cannot read your personal library.\n2. Request user-library-read, playlist-read-private and playlist-read-collaborative. For direct audio import also request streaming.\n3. Paste only access_token into Hopea, without quotes or the prefix Bearer. Do not paste a client secret or refresh token.\n\nIf the token has expired, authorize again. Direct audio requires Premium and a compatible account; you can turn off audio download to import the catalog only."),
+                i18n("Use Sign In with Browser and enter your Spotify developer application’s public Client ID. Register http://127.0.0.1:43821/callback as its Redirect URI. Complete authorization in the browser; Hopea receives the token automatically. No Client Secret is needed.\n\nFor manual sign-in, this importer needs a Spotify OAuth access token, not cookies such as sp_dc or sp_key.\n\n1. Use a Spotify developer application and its user authorization flow, described at the link below. Client Credentials tokens cannot read your personal library.\n2. Request user-library-read, playlist-read-private and playlist-read-collaborative. For direct audio import also request streaming.\n3. Paste only access_token into Hopea, without quotes or the prefix Bearer. Do not paste a client secret or refresh token.\n\nIf the token has expired, authorize again. Direct audio requires Premium and a compatible account; you can turn off audio download to import the catalog only."),
                 "",
                 Some("https://developer.spotify.com/documentation/web-api/tutorials/code-pkce-flow"),
             ),

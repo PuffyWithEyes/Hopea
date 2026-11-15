@@ -940,3 +940,121 @@ fn navigation_preserves_playback_and_settings_open_without_search() {
     }
     window.close();
 }
+
+/// Exercise a genuinely scrollable queue, rather than two rows that both fit.
+#[test]
+#[ignore = "requires a GTK display and isolated XDG directories; see docs/IMPORTING.md"]
+fn progressive_playlist_and_shuffle_start_at_top() {
+    assert_eq!(std::env::var("GSETTINGS_BACKEND").as_deref(), Ok("memory"));
+    assert!(glib::user_data_dir().starts_with("/tmp"));
+    adw::init().unwrap();
+    gtk::Settings::default()
+        .unwrap()
+        .set_gtk_enable_animations(false);
+    gst::init().unwrap();
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    gio::resources_register(
+        &gio::Resource::load(root.join("_builddir/src/hopea.gresource")).unwrap(),
+    );
+    let context = glib::MainContext::default();
+    let _guard = context.acquire().unwrap();
+    let settings = utils::settings_manager();
+    settings.set_boolean("library-enabled", false).unwrap();
+    settings.set_boolean("library-rules-seen", true).unwrap();
+    settings.set_boolean("game-mode", false).unwrap();
+    let app = crate::application::Application::new();
+    app.set_flags(app.flags() | gio::ApplicationFlags::NON_UNIQUE);
+    app.register(gio::Cancellable::NONE).unwrap();
+    let window = Window::new(&app);
+    window.set_default_size(1100, 600);
+    GtkWindowExt::present(&window);
+    let directory = crate::paths::data_dir().join("startup-fixtures");
+    std::fs::create_dir_all(&directory).unwrap();
+    let original = std::fs::read(root.join("node/tests/fixtures/tone.wav")).unwrap();
+    let files: Vec<_> = (0u16..200)
+        .map(|i| {
+            let mut bytes = original.clone();
+            let len = bytes.len();
+            bytes[len - 2..].copy_from_slice(&i.to_le_bytes());
+            let path = directory.join(format!("track-{i:03}.wav"));
+            std::fs::write(&path, bytes).unwrap();
+            gio::File::for_path(path)
+        })
+        .collect();
+    let mut input = files.clone();
+    input.push(files[10].clone()); // Duplicate within the same load.
+    input.push(gio::File::for_path(directory.join("missing.wav")));
+    window.queue_songs_with_feedback(input, false);
+    let player = window.player().unwrap();
+    let deadline = Instant::now() + std::time::Duration::from_secs(30);
+    context.block_on(async {
+        while player.queue().is_empty() && Instant::now() < deadline {
+            glib::timeout_future(std::time::Duration::from_millis(5)).await;
+        }
+    });
+    assert!(player.queue().n_songs() > 0 && player.queue().n_songs() < 200);
+    assert!(
+        window.imp().playlist_loading.get(),
+        "first rows appear before indexing finishes"
+    );
+    window.store_personal_playlist();
+    let saved_during_load = utils::load_cached_songs().unwrap();
+    assert!(
+        files
+            .iter()
+            .all(|file| saved_during_load.iter().any(|saved| saved.equal(file))),
+        "saving during restoration must preserve unread favorites"
+    );
+    context.block_on(async {
+        while window.imp().playlist_loading.get() && Instant::now() < deadline {
+            glib::timeout_future(std::time::Duration::from_millis(10)).await;
+        }
+    });
+    assert!(!window.imp().playlist_loading.get());
+    assert_eq!(player.queue().n_songs(), 200);
+    assert_eq!(utils::load_cached_songs().unwrap().len(), 200);
+    for (i, file) in files.iter().enumerate() {
+        assert!(player.queue().song_at(i as u32).unwrap().file().equal(file));
+    }
+    player.skip_to(125);
+    player.pause();
+    let current = player.state().current_song().unwrap();
+    let view = window.imp().playlist_view.queue_view();
+    view.scroll_to(199, gtk::ListScrollFlags::FOCUS, None);
+    context.block_on(glib::timeout_future(std::time::Duration::from_millis(250)));
+    let adjustment = window.imp().playlist_view.scroll().vadjustment();
+    assert!(
+        adjustment.value() > 100.0,
+        "fixture must start scrolled down"
+    );
+    player.state().set_position(42);
+    window.set_playlist_shuffled(true);
+    context.block_on(glib::timeout_future(std::time::Duration::from_millis(250)));
+    assert_eq!(player.queue().song_at(0), Some(current.clone()));
+    assert_eq!(player.state().current_song(), Some(current));
+    assert_eq!(player.state().position(), 42);
+    assert!(!player.state().playing());
+    assert!(
+        adjustment.value() < 1.0,
+        "shuffle must scroll to the beginning: {}",
+        adjustment.value()
+    );
+    window.queue_songs_with_feedback(
+        vec![
+            files[10].clone(),
+            gio::File::for_path(directory.join("missing.wav")),
+        ],
+        false,
+    );
+    context.block_on(async {
+        while window.imp().playlist_loading.get() && Instant::now() < deadline {
+            glib::timeout_future(std::time::Duration::from_millis(10)).await;
+        }
+    });
+    assert!(
+        !window.imp().playlist_loading.get(),
+        "all duplicate/invalid load must finish"
+    );
+    assert_eq!(player.queue().n_songs(), 200);
+    window.destroy();
+}

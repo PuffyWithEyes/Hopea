@@ -244,6 +244,9 @@ pub async fn dht_lookup(
     time: Duration,
     max: usize,
 ) -> Vec<SocketAddr> {
+    if time.is_zero() {
+        return Vec::new();
+    }
     let Some(dht) = state.torrents.dht() else {
         return Vec::new();
     };
@@ -327,7 +330,11 @@ pub async fn search(state: &AppState, query: &str) -> SearchReport {
         .filter(|n| Some(*n) != own)
         .collect::<HashSet<_>>()
         .into_iter()
-        .take(MAX_NODES_PER_SEARCH)
+        .take(if state.config.dht {
+            MAX_NODES_PER_SEARCH / 2
+        } else {
+            MAX_NODES_PER_SEARCH
+        })
         .collect();
 
     // Configured nodes are asked right away, while the DHT finds others
@@ -346,22 +353,33 @@ pub async fn search(state: &AppState, query: &str) -> SearchReport {
         } else {
             DhtState::NoContact
         };
-        let lookups = keywords::query_keys(query).into_iter().map(|word| {
-            dht_lookup(
-                state,
-                keywords::dht_key(&word),
-                None,
-                DHT_LOOKUP_TIME,
-                MAX_NODES_PER_SEARCH,
-            )
-        });
-        let mut nodes = HashSet::new();
-        for found in futures_util::future::join_all(lookups).await {
-            nodes.extend(found);
-        }
-        nodes.retain(|n| Some(*n) != own && !configured.contains(n));
+        // Overflow routes share the existing lookup deadline and the previous
+        // maximum of six concurrent exact/prefix lookups. They must not create
+        // another full search round or recursively expand discovered peers.
+        let deadline = Instant::now() + DHT_LOOKUP_TIME;
+        let lookups = keywords::query_routing_keys(query)
+            .into_iter()
+            .enumerate()
+            .map(|(index, word)| async move {
+                let found = dht_lookup(
+                    state,
+                    keywords::dht_key(&word),
+                    None,
+                    deadline.saturating_duration_since(Instant::now()),
+                    MAX_NODES_PER_SEARCH,
+                )
+                .await;
+                (index, found)
+            });
+        let mut routes: Vec<_> = stream::iter(lookups)
+            .buffer_unordered(2 * keywords::MAX_QUERY_WORDS)
+            .collect()
+            .await;
+        routes.sort_unstable_by_key(|(index, _)| *index);
+        let routes = routes.into_iter().map(|(_, found)| found).collect();
         let remaining = MAX_NODES_PER_SEARCH.saturating_sub(configured.len());
-        let asked = ask_all(state, nodes.into_iter().take(remaining), query, &slots).await;
+        let nodes = search_candidates(routes, &configured, own, remaining);
+        let asked = ask_all(state, nodes.into_iter(), query, &slots).await;
         (dht, asked)
     };
     let (direct, (dht, found)) = tokio::join!(
@@ -388,6 +406,33 @@ pub async fn search(state: &AppState, query: &str) -> SearchReport {
     };
     tracing::debug!("Searched the network for {query:?}: {report:?}");
     report
+}
+
+/// Fairly interleave independent routes within the existing request budget.
+/// A broad prefix/group cannot consume every slot before an exact route.
+fn search_candidates(
+    routes: Vec<Vec<SocketAddr>>,
+    configured: &[SocketAddr],
+    own: Option<SocketAddr>,
+    limit: usize,
+) -> Vec<SocketAddr> {
+    let mut seen: HashSet<_> = configured.iter().copied().chain(own).collect();
+    let mut routes: Vec<_> = routes.into_iter().map(Vec::into_iter).collect();
+    let mut result = Vec::new();
+    loop {
+        let before = result.len();
+        for route in &mut routes {
+            if result.len() == limit {
+                return result;
+            }
+            if let Some(node) = route.find(|node| seen.insert(*node)) {
+                result.push(node);
+            }
+        }
+        if result.len() == before {
+            return result;
+        }
+    }
 }
 
 /// Recheck sources of the displayed results without launching new DHT searches.
@@ -822,6 +867,29 @@ fn announce_jitter() -> Duration {
 #[cfg(test)]
 mod scaling_tests {
     use super::*;
+    #[test]
+    fn exact_and_overflow_routes_share_a_bounded_peer_budget() {
+        let address = |n| SocketAddr::from(([127, 0, 0, 1], n));
+        let exact = vec![address(1), address(2), address(3)];
+        let overflow = (10..100).map(address).collect();
+        let candidates =
+            search_candidates(vec![exact, overflow], &[address(1)], Some(address(10)), 4);
+        assert_eq!(
+            candidates,
+            vec![address(2), address(11), address(3), address(12)]
+        );
+        assert!(search_candidates(vec![vec![address(1)]], &[], None, 0).is_empty());
+        assert_eq!(
+            search_candidates(
+                vec![vec![address(1); 100], vec![address(1), address(2)]],
+                &[],
+                None,
+                40
+            ),
+            vec![address(1), address(2)]
+        );
+    }
+
     #[tokio::test]
     async fn dht_duplicates_floods_and_announcements_use_bounded_memory() {
         let peer = "127.0.0.1:1".parse().unwrap();

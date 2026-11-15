@@ -54,6 +54,11 @@ subdir('po')
 reuse = find_program('reuse', required: false)
 import_test_python = find_program('python3', required: false)
 if import_test_python.found()
+  test('Service sign-in adapters', import_test_python,
+    args: ['-I', files('tests/test_service_auth.py')],
+    suite: ['import'],
+    timeout: 30,
+  )
   test('Service import adapters', import_test_python,
     args: ['-I', files('tests/test_service_import.py')],
     suite: ['import'],
