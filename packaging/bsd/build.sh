@@ -80,7 +80,11 @@ if [[ $os == FreeBSD || $os == DragonFly ]]; then
       desc:"Hopea GTK4 music player",maintainer:"maintainers@localhost",www:"https://github.com",
       prefix:$prefix,licenselogic:"single",licenses:["GPLv3+"],deps:$deps}' > "$stage/+MANIFEST"
   (cd "$stage/root$prefix" && find . \( -type f -o -type l \) | sed 's|^./||' | sort) > "$stage/plist"
-  pkg create -m "$stage" -r "$stage/root" -p "$stage/plist" -o "$dist"
+  package_format=()
+  # DragonFly's system libarchive may lack built-in zstd support. pkg treats
+  # that as an error, so explicitly use its supported xz compression there.
+  if [[ $os == DragonFly ]]; then package_format=(-f txz); fi
+  pkg create "${package_format[@]}" -m "$stage" -r "$stage/root" -p "$stage/plist" -o "$dist"
 fi
 if [[ $os == NetBSD || $os == OpenBSD ]]; then
   printf '%s\n' 'Hopea music player with peer-to-peer sharing.' > "$stage/description"

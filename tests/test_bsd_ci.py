@@ -64,9 +64,11 @@ elif name == "umount":
                 self.assertTrue(entered.is_file())
 
     @unittest.skipUnless(shutil.which("jq"), "jq is required to check the package manifest")
-    def test_freebsd_package_with_base_or_ports_openssl(self):
-        for openssl, missing in ((False, ""), (True, ""), (False, "gtk4")):
-            with self.subTest(openssl=openssl, missing=missing), tempfile.TemporaryDirectory() as directory:
+    def test_pkg_creation_with_base_or_ports_openssl_and_dragonfly_compression(self):
+        cases = ((system, openssl, missing) for system in ("FreeBSD", "DragonFly")
+                 for openssl, missing in ((False, ""), (True, ""), (False, "gtk4")))
+        for system, openssl, missing in cases:
+            with self.subTest(system=system, openssl=openssl, missing=missing), tempfile.TemporaryDirectory() as directory:
                 root = Path(directory)
                 (root / "packaging").mkdir()
                 (root / "packaging/native.sh").write_text(
@@ -80,7 +82,7 @@ import os, pathlib, sys, shutil
 name = pathlib.Path(sys.argv[0]).name
 args = sys.argv[1:]
 if name == "uname":
-    print("FreeBSD" if args == ["-s"] else "amd64")
+    print(os.environ["TEST_SYSTEM"] if args == ["-s"] else "amd64")
 elif name == "pkg-config":
     print("99.0")
 elif name == "python-fixture":
@@ -95,6 +97,11 @@ elif name == "pkg":
             if package == os.environ["TEST_MISSING"]: sys.exit(1)
             print(f"{package}|1.2.3|fixture/{package}")
     elif args[0] == "create":
+        if os.environ["TEST_SYSTEM"] == "DragonFly":
+            if "-f" not in args or args[args.index("-f")+1] != "txz":
+                sys.exit("pkg: zstd is supported, but not builtin")
+        elif "-f" in args:
+            sys.exit("FreeBSD should retain its default compression")
         shutil.copyfile(pathlib.Path(args[args.index("-m")+1]) / "+MANIFEST", os.environ["TEST_MANIFEST"])
 ''')
                 stub.chmod(0o755)
@@ -105,7 +112,8 @@ elif name == "pkg":
                     capture_output=True, text=True, env=dict(os.environ,
                         PATH=f"{binary}:{os.environ['PATH']}", HOPEA_BUILD_PYTHON=str(binary / "python-fixture"),
                         HOPEA_VERSION="1.2", HOPEA_CI_CONTAINER="0", HOPEA_DIST_DIR=str(root / "dist"),
-                        TEST_OPENSSL=str(int(openssl)), TEST_MISSING=missing, TEST_MANIFEST=str(manifest)))
+                        TEST_SYSTEM=system, TEST_OPENSSL=str(int(openssl)), TEST_MISSING=missing,
+                        TEST_MANIFEST=str(manifest)))
                 if missing:
                     self.assertNotEqual(result.returncode, 0)
                     self.assertFalse(manifest.exists())
