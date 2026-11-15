@@ -35,6 +35,15 @@ References: [PKCE authorization](https://developer.spotify.com/documentation/web
 Hopea displays a short code and opens Yandex's confirmation page. Enter the
 code and approve access. The `yandex-music` adapter's Device Flow polls for
 completion and returns the access token without reading browser cookies.
+Hopea explicitly requests only `music:read` and `music:content`. It does not
+request Yandex ID profile, birthday, email or avatar permissions, `mobile:all`,
+or playlist modification. The pinned adapter otherwise requests all permissions
+registered for its OAuth client, so Hopea restricts the device-code request
+through its HTTP request adapter. A rejected scope does not trigger a retry
+with broader permissions. See [Yandex's scope parameters](https://yandex.ru/dev/id/doc/ru/codes/screen-code-oauth).
+This applies to new authorizations; it does not revoke previously granted access
+or restrict manually supplied tokens. Account import with the reduced scopes
+still needs verification with an authorized Music account.
 The live endpoint can return `https://ya.ru/device`; the documented
 `https://oauth.yandex.ru/device` and `https://oauth.yandex.com/device` pages are
 also accepted. Both the adapter and the desktop UI validate the exact host and

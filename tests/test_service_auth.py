@@ -90,7 +90,7 @@ class AuthTests(unittest.TestCase):
                 assert self_kwargs['timeout'] == 300
                 self_kwargs['on_code'](Obj(verification_url='https://ya.ru/device', user_code='ABCD-EFGH', device_code='private-code'))
                 return Obj(access_token='fixture-token')
-        with patch.dict(sys.modules, yandex_music=Obj(Client=Client)):
+        with patch.object(auth, 'yandex_auth_client', return_value=Client()):
             self.assertEqual(auth.yandex(events.append), 'fixture-token')
         self.assertEqual(events[0]['user_code'], 'ABCD-EFGH')
         self.assertEqual(events[0]['url'], 'https://ya.ru/device')
@@ -115,12 +115,44 @@ class AuthTests(unittest.TestCase):
         class Client:
             def device_auth(self, **kwargs):
                 kwargs['on_code'](Obj(verification_url='https://evil.test/device', user_code='ABCD'))
-        with patch.dict(sys.modules, yandex_music=Obj(Client=Client)):
+        with patch.object(auth, 'yandex_auth_client', return_value=Client()):
             with self.assertRaises(auth.AuthError): auth.yandex(lambda event: self.fail('Foreign page emitted'))
         Client.device_auth = lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError('secret-token-in-provider-error'))
-        with patch.dict(sys.modules, yandex_music=Obj(Client=Client)):
+        with patch.object(auth, 'yandex_auth_client', return_value=Client()):
             with self.assertRaises(auth.AuthError) as failure: auth.yandex(lambda _: None)
         self.assertNotIn('secret-token', str(failure.exception))
+
+    def test_yandex_requests_music_only_without_broad_permission_fallback(self):
+        calls = []
+
+        class Request:
+            def post(self, url, data, *args, **kwargs):
+                calls.append((url, data, args, kwargs))
+                if data.get('device_id') == 'reject':
+                    raise ValueError('invalid_scope')
+                return 'fixture-response'
+
+        with patch.dict(sys.modules, {
+                'yandex_music': Obj(Client=lambda request: request),
+                'yandex_music.utils.request': Obj(Request=Request)}):
+            request = auth.yandex_auth_client()
+        original = {'client_id': 'fixture-client', 'device_id': 'fixture-device',
+                    'scope': 'mobile:all login:info', 'optional_scope': 'login:email'}
+        endpoint = 'https://oauth.yandex.ru/device/code'
+        self.assertEqual(request.post(endpoint, original, timeout=10), 'fixture-response')
+        sent = calls[-1][1]
+        self.assertEqual(set(sent['scope'].split()), {'music:read', 'music:content'})
+        self.assertNotIn('optional_scope', sent)
+        self.assertEqual(sent['client_id'], 'fixture-client')
+        self.assertEqual(sent['device_id'], 'fixture-device')
+        self.assertEqual(calls[-1][3], {'timeout': 10})
+        self.assertEqual(original['scope'], 'mobile:all login:info')
+        token_data = {'grant_type': 'device_code', 'code': 'private-fixture'}
+        request.post('https://oauth.yandex.ru/token', token_data)
+        self.assertIs(calls[-1][1], token_data)
+        with self.assertRaises(ValueError):
+            request.post(endpoint, {'device_id': 'reject'})
+        self.assertEqual(len(calls), 3)  # Never retry without the restricted scope.
 
 
 if __name__ == '__main__':

@@ -15,6 +15,7 @@ from urllib.parse import parse_qs, urlencode, urlsplit
 
 SCOPES = 'user-library-read playlist-read-private playlist-read-collaborative streaming'
 REDIRECT_URI = 'http://127.0.0.1:43821/callback'
+YANDEX_SCOPES = 'music:read music:content'
 
 
 class AuthError(Exception):
@@ -155,15 +156,31 @@ def valid_yandex_confirmation(page, user_code):
         return False
 
 
-def yandex(emit):
+def yandex_auth_client():
     from yandex_music import Client
+    from yandex_music.utils.request import Request
 
+    class MusicOnlyRequest(Request):
+        def post(self, url, data=None, *args, **kwargs):
+            # The pinned library's Device Flow omits scope, which grants every
+            # permission registered for its client. Narrow the initial request
+            # while retaining the library's polling and cancellation behavior.
+            if url == 'https://oauth.yandex.ru/device/code':
+                data = dict(data or {})
+                data['scope'] = YANDEX_SCOPES
+                data.pop('optional_scope', None)
+            return super().post(url, data, *args, **kwargs)
+
+    return Client(request=MusicOnlyRequest())
+
+
+def yandex(emit):
     def show_code(code):
         if not valid_yandex_confirmation(code.verification_url, code.user_code):
             raise AuthError('Yandex returned an invalid confirmation page or code.')
         emit({'event': 'auth_prompt', 'url': code.verification_url, 'user_code': code.user_code})
 
-    client = Client()
+    client = yandex_auth_client()
     if not hasattr(client, 'device_auth'):
         raise AuthError('Update the yandex-music import dependency to a version with Device Flow support, or paste a token manually.')
     try:
