@@ -2055,27 +2055,47 @@ impl Window {
         let Some(player) = self.player() else {
             return;
         };
-        for track in &tracks {
-            if !track.favorite {
-                continue;
-            }
-            let original = library::shared_files::uri_for(track.id)
-                .map(|uri| gio::File::for_uri(&uri))
-                .filter(|f| f.query_exists(gio::Cancellable::NONE));
-            let Some(file) = original else {
+        for track in tracks.iter().filter(|track| track.favorite) {
+            // The local-file branch used to have no await at all: importing
+            // every favorite in one main-loop turn delayed input until the end.
+            glib::timeout_future(std::time::Duration::from_millis(1)).await;
+            let Some(uri) = library::shared_files::uri_for(track.id) else {
                 self.add_remote_track(track, false).await;
                 continue;
             };
-            let queue = player.queue();
-            let queued = (0..queue.n_songs())
-                .filter_map(|i| queue.song_at(i))
-                .any(|s| s.uri() == file.uri());
-            if !queued {
-                if let Ok(song) = Song::from_uri(&file.uri()) {
-                    song.set_library(Some(track.id), track.mine, track.favorite);
-                    self.switch_mode(WindowMode::MainView);
-                    queue.add_song(&song);
+            let existing = if self.in_for_you() {
+                self.imp()
+                    .my_music_songs
+                    .borrow()
+                    .iter()
+                    .find(|s| s.uri() == uri)
+                    .cloned()
+            } else {
+                let queue = player.queue();
+                (0..queue.n_songs())
+                    .filter_map(|i| queue.song_at(i))
+                    .find(|s| s.uri() == uri)
+            };
+            if let Some(song) = existing {
+                song.set_library(Some(track.id), track.mine, track.favorite);
+                continue;
+            }
+            let Ok(song) = Song::load_local(uri).await else {
+                // The node still owns its verified copy if the original moved.
+                self.add_remote_track(track, false).await;
+                continue;
+            };
+            song.set_library(Some(track.id), track.mine, track.favorite);
+            // The view may have changed while reading. Never append personal
+            // favorites to the recommendation queue, or duplicate a restored row.
+            if self.in_for_you() {
+                let mut songs = self.imp().my_music_songs.borrow_mut();
+                if !songs.iter().any(|s| s.equals(&song)) {
+                    songs.push(song);
                 }
+            } else {
+                self.switch_mode(WindowMode::MainView);
+                player.queue().add_song(&song);
             }
         }
     }

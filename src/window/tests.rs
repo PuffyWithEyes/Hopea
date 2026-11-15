@@ -1005,12 +1005,37 @@ fn progressive_playlist_and_shuffle_start_at_top() {
             .all(|file| saved_during_load.iter().any(|saved| saved.equal(file))),
         "saving during restoration must preserve unread favorites"
     );
+    let scroll = window.imp().playlist_view.scroll();
+    let adjustment = scroll.vadjustment();
+    context.block_on(async {
+        while (player.queue().n_songs() < 50 || adjustment.upper() <= adjustment.page_size())
+            && Instant::now() < deadline
+        {
+            glib::timeout_future(std::time::Duration::from_millis(5)).await;
+        }
+    });
+    assert!(
+        window.imp().playlist_loading.get(),
+        "scroll during loading, not afterwards"
+    );
+    assert!(scroll.is_sensitive());
+    assert!(scroll.emit_by_name::<bool>("scroll-child", &[&gtk::ScrollType::PageForward, &false]));
+    context.block_on(glib::timeout_future(std::time::Duration::from_millis(40)));
+    assert!(
+        adjustment.value() > 100.0,
+        "loading must accept user scrolling: {}",
+        adjustment.value()
+    );
     context.block_on(async {
         while window.imp().playlist_loading.get() && Instant::now() < deadline {
             glib::timeout_future(std::time::Duration::from_millis(10)).await;
         }
     });
     assert!(!window.imp().playlist_loading.get());
+    assert!(
+        adjustment.value() > 100.0,
+        "later batches must not reset the user's scroll position"
+    );
     assert_eq!(player.queue().n_songs(), 200);
     assert_eq!(utils::load_cached_songs().unwrap().len(), 200);
     for (i, file) in files.iter().enumerate() {
@@ -1056,5 +1081,55 @@ fn progressive_playlist_and_shuffle_start_at_top() {
         "all duplicate/invalid load must finish"
     );
     assert_eq!(player.queue().n_songs(), 200);
+    // Joining the node restores favorites through a separate path from the
+    // cached playlist. It must yield while local files are still being read.
+    player.clear_queue();
+    let tracks = files
+        .iter()
+        .enumerate()
+        .map(|(index, file)| {
+            let id = index as i64 + 1;
+            library::shared_files::remember(&file.uri(), id);
+            serde_json::from_value(serde_json::json!({
+                "id": id, "title": format!("Song {index}"), "artist": null, "album": null,
+                "album_artist": null, "track_number": null, "year": null, "genre": null,
+                "duration_ms": 1000, "format": "wav", "codec": "pcm", "sample_rate": 44100,
+                "channels": 1, "size": 100, "sha256": format!("{id:064x}"),
+                "has_cover": false, "uploader": "fixture", "uploaded_at": 0,
+                "favorite": true, "mine": true, "local": true
+            }))
+            .unwrap()
+        })
+        .collect();
+    let finished = std::rc::Rc::new(std::cell::Cell::new(false));
+    let task_window = window.clone();
+    let task_finished = finished.clone();
+    let loading = glib::spawn_future_local(async move {
+        task_window.show_favorites_in_playlist(tracks).await;
+        task_finished.set(true);
+    });
+    context.block_on(async {
+        while (player.queue().n_songs() < 50 || adjustment.upper() <= adjustment.page_size())
+            && Instant::now() < deadline
+        {
+            glib::timeout_future(std::time::Duration::from_millis(5)).await;
+        }
+    });
+    assert!(
+        !finished.get(),
+        "favorites must not block until the full catalogue has loaded"
+    );
+    assert!(scroll.emit_by_name::<bool>("scroll-child", &[&gtk::ScrollType::PageForward, &false]));
+    context.block_on(glib::timeout_future(std::time::Duration::from_millis(40)));
+    assert!(
+        adjustment.value() > 100.0,
+        "favorites must accept scrolling during loading"
+    );
+    context.block_on(loading).unwrap();
+    assert_eq!(player.queue().n_songs(), 200);
+    assert!(
+        adjustment.value() > 100.0,
+        "favorites must preserve the user's scroll position"
+    );
     window.destroy();
 }

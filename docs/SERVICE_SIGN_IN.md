@@ -45,6 +45,9 @@ command-line arguments. They are not saved in settings or a token cache.
 Cancel stops the worker. Authorization expires after a bounded wait; authorize
 again if an access token expires during a later operation. Persistent sessions
 and refresh-token storage are not implemented.
+The progress dialog uses its response signal for cancellation. It does not race
+`AlertDialog::choose_future` against the worker: cancelling that future can pass
+a null response through the current Rust binding and abort the application.
 
 Offline tests cover the PKCE reference vector, callback state and host checks,
 ambiguous responses, token exchange parameters, Yandex confirmation events,
@@ -52,3 +55,6 @@ provider-error redaction and allowed browser hosts. These tests use simulated
 providers. Live Spotify and Yandex account authorization has not been verified.
 Run `meson test -C _builddir --suite import --print-errorlogs` after configuring
 Meson, or `python3 -I tests/test_service_auth.py` for the protocol tests alone.
+The ignored GUI test `sign_in_dialog_handles_completion_error_timeout_and_cancel`
+checks dialog teardown with simulated outcomes; run it on an isolated GTK display
+with temporary XDG directories and `GSETTINGS_BACKEND=memory`.

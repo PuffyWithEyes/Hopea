@@ -241,6 +241,11 @@ The loading indicator counts attempted files, including missing and invalid
 ones, and is cleared even when no songs can be added. Sharing starts after the
 load completes. This improves time to the first playable row; artwork decoding
 still runs on the main thread, so total indexing time depends on the files.
+Favorites restored after joining the embedded node use the same asynchronous
+local-file reader and yield between entries, including already queued tracks.
+That path must not run a synchronous file-reading loop on GTK's thread. It
+preserves the user's scroll position and keeps personal favorites separate if
+the listener switches to For You while a read is pending.
 
 Shuffling temporarily detaches the view's selection model before permuting the
 queue and reattaches the same model afterwards. This discards GTK's previous

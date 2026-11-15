@@ -82,28 +82,66 @@ impl LibraryPanel {
                     }
                 }
             };
-            let bounded = async {
-                match select(Box::pin(flow), Box::pin(glib::timeout_future_seconds(360))).await {
-                    Either::Left((result, _)) => result,
-                    Either::Right(_) => Err(i18n("Sign-in timed out. Please try again.")),
-                }
-            };
-            match select(
-                Box::pin(bounded),
-                Box::pin(prompt.clone().choose_future(self.window().as_ref())),
+            wait_for_sign_in(
+                &prompt,
+                self.window().as_ref(),
+                flow,
+                std::time::Duration::from_secs(360),
             )
             .await
-            {
-                Either::Left((result, _)) => result,
-                Either::Right(_) => Ok(None),
-            }
         };
         // Stop polling and close the loopback listener on cancellation or error.
         if worker.process.identifier().is_some() {
             worker.process.force_exit();
         }
-        prompt.close();
         result
+    }
+}
+
+type SignInResult = Result<Option<(String, String)>, String>;
+
+struct SignInPrompt {
+    dialog: adw::AlertDialog,
+    response: Option<glib::SignalHandlerId>,
+}
+
+impl Drop for SignInPrompt {
+    fn drop(&mut self) {
+        if let Some(response) = self.response.take() {
+            self.dialog.disconnect(response);
+        }
+        self.dialog.close();
+    }
+}
+
+async fn wait_for_sign_in(
+    prompt: &adw::AlertDialog,
+    parent: Option<&Window>,
+    flow: impl std::future::Future<Output = SignInResult>,
+    timeout: std::time::Duration,
+) -> SignInResult {
+    // Dropping choose_future cancels its GTask. libadwaita can return NULL
+    // from choose_finish on cancellation, but the Rust binding expects a
+    // non-null GString and aborts inside its C callback. A response signal
+    // needs no cancellable GTask when the worker finishes first.
+    let (sender, receiver) = async_channel::bounded(1);
+    let response = prompt.connect_response(None, move |_, _| {
+        let _ = sender.try_send(());
+    });
+    let _guard = SignInPrompt {
+        dialog: prompt.clone(),
+        response: Some(response),
+    };
+    AdwDialogExt::present(prompt, parent);
+    let bounded = async {
+        match select(Box::pin(flow), Box::pin(glib::timeout_future(timeout))).await {
+            Either::Left((result, _)) => result,
+            Either::Right(_) => Err(i18n("Sign-in timed out. Please try again.")),
+        }
+    };
+    match select(Box::pin(bounded), Box::pin(receiver.recv())).await {
+        Either::Left((result, _)) => result,
+        Either::Right(_) => Ok(None),
     }
 }
 
@@ -124,6 +162,63 @@ fn valid_auth_url(service: &str, url: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    #[ignore = "requires a GTK display and isolated XDG directories"]
+    fn sign_in_dialog_handles_completion_error_timeout_and_cancel() {
+        assert_eq!(std::env::var("GSETTINGS_BACKEND").as_deref(), Ok("memory"));
+        adw::init().unwrap();
+        gtk::Settings::default()
+            .unwrap()
+            .set_gtk_enable_animations(false);
+        let context = glib::MainContext::default();
+        context.block_on(async {
+            let dialog = || {
+                let prompt = adw::AlertDialog::builder().close_response("cancel").build();
+                prompt.add_response("cancel", "Cancel");
+                prompt
+            };
+            for expected in [
+                Ok(Some(("fixture-token".into(), String::new()))),
+                Err("fixture failure".into()),
+            ] {
+                let prompt = dialog();
+                let result = expected.clone();
+                let flow = async {
+                    glib::timeout_future(std::time::Duration::from_millis(10)).await;
+                    result
+                };
+                assert_eq!(
+                    wait_for_sign_in(&prompt, None, flow, std::time::Duration::from_secs(1)).await,
+                    expected
+                );
+                // Drain completion callbacks: the original crash happened in
+                // a later main-loop iteration after the losing future dropped.
+                glib::timeout_future(std::time::Duration::from_millis(30)).await;
+            }
+            let prompt = dialog();
+            assert!(wait_for_sign_in(
+                &prompt,
+                None,
+                futures::future::pending(),
+                std::time::Duration::from_millis(10)
+            )
+            .await
+            .is_err());
+            glib::timeout_future(std::time::Duration::from_millis(30)).await;
+            let prompt = dialog();
+            let flow = async {
+                glib::timeout_future(std::time::Duration::from_millis(10)).await;
+                prompt.close();
+                futures::future::pending::<SignInResult>().await
+            };
+            assert_eq!(
+                wait_for_sign_in(&prompt, None, flow, std::time::Duration::from_secs(1)).await,
+                Ok(None)
+            );
+            glib::timeout_future(std::time::Duration::from_millis(30)).await;
+        });
+    }
+
     #[test]
     fn sign_in_pages_are_restricted_to_the_selected_provider() {
         assert!(valid_auth_url(
