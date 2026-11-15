@@ -59,6 +59,18 @@ policy does not implement Android account authorization or account import:
 those remain unavailable until the desktop adapter workflow is ported.
 Native app handling still needs physical-device verification.
 
+### Import timeouts
+
+Yandex Music import uses a 45-second HTTP timeout instead of the adapter's
+five-second default. Timed-out read operations get at most three attempts,
+with two- and four-second delays. Progress and errors identify the operation
+(account status, liked songs, playlists, albums or track details) without
+including tokens, account identifiers or provider response bodies.
+An access refusal is reported separately and is not retried or used to request
+broader permissions. If a timeout interrupts catalogue reading after some songs
+have been found, the chooser retains them and explicitly warns that the library
+is incomplete. A timeout before any results remains a failure.
+
 ## Lifetime and verification
 
 Tokens pass between Hopea and its disposable adapters through pipes, never

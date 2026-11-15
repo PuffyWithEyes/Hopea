@@ -104,22 +104,46 @@ def spotify(request):
                           collection("album", album["id"], album.get("name"), picture(album.get("images"))), album)
 
 
+def yandex_read(request, stage, operation, *args):
+    """Retry only timed-out reads; keep diagnostics independent of provider data."""
+    from yandex_music.exceptions import TimedOutError, UnauthorizedError
+
+    def progress(message):
+        if request.get("_reading_catalog"):
+            request["_progress"](message)
+
+    progress(f"Reading Yandex Music {stage}…")
+    for attempt in range(3):
+        try:
+            return operation(*args)
+        except UnauthorizedError:
+            raise ImportFailure(f"Yandex Music refused access while reading {stage}. Sign in again. If this persists, the token may not permit this operation; Hopea will not request broader permissions automatically.") from None
+        except TimedOutError:
+            if attempt == 2:
+                raise TemporaryServiceFailure(f"Yandex Music did not respond while reading {stage} after 3 attempts. Check access to api.music.yandex.net and your connection or VPN. A timeout does not establish that sign-in or permissions are invalid.") from None
+        progress(f"Waiting for Yandex Music {stage}. Retrying ({attempt + 2}/3)…")
+        time.sleep(2 * (attempt + 1))
+
+
 def yandex(request):
     from yandex_music import Client
-    client = Client(request["secret"]).init()
+    client = Client(request["secret"])
+    client.request.set_timeout(45)
+    read = lambda stage, operation, *args: yandex_read(request, stage, operation, *args)
+    read("account status", client.init)
 
     def tracks(shorts, group, album=None):
         # Fetch metadata in batches; a liked-tracks response holds IDs only.
         ids = [str(t.id) for t in shorts]
         positions = {key: i + 1 for i, key in enumerate(ids)} if album else {}
         for start in range(0, len(ids), 100):
-            for track in client.tracks(ids[start:start + 100]) or []:
+            for track in read("track details", client.tracks, ids[start:start + 100]) or []:
                 def download_url(track=track):
-                    choices = [d for d in track.get_download_info() or []
+                    choices = [d for d in read("audio availability", track.get_download_info) or []
                                if d.codec == "mp3"]
                     if not choices:
                         return None
-                    return max(choices, key=lambda d: d.bitrate_in_kbps).get_direct_link()
+                    return read("audio link", max(choices, key=lambda d: d.bitrate_in_kbps).get_direct_link)
                 record = album or next(iter(getattr(track, "albums", []) or []), None)
                 cover = getattr(track, "cover_uri", None) or getattr(record, "cover_uri", None)
                 if cover:
@@ -131,11 +155,11 @@ def yandex(request):
                            track_number=getattr(position, "index", None) or positions.get(str(track.id)), cover=cover, collection=group,
                            duration_ms=getattr(track, "duration_ms", None))
 
-    likes = client.users_likes_tracks()
+    likes = read("liked songs", client.users_likes_tracks)
     if likes:
         yield from tracks(likes.tracks, collection("library", "likes", "Liked songs"))
-    playlists = list(client.users_playlists_list() or [])
-    playlists.extend(like.playlist for like in client.users_likes_playlists() or []
+    playlists = list(read("playlists", client.users_playlists_list) or [])
+    playlists.extend(like.playlist for like in read("saved playlists", client.users_likes_playlists) or []
                      if like.playlist)
     seen = set()
     for summary in playlists:
@@ -143,12 +167,12 @@ def yandex(request):
         if key in seen:
             continue
         seen.add(key)
-        playlist = client.users_playlists(summary.kind, summary.owner.uid)
+        playlist = read("playlist details", client.users_playlists, summary.kind, summary.owner.uid)
         if playlist:
-            yield from tracks(playlist.fetch_tracks(), collection("playlist", f"{key[0]}:{key[1]}",
+            yield from tracks(read("playlist songs", playlist.fetch_tracks), collection("playlist", f"{key[0]}:{key[1]}",
                                                                  getattr(playlist, "title", None)))
-    for like in client.users_likes_albums() or []:
-        album = client.albums_with_tracks(like.album.id) if like.album else None
+    for like in read("saved albums", client.users_likes_albums) or []:
+        album = read("album songs", client.albums_with_tracks, like.album.id) if like.album else None
         if album:
             yield from tracks([track for volume in album.volumes for track in volume],
                               collection("album", like.album.id, getattr(album, "title", None)), album)

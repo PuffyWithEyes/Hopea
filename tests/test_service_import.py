@@ -14,7 +14,7 @@ import sys
 import tempfile
 from types import SimpleNamespace as Obj
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 SOURCE = Path(__file__).resolve().parents[1] / "src/library/service_import.py"
 spec = importlib.util.spec_from_file_location("service_import", SOURCE)
@@ -24,6 +24,22 @@ spec.loader.exec_module(worker)
 
 class ReadTimeout(Exception):
     pass
+
+
+class YandexUnauthorized(Exception):
+    pass
+
+
+@contextlib.contextmanager
+def yandex_client(client):
+    timeouts = []
+    client.request = Obj(set_timeout=timeouts.append)
+    if not hasattr(client, "init"):
+        client.init = lambda: client
+    with patch.dict(sys.modules, {
+            "yandex_music": Obj(Client=lambda _: client),
+            "yandex_music.exceptions": Obj(TimedOutError=ReadTimeout, UnauthorizedError=YandexUnauthorized)}):
+        yield timeouts
 
 
 @contextlib.contextmanager
@@ -471,14 +487,76 @@ class ImportTests(unittest.TestCase):
             users_likes_albums=lambda: [Obj(id="like-id", album=Obj(id="album-id"))],
             albums_with_tracks=album,
         )
-        with patch.dict(sys.modules, {"yandex_music": Obj(Client=lambda _: Obj(init=lambda: client))}):
+        with yandex_client(client) as timeouts:
             songs = list(worker.yandex({"secret": "do-not-log"}))
+        self.assertEqual(timeouts, [45])
         self.assertEqual(len(songs), 207)
         self.assertEqual([len(b) for b in batches], [100, 100, 5, 1, 1])
         self.assertEqual(albums, ["album-id"])
         self.assertEqual(songs[-1]["album"], "Album")
         self.assertEqual(songs[-1]["track_number"], 1)
         self.assertEqual(songs[-1]["cover"], "https://avatars.yandex.net/cover/600x600")
+
+    def test_yandex_timeout_retries_same_batch_and_keeps_song(self):
+        events = []
+        track = Obj(id="song", title="Song", artists=[])
+        client = Obj(
+            init=Mock(side_effect=[ReadTimeout("secret-token"), None]),
+            users_likes_tracks=lambda: Obj(tracks=[Obj(id="song")]),
+            tracks=Mock(side_effect=[ReadTimeout("private-url"), [track]]),
+            users_playlists_list=lambda: [], users_likes_playlists=lambda: [],
+            users_likes_albums=lambda: [])
+        with yandex_client(client), tempfile.TemporaryDirectory() as directory, patch.object(worker.time, "sleep") as sleep:
+            worker.browse({"service": "yandex", "secret": "secret-token", "directory": directory},
+                          events.append, [json.dumps({"finish": True})])
+        self.assertEqual(client.init.call_count, 2)
+        self.assertEqual(client.tracks.call_count, 2)
+        self.assertEqual(client.tracks.call_args_list[0], client.tracks.call_args_list[1])
+        self.assertEqual([call.args for call in sleep.call_args_list], [(2,), (2,)])
+        self.assertEqual(len([event for event in events if event["event"] == "catalog_track"]), 1)
+        self.assertEqual(events[-1]["event"], "ready")
+        self.assertTrue(any("account status. Retrying (2/3)" in e.get("message", "") for e in events))
+        self.assertTrue(any("track details. Retrying (2/3)" in e.get("message", "") for e in events))
+        self.assertNotIn("secret-token", json.dumps(events))
+        self.assertNotIn("private-url", json.dumps(events))
+
+    def test_yandex_exhausted_timeout_preserves_partial_catalog(self):
+        events = []
+        client = Obj(
+            users_likes_tracks=lambda: Obj(tracks=[Obj(id="song")]),
+            tracks=lambda _: [Obj(id="song", title="Song", artists=[])],
+            users_playlists_list=Mock(side_effect=ReadTimeout("secret-token")))
+        with yandex_client(client), tempfile.TemporaryDirectory() as directory, patch.object(worker.time, "sleep") as sleep:
+            worker.browse({"service": "yandex", "secret": "secret-token", "directory": directory},
+                          events.append, [json.dumps({"finish": True})])
+        self.assertEqual(client.users_playlists_list.call_count, 3)
+        self.assertEqual([call.args for call in sleep.call_args_list], [(2,), (4,)])
+        self.assertEqual(len([e for e in events if e["event"] == "catalog_track"]), 1)
+        warning = next(e["message"] for e in events if e["event"] == "warning")
+        self.assertIn("Only part of the library", warning)
+        self.assertIn("playlists after 3 attempts", warning)
+        self.assertEqual(events[-1]["event"], "ready")
+        self.assertNotIn("secret-token", json.dumps(events))
+
+    def test_yandex_timeout_without_results_is_failure(self):
+        events = []
+        client = Obj(init=Mock(side_effect=ReadTimeout("secret-token")))
+        with yandex_client(client), patch.object(worker.time, "sleep"), tempfile.TemporaryDirectory() as directory:
+            with self.assertRaisesRegex(worker.TemporaryServiceFailure, "account status after 3 attempts") as error:
+                worker.browse({"service": "yandex", "secret": "secret-token", "directory": directory}, events.append, [])
+        self.assertEqual(client.init.call_count, 3)
+        self.assertFalse(any(e["event"] == "ready" for e in events))
+        self.assertNotIn("secret-token", str(error.exception))
+
+    def test_yandex_refused_permissions_are_not_retried_or_exposed(self):
+        client = Obj(init=Mock(side_effect=YandexUnauthorized("secret-token private-url")))
+        with yandex_client(client), patch.object(worker.time, "sleep") as sleep:
+            with self.assertRaisesRegex(worker.ImportFailure, "refused access.*account status") as error:
+                list(worker.yandex({"secret": "secret-token"}))
+        self.assertEqual(client.init.call_count, 1)
+        sleep.assert_not_called()
+        self.assertNotIn("secret-token", str(error.exception))
+        self.assertNotIn("private-url", str(error.exception))
 
     def test_youtube_reads_all_collection_sections(self):
         def track(ident):
