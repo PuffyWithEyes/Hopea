@@ -136,14 +136,30 @@ def spotify(client_id, emit):
         raise AuthError('Unable to complete Spotify sign-in. Check the connection and try again.') from None
 
 
+def valid_yandex_confirmation(page, user_code):
+    if (not isinstance(page, str) or len(page) > 2048
+            or any(ord(c) <= 32 or ord(c) == 127 for c in page)
+            or not isinstance(user_code, str)
+            or not re.fullmatch(r'[A-Za-z0-9-]{1,64}', user_code)):
+        return False
+    try:
+        url = urlsplit(page)
+        # The live OAuth endpoint returns ya.ru/device, while the API docs
+        # also describe the oauth.yandex.ru/com confirmation pages.
+        return (url.scheme == 'https'
+                and url.hostname in ('ya.ru', 'oauth.yandex.ru', 'oauth.yandex.com')
+                and url.path in ('/device', '/device/')
+                and url.username is None and url.password is None
+                and url.port in (None, 443) and not url.query and not url.fragment)
+    except ValueError:
+        return False
+
+
 def yandex(emit):
     from yandex_music import Client
 
     def show_code(code):
-        url = urlsplit(code.verification_url)
-        if (url.scheme != 'https' or url.hostname not in ('oauth.yandex.ru', 'oauth.yandex.com')
-                or url.username or url.password or url.port not in (None, 443)
-                or not re.fullmatch(r'[A-Za-z0-9-]{1,64}', code.user_code)):
+        if not valid_yandex_confirmation(code.verification_url, code.user_code):
             raise AuthError('Yandex returned an invalid confirmation page or code.')
         emit({'event': 'auth_prompt', 'url': code.verification_url, 'user_code': code.user_code})
 

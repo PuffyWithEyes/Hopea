@@ -35,8 +35,20 @@ References: [PKCE authorization](https://developer.spotify.com/documentation/web
 Hopea displays a short code and opens Yandex's confirmation page. Enter the
 code and approve access. The `yandex-music` adapter's Device Flow polls for
 completion and returns the access token without reading browser cookies.
+The live endpoint can return `https://ya.ru/device`; the documented
+`https://oauth.yandex.ru/device` and `https://oauth.yandex.com/device` pages are
+also accepted. Both the adapter and the desktop UI validate the exact host and
+device-confirmation path before opening it.
 An adapter version without Device Flow reports an update/manual-sign-in hint.
 See the [adapter's authorization guide](https://ym.marshal.dev/token/).
+
+On Android, service links first target the official Yandex Music package
+(`ru.yandex.music`). If it is missing, disabled or cannot handle the original
+link, Hopea falls back to normal system URL handling and the user's browser.
+Confirmation URLs are never replaced with the app's home screen. This opening
+policy does not implement Android account authorization or account import:
+those remain unavailable until the desktop adapter workflow is ported.
+Native app handling still needs physical-device verification.
 
 ## Lifetime and verification
 

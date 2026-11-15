@@ -14,6 +14,9 @@ cp src/gtk/*.ui "$build_dir/src/gtk/"
 if ! grep -q 'Hopea: prefer' subprojects/gtk/gdk/android/glue/java/org/gtk/android/ToplevelActivity.java; then
   patch -d subprojects/gtk -p1 < build-aux/android/app-links.patch
 fi
+if ! grep -q 'Hopea: Yandex Music' subprojects/gtk/gdk/android/glue/java/org/gtk/android/ToplevelActivity.java; then
+  patch --batch --fuzz=0 -d subprojects/gtk -p1 < build-aux/android/yandex-app-links.patch
+fi
 if ! grep -q 'Hopea uses private' subprojects/gtk/gdk/android/glue/java/org/gtk/android/RuntimeApplication.java; then
   patch -d subprojects/gtk -p1 < build-aux/android/runtime-paths.patch
 fi

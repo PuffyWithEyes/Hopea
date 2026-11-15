@@ -1,0 +1,27 @@
+--- a/gdk/android/glue/java/org/gtk/android/ToplevelActivity.java
++++ b/gdk/android/glue/java/org/gtk/android/ToplevelActivity.java
+@@ -596,6 +596,24 @@
+ 				&& intent.getComponent() == null && intent.getPackage() == null) {
+ 			Intent appIntent = new Intent(intent);
+ 			appIntent.addCategory(Intent.CATEGORY_BROWSABLE);
++			String host = uri.getHost();
++			boolean yandexConfirmation = ("ya.ru".equalsIgnoreCase(host)
++					|| "oauth.yandex.ru".equalsIgnoreCase(host) || "oauth.yandex.com".equalsIgnoreCase(host))
++					&& ("/device".equals(uri.getPath()) || "/device/".equals(uri.getPath()));
++			if ("https".equalsIgnoreCase(uri.getScheme()) && (yandexConfirmation
++					|| "music.yandex.ru".equalsIgnoreCase(host) || "music.yandex.com".equalsIgnoreCase(host))) {
++				// Hopea: Yandex Music gets the original link before any browser.
++				appIntent.setPackage("ru.yandex.music");
++				try {
++					super.startActivity(appIntent, options);
++					return;
++				} catch (android.content.ActivityNotFoundException | SecurityException noMusicHandler) {
++					// Missing, disabled, or unable to handle this confirmation URL.
++					// Do not substitute the app's home screen for authorization.
++				}
++				super.startActivity(intent, options);
++				return;
++			}
+ 			appIntent.addFlags(Intent.FLAG_ACTIVITY_REQUIRE_NON_BROWSER);
+ 			try {
+ 				super.startActivity(appIntent, options);

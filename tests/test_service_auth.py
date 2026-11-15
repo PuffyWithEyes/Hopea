@@ -88,13 +88,28 @@ class AuthTests(unittest.TestCase):
             def device_auth(self, **kwargs):
                 self_kwargs = kwargs
                 assert self_kwargs['timeout'] == 300
-                self_kwargs['on_code'](Obj(verification_url='https://oauth.yandex.ru/device', user_code='ABCD-EFGH', device_code='private-code'))
+                self_kwargs['on_code'](Obj(verification_url='https://ya.ru/device', user_code='ABCD-EFGH', device_code='private-code'))
                 return Obj(access_token='fixture-token')
         with patch.dict(sys.modules, yandex_music=Obj(Client=Client)):
             self.assertEqual(auth.yandex(events.append), 'fixture-token')
         self.assertEqual(events[0]['user_code'], 'ABCD-EFGH')
+        self.assertEqual(events[0]['url'], 'https://ya.ru/device')
         self.assertNotIn('private-code', repr(events))
         self.assertNotIn('fixture-token', repr(events))
+
+    def test_yandex_confirmation_pages_and_codes_are_validated(self):
+        for page in ['https://ya.ru/device', 'https://oauth.yandex.ru/device',
+                     'https://oauth.yandex.com/device', 'https://ya.ru:443/device/']:
+            self.assertTrue(auth.valid_yandex_confirmation(page, 'abcd1234'), page)
+        for page in ['http://ya.ru/device', 'https://ya.ru.evil.test/device',
+                     'https://evil.test/device', 'https://ya.ru/other',
+                     'https://ya.ru/device?redirect=https://evil.test', 'https://ya.ru/device#fragment',
+                     'https://ya.ru:8443/device', 'https://evil.test@ya.ru/device', 'https://@ya.ru/device',
+                     'https://ya.ru/de\nvice', 'https://ya.ru/device/extra', 'https://ya.ru:invalid/device',
+                     'https://[broken/device', None]:
+            self.assertFalse(auth.valid_yandex_confirmation(page, 'abcd1234'), page)
+        for code in ['', 'a' * 65, 'ab\ncd', 'code with spaces', '<code>', None, 123]:
+            self.assertFalse(auth.valid_yandex_confirmation('https://ya.ru/device', code))
 
     def test_yandex_rejects_foreign_pages_and_redacts_provider_errors(self):
         class Client:

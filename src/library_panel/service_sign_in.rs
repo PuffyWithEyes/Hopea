@@ -146,6 +146,9 @@ async fn wait_for_sign_in(
 }
 
 fn valid_auth_url(service: &str, url: &str) -> bool {
+    if url.len() > 2048 || url.chars().any(|c| c <= ' ' || c == '\u{7f}') {
+        return false;
+    }
     let Ok(uri) = glib::Uri::parse(url, glib::UriFlags::NONE) else {
         return false;
     };
@@ -154,7 +157,11 @@ fn valid_auth_url(service: &str, url: &str) -> bool {
     }
     match (service, uri.host().as_deref()) {
         ("spotify", Some("accounts.spotify.com")) => uri.path() == "/authorize",
-        ("yandex", Some("oauth.yandex.ru" | "oauth.yandex.com")) => true,
+        ("yandex", Some("ya.ru" | "oauth.yandex.ru" | "oauth.yandex.com")) => {
+            matches!(uri.path().as_str(), "/device" | "/device/")
+                && uri.query().is_none()
+                && uri.fragment().is_none()
+        }
         _ => false,
     }
 }
@@ -226,6 +233,28 @@ mod tests {
             "https://accounts.spotify.com/authorize?state=fixture"
         ));
         assert!(valid_auth_url("yandex", "https://oauth.yandex.ru/device"));
+        for url in [
+            "https://ya.ru/device",
+            "https://oauth.yandex.com/device",
+            "https://ya.ru:443/device/",
+        ] {
+            assert!(valid_auth_url("yandex", url));
+        }
+        for url in [
+            "http://ya.ru/device",
+            "https://ya.ru.evil.test/device",
+            "https://evil.test/device",
+            "https://ya.ru/other",
+            "https://ya.ru/device?redirect=https://evil.test",
+            "https://ya.ru/device#fragment",
+            "https://ya.ru:8443/device",
+            "https://evil.test@ya.ru/device",
+            "https://@ya.ru/device",
+            "https://ya.ru/de\nvice",
+            "https://ya.ru/device/extra",
+        ] {
+            assert!(!valid_auth_url("yandex", url), "{url:?}");
+        }
         for url in [
             "http://accounts.spotify.com/authorize",
             "https://accounts.spotify.com.evil.test/authorize",

@@ -52,7 +52,7 @@ SPDX-FileCopyrightText = "2026 Daniil Klimov"
 SPDX-License-Identifier = "GPL-3.0-or-later"
 
 [[annotations]]
-path = ["build-aux/android/app-links.patch", "build-aux/android/runtime-paths.patch", "build-aux/android/fdk-ndk.patch"]
+path = ["build-aux/android/app-links.patch", "build-aux/android/yandex-app-links.patch", "build-aux/android/runtime-paths.patch", "build-aux/android/fdk-ndk.patch"]
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 Daniil Klimov"
 SPDX-License-Identifier = "GPL-3.0-or-later"
