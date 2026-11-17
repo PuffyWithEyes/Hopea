@@ -1,18 +1,17 @@
-# Разработка Hopea
+# Contributing to Hopea
 
-У проекта нет особых требований к способу написания кода. Можно присылать
-исправления, предложения и переводы, в том числе подготовленные с помощью ИИ.
-Ответственность за проверку результата остаётся у автора изменений.
-Обсуждения и pull request относятся к репозиторию Hopea, а не к проекту,
-от которого он был ответвлён.
+The project does not prescribe how contributors write code. Fixes, suggestions
+and translations are welcome, including work prepared with AI assistance.
+Contributors remain responsible for checking their changes. Discussions and pull
+requests belong in the Hopea repository, not the project it was forked from.
 
-Полезно кратко описать проблему, что изменилось и как это проверено.
-Для ошибки приложите шаги воспроизведения, систему и версию приложения.
-Не публикуйте cookies, токены, приватные ссылки и содержимое профиля браузера.
+Briefly describe the problem, the change and how you checked it. Bug reports
+should include reproduction steps, the operating system and application version.
+Do not publish cookies, tokens, private links or browser profile contents.
 
-## Сборка
+## Building
 
-Команды выполняются из корня проекта. На NixOS или с Nix:
+Run these commands from the project root. On NixOS or with Nix installed:
 
 ```sh
 nix-shell nix/shell.nix
@@ -21,15 +20,16 @@ meson compile -C _builddir
 meson devenv -C _builddir ./src/hopea
 ```
 
-Также доступен `nix develop` для полного Git checkout или распакованного архива.
-Обе команды используют `nixpkgs` из `flake.lock`, как GitHub Actions; системный
-канал Nix не подменяет версии зависимостей. При изменении окружения проверяйте
-`nix develop --command bash tests/test_nix.sh` перед отправкой.
-Meson создаёт `src/config.rs` и ресурсы интерфейса; одного `cargo run` недостаточно.
-После изменения Blueprint выполните компиляцию повторно, чтобы обновился GResource.
-Системные зависимости и ограничения платформ перечислены в [README](../README.md).
+You can also use `nix develop` from a complete Git checkout or an extracted source
+archive. Both commands use the `nixpkgs` revision in `flake.lock`, as GitHub Actions
+does; the system's Nix channel does not replace the pinned dependencies. After
+changing the environment, run `nix develop --command bash tests/test_nix.sh`
+before submitting the change.
+Meson generates `src/config.rs` and the UI resources; `cargo run` alone is not
+sufficient. Recompile after editing Blueprint files to update the GResource.
+See [README](../README.md) for system dependencies and platform limitations.
 
-## Проверки
+## Checks
 
 ```sh
 cargo fmt --all -- --check
@@ -41,24 +41,24 @@ meson test -C _builddir --suite import --print-errorlogs
 bash tests/test_nix.sh
 ```
 
-Не используйте `cargo test --workspace`: Spotify helper и P2P node намеренно
-собираются раздельно из-за несовместимых feature-комбинаций зависимостей.
-GUI-тест запускается отдельно с GTK-дисплеем, временными XDG-каталогами и
-`GSETTINGS_BACKEND=memory`. Тесты реальных сервисов требуют предоставленных
-ссылок или явного разрешения на использование авторизованного профиля.
-Подробности — в [инструкции импорта](IMPORTING.md).
+Do not use `cargo test --workspace`: the Spotify helper and P2P node are built
+separately because their dependencies have incompatible feature combinations.
+Run GUI tests separately with a GTK display, temporary XDG directories and
+`GSETTINGS_BACKEND=memory`. Tests against live services require supplied links or
+explicit permission to use an authenticated profile. See the
+[import guide](IMPORTING.md) for details.
 
-Меняйте тесты соразмерно изменению. Для исправления ошибки полезен тест её
-воспроизведения; для небольшого перемещения файлов достаточно проверки ссылок
-и сборки. Не очищайте рабочие кеши и пользовательскую медиатеку ради тестов.
+Keep testing proportional to the change. A regression test is useful for a bug
+fix; link and build checks are enough for a small file relocation. Do not clear
+working caches or the user's music library to run tests.
 
-## Где искать информацию
+## Further information
 
-- [Архитектура и важные связи между компонентами](ARCHITECTURE.md).
-- [Безопасность и протокол узла](../node/README.md).
-- [Nix, NixOS и Home Manager](../nix/README.md).
-- [Пакеты и GitHub Actions](../packaging/README.md).
+- [Architecture and component interactions](ARCHITECTURE.md).
+- [Node security and protocol](../node/README.md).
+- [Nix, NixOS and Home Manager](../nix/README.md).
+- [Packages and GitHub Actions](../packaging/README.md).
 
-Лицензии и исходные сведения об авторах сохраняются. Для новых файлов используйте
-SPDX-заголовок или запись в `REUSE.toml`; лицензионные условия приведены в
-[LICENSES](../LICENSES) и [ADDITIONAL-TERMS.md](../ADDITIONAL-TERMS.md).
+Preserve licenses and existing author notices. Add SPDX headers or an entry in
+`REUSE.toml` for new files. Licensing terms are in [LICENSES](../LICENSES) and
+[ADDITIONAL-TERMS.md](../ADDITIONAL-TERMS.md).

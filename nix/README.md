@@ -1,16 +1,23 @@
-# Hopea через Nix
+# Hopea with Nix
 
-В корне остаются только `flake.nix` и `flake.lock`. Рецепт пакета —
-`nix/package.nix`, окружение разработки — `nix/shell.nix`. Все пять модулей
-установки используют одну реализацию в flake.
+The flake tracks the stable `nixos-26.05` branch. `flake.lock` pins an exact
+revision shared by `nix build`, `nix develop`, and `nix-shell nix/shell.nix`.
+Run `nix flake update nixpkgs` to receive updates within that stable release.
+Moving to a newer stable release requires changing the input in `flake.nix`
+and updating the lock file.
 
-Образ системы не нужен. `nix run` собирает пакет или получает готовые зависимости
-из кеша и запускает приложение; `nix profile add` устанавливает его в профиль.
-Hopea пока не опубликована в nixpkgs и не имеет своего бинарного кеша.
+Only `flake.nix` and `flake.lock` live at the repository root. The package recipe
+is in `nix/package.nix`, and the development environment is in `nix/shell.nix`.
+All five installation modules share one implementation in the flake.
 
-## Из исходников
+No system image is needed. `nix run` builds the package or downloads available
+dependencies from the cache, then starts the application. `nix profile add`
+installs it into your profile. Hopea is not yet published in nixpkgs and does not
+have its own binary cache.
 
-Команды выполняются в корне распакованного исходного архива:
+## Building from source
+
+Run these commands from the root of an extracted source archive:
 
 ```sh
 nix build .#hopea
@@ -18,41 +25,41 @@ nix run .#hopea
 nix profile add .#hopea
 ```
 
-В старых версиях Nix вместо `profile add` используется `profile install`.
-Если flakes отключены, добавьте `--extra-experimental-features 'nix-command flakes'`
-после `nix`. Сборка включает ресурсы, темы значков, кодеки, FFmpeg, Python-библиотеки
-импорта и Spotify helper. Pip при запуске приложения не используется.
-Версии зависимостей закреплены `flake.lock`, `Cargo.lock` и хешами исходников.
-Python-пакеты из nixpkgs могут отличаться от версий pip-окружения разработки.
+Older Nix versions use `profile install` instead of `profile add`. If flakes are
+disabled, add `--extra-experimental-features 'nix-command flakes'` after `nix`.
+The build includes resources, icon themes, codecs, FFmpeg, Python import libraries
+and the Spotify helper. The application does not run pip at startup.
+Dependency versions are pinned by `flake.lock`, `Cargo.lock` and source hashes.
+Python packages from nixpkgs may differ from those in the development pip environment.
 
-В Git flakes видят только добавленные в Git файлы. Для текущей рабочей копии
-с ещё не добавленными исходниками используйте безопасный архив:
+Git flakes only include files added to Git. To build a working copy containing
+source files that have not been added yet, create a filtered source archive:
 
 ```sh
 bash build-aux/make-dist.sh
 mkdir -p /tmp/hopea-install
-# В архиве уже есть каталог hopea.
+# The archive already contains a hopea directory.
 tar -xzf dist/hopea-src.tar.gz -C /tmp/hopea-install
 cd /tmp/hopea-install/hopea
 nix build .#hopea
 ```
 
-Архив собирается по списку исходных каталогов; локальные окружения, скрытые
-файлы, симлинки и кеши сборки исключены. Не помещайте секреты в исходники.
-Для разработки: `nix develop`, либо `nix-shell nix/shell.nix` без flakes.
+The archive uses an allowlist of source directories. Local environments, hidden
+files, symlinks and build caches are excluded. Do not put secrets in source files.
+For development, use `nix develop`, or `nix-shell nix/shell.nix` without flakes.
 
-## NixOS, Home Manager, nix-darwin, Nix-on-Droid и NixBSD
+## NixOS, Home Manager, nix-darwin, Nix-on-Droid and NixBSD
 
-В flake конфигурации добавьте input с исходниками Hopea. До публикации репозитория
-это может быть абсолютный путь к распакованному архиву:
+Add the Hopea source as an input to your configuration flake. Before publishing
+the repository, this can be an absolute path to an extracted archive:
 
 ```nix
 inputs.hopea.url = "path:/absolute/path/to/hopea";
 ```
 
-Передайте `hopea` в аргументы модуля через `specialArgs = { inherit hopea; };`
-(NixOS/nix-darwin) или `extraSpecialArgs = { inherit hopea; };` (Home Manager).
-Пример модуля Home Manager:
+Pass `hopea` to modules through `specialArgs = { inherit hopea; };`
+(NixOS/nix-darwin) or `extraSpecialArgs = { inherit hopea; };` (Home Manager).
+Example Home Manager module:
 
 ```nix
 { hopea, pkgs, ... }: {
@@ -62,57 +69,59 @@ inputs.hopea.url = "path:/absolute/path/to/hopea";
 }
 ```
 
-Выберите соответствующий экспорт:
+Choose the appropriate export:
 
-| Конфигурация | Модуль | Куда добавляется пакет |
+| Configuration | Module | Package destination |
 | --- | --- | --- |
-| Home Manager, отдельно или внутри системы | `homeManagerModules.default` | `home.packages` |
-| NixOS, включая NixOS-WSL | `nixosModules.default` | `environment.systemPackages` |
-| macOS с nix-darwin | `darwinModules.default` | `environment.systemPackages` |
+| Home Manager, standalone or within a system | `homeManagerModules.default` | `home.packages` |
+| NixOS, including NixOS-WSL | `nixosModules.default` | `environment.systemPackages` |
+| macOS with nix-darwin | `darwinModules.default` | `environment.systemPackages` |
 | Nix-on-Droid | `nixOnDroidModules.default` | `environment.packages` |
-| NixBSD (экспериментально) | `nixbsdModules.default` | `environment.systemPackages` |
+| NixBSD (experimental) | `nixbsdModules.default` | `environment.systemPackages` |
 
-В каждом случае опции одинаковы: `programs.hopea.enable` и `programs.hopea.package`.
-Указание пакета из flake использует закреплённые зависимости Hopea; без явного
-`package` рецепт использует `pkgs` вашей конфигурации. Старые nixpkgs могут не иметь
-нужных версий GTK/Rust. Не подключайте системный и пользовательский модуль одновременно,
-если достаточно одной установки. Модули не включают раздачу, автозапуск, VPN или
-сетевые разрешения и не изменяют пользовательские настройки.
+Every module exposes the same options: `programs.hopea.enable` and
+`programs.hopea.package`. Selecting the flake package uses Hopea's pinned
+dependencies. Without an explicit `package`, the recipe uses your configuration's
+`pkgs`. Older nixpkgs revisions may lack the required GTK/Rust versions.
+Do not enable both the system and user modules if one installation is sufficient.
+The modules do not enable sharing, autostart, VPN or network permissions, and do
+not change user settings.
 
-Для overlay: `nixpkgs.overlays = [ hopea.overlays.default ];`, затем `pkgs.hopea`.
-Для собственного набора пакетов: `hopea.lib.mkPackage pkgs`.
+For the overlay, use `nixpkgs.overlays = [ hopea.overlays.default ];`, then
+`pkgs.hopea`. To supply your own package set, use `hopea.lib.mkPackage pkgs`.
 
-## Платформы и ограничения
+## Platforms and limitations
 
-| Система | Путь запуска | Проверка / ограничение |
+| System | How it runs | Verification / limitation |
 | --- | --- | --- |
-| Linux, NixOS, обычный Nix | Нативный пакет x86_64/aarch64 | Вычисление обоих рецептов; сборка проверяется на x86_64 Linux |
-| macOS / nix-darwin | Нативный пакет Intel/Apple Silicon | Рецепты вычисляются; нужен тест сборки и GUI на Mac. Закреплённый nixpkgs предупреждает о прекращении поддержки Intel Mac после 26.05 |
-| Windows через Nix | WSL2 + WSLg, Linux-пакет | WSL2 использует виртуальную машину; требует проверки аудио, браузера и сети на Windows |
-| Windows без виртуальной машины | Нативная `.exe`-сборка | `build-aux/windows/build.sh` под MSYS2 UCRT64; не Nix-пакет, нужен тест на Windows |
-| Nix-on-Droid | Linux-пакет aarch64 в PRoot | Нужны отдельные графическая и звуковая сессии; установка пакета не создаёт Android Activity или медиасервис |
-| Android без Linux-окружения | Нативный APK | См. [Android preview](../README.md#android-preview) |
-| FreeBSD / GhostBSD / HardenedBSD / NixBSD | Нативный рецепт с BSD-набором пакетов | Закреплённый upstream nixpkgs блокирует `libproxy` для FreeBSD. Модуль подготовлен, готовой сборки нет; нужен совместимый набор зависимостей |
-| NetBSD / OpenBSD / DragonFly и производные | Нативный source-build с пакетами ОС | Полный Nix-стек Hopea не подтверждён; см. `build-aux/desktop/build.sh`. Требуется проверка версий и нативной сборки |
-| Redox | Отдельный порт | Нужна большая работа над GTK/GStreamer и платформенным backend; Nix-модуль это не решает |
+| Linux, NixOS, standalone Nix | Native x86_64/aarch64 package | Both recipes can be evaluated; build checks run on x86_64 Linux |
+| macOS / nix-darwin | Native Intel/Apple Silicon package | Recipes can be evaluated; native build and GUI checks are still needed. Upstream nixpkgs announced the end of Intel Mac support after 26.05 |
+| Windows with Nix | WSL2 + WSLg, Linux package | WSL2 uses a virtual machine; audio, browser and networking need testing on Windows |
+| Windows without a virtual machine | Native `.exe` build | `build-aux/windows/build.sh` under MSYS2 UCRT64; not a Nix package; requires Windows testing |
+| Nix-on-Droid | Linux aarch64 package in PRoot | Requires separate graphical and audio sessions; installation does not create an Android Activity or media service |
+| Android without a Linux environment | Native APK | See [Android preview](../README.md#android-preview) |
+| FreeBSD / GhostBSD / HardenedBSD / NixBSD | Native recipe with a BSD package set | The previously checked upstream nixpkgs revision blocked `libproxy` on FreeBSD. The module is available, but no verified build exists; a compatible dependency set is needed |
+| NetBSD / OpenBSD / DragonFly and derivatives | Native source build with OS packages | Hopea's full Nix stack is unverified; see `build-aux/desktop/build.sh`. Dependency versions and native builds need checking |
+| Redox | Separate port | Requires substantial GTK/GStreamer and platform backend work; a Nix module does not provide that port |
 
-Никакая из команд Hopea не создаёт и не запускает виртуальную машину автоматически.
-WSL — отдельный добровольный вариант, если нужен именно Nix на Windows.
-Nix-on-Droid не предоставляет доступ к приватным данным браузеров Android.
-В WSL/PRoot VPN на хосте может быть невидим приложению; проверка VPN не заменяет
-межсетевой экран. Не отключайте её автоматически ради запуска на такой системе.
+None of Hopea's commands automatically creates or starts a virtual machine.
+WSL is an optional, separate route for running Nix on Windows.
+Nix-on-Droid cannot access the private data of Android browsers.
+In WSL/PRoot, a host VPN may be invisible to the application. VPN detection is not
+a firewall; do not disable it automatically to make the application start there.
 
-На обычном Linux могут потребоваться настройки GPU/порталов вашего дистрибутива.
-На BSD нужен session D-Bus для MPRIS/трея. На macOS это пока запуск `hopea` из
-терминала, а не подписанный standalone `.app`.
+Other Linux distributions may need their own GPU/portal configuration.
+BSD needs a session D-Bus for MPRIS and tray integration. On macOS, this currently
+starts `hopea` from a terminal; it does not produce a signed standalone `.app`.
 
-Проверки модулей: `bash tests/test_nix.sh` (20 сочетаний включения и подмены пакета).
-Они проверяют контракт модулей и не заменяют запуск на каждой ОС.
+Run `bash tests/test_nix.sh` to check 20 module combinations covering enablement
+and package overrides, then configure the actual package in a Nix sandbox.
+These checks do not replace runtime testing on each OS.
 
-## Первичные источники
+## Primary sources
 
-- [Nix: поддерживаемые платформы](https://nix.dev/manual/nix/2.34/installation/supported-platforms)
-- [NixBSD: нативный FreeBSD и состояние nixpkgs](https://github.com/nix-community/nixbsd)
-- [Microsoft: графические приложения в WSLg](https://learn.microsoft.com/en-us/windows/wsl/tutorials/gui-apps)
-- [Nix-on-Droid и его интеграция с Home Manager](https://github.com/nix-community/nix-on-droid)
+- [Nix: supported platforms](https://nix.dev/manual/nix/2.34/installation/supported-platforms)
+- [NixBSD: native FreeBSD and nixpkgs status](https://github.com/nix-community/nixbsd)
+- [Microsoft: GUI applications in WSLg](https://learn.microsoft.com/en-us/windows/wsl/tutorials/gui-apps)
+- [Nix-on-Droid and Home Manager integration](https://github.com/nix-community/nix-on-droid)
 - [Home Manager](https://nix-community.github.io/home-manager/)
