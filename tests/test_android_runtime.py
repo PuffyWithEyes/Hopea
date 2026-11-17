@@ -67,8 +67,11 @@ int main(void) {
 
 reset = method((java / 'ImContext.java').read_text(), 'private static void reset(')
 activity = (java / 'ToplevelActivity.java').read_text()
-launch = (method(activity, 'public void startActivityForResult(')
-          if 'public void startActivityForResult(' in activity else '')
+launch = (method(activity, 'public void launchActivityForResult(')
+          if 'public void launchActivityForResult(' in activity else '')
+assert '->toplevel.launch_activity_for_result,' in toplevel
+cache = (gtk / 'gdk/android/gdkandroidinit.c').read_text()
+assert 'launch_activity_for_result, "launchActivityForResult", "(Landroid/content/Intent;I)V"' in cache
 result = method(activity, 'protected void onActivityResult(')
 java_source = r'''
 import java.util.ArrayDeque;
@@ -145,7 +148,7 @@ class RuntimeTest {
                 Intent intent = new Intent();
                 if (mode == 1) activity.failure = new android.content.ActivityNotFoundException();
                 if (mode == 2) activity.failure = new SecurityException();
-                activity.startActivityForResult(intent, code); // JNI's two-argument entry
+                activity.launchActivityForResult(intent, code); // JNI's dedicated entry
                 assert activity.launches == 0 && activity.responses == 0;
                 Ui.drain();
                 assert activity.launches == 1 && activity.lastIntent == intent && activity.lastCode == code;
@@ -162,6 +165,14 @@ class RuntimeTest {
         activity.startActivityForResult(intent, 31, options);
         Ui.active = false;
         assert activity.launches == 1 && activity.lastOptions == options;
+        // Ordinary launches must still throw synchronously for client/browser fallback.
+        activity.failure = new android.content.ActivityNotFoundException();
+        Ui.active = true;
+        boolean threw = false;
+        try { activity.startActivityForResult(intent, -1); }
+        catch (android.content.ActivityNotFoundException expected) { threw = true; }
+        finally { Ui.active = false; }
+        assert threw && Ui.pending.isEmpty();
         activity.onActivityResult(31, -1, intent);
         GlibContext.drain();
         assert activity.responses == 1 && activity.lastResult == -1 && activity.responseIntent == intent;

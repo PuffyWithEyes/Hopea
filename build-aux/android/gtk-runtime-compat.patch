@@ -7,7 +7,7 @@
 -                                                          self));
 +                                                          (jlong)GPOINTER_TO_SIZE (self)));
    (*env)->PopLocalFrame (env, NULL);
- 
+
    self->preedit_cursor = -1;
 --- a/gdk/android/gdkandroidtoplevel.c
 +++ b/gdk/android/gdkandroidtoplevel.c
@@ -19,11 +19,40 @@
 +                            (jlong)GPOINTER_TO_SIZE (self));
    self->intent = (*env)->NewGlobalRef (env, intent);
    (*env)->PopLocalFrame (env, NULL);
- 
+
+@@ -748,7 +748,7 @@
+
+   guint request_code = self->activity_request_counter++;
+   (*env)->CallVoidMethod (env, self->activity,
+-                          gdk_android_get_java_cache ()->a_activity.start_activity_for_result,
++                          gdk_android_get_java_cache ()->toplevel.launch_activity_for_result,
+                           intent, request_code);
+
+   if (gdk_android_check_exception (&err))
+--- a/gdk/android/gdkandroidinit-private.h
++++ b/gdk/android/gdkandroidinit-private.h
+@@ -81,6 +81,7 @@
+     jmethodID attach_toplevel_surface;
+     jmethodID post_window_configuration;
+     jmethodID post_title;
++    jmethodID launch_activity_for_result;
+   } toplevel;
+   struct
+   {
+--- a/gdk/android/gdkandroidinit.c
++++ b/gdk/android/gdkandroidinit.c
+@@ -267,6 +267,7 @@
+   POPULATE_REFCACHE_MEMBER (toplevel, native_identifier, "nativeIdentifier", "J")
+   POPULATE_REFCACHE_MEMBER (toplevel, toplevel_view, "view", "Lorg/gtk/android/ToplevelActivity$ToplevelView;")
+   POPULATE_REFCACHE_STRING (toplevel, toplevel_identifier_key, "toplevelIdentifierKey")
++  POPULATE_REFCACHE_METHOD (toplevel, launch_activity_for_result, "launchActivityForResult", "(Landroid/content/Intent;I)V")
+   POPULATE_REFCACHE_METHOD (toplevel, bind_native, "bindNative", "(J)V")
+   POPULATE_REFCACHE_METHOD (toplevel, attach_toplevel_surface, "attachToplevelSurface", "()V")
+   POPULATE_REFCACHE_METHOD (toplevel, post_window_configuration, "postWindowConfiguration", "(IZ)V")
 --- a/gdk/android/glue/java/org/gtk/android/ImContext.java
 +++ b/gdk/android/glue/java/org/gtk/android/ImContext.java
 @@ -42,8 +42,12 @@
- 
+
  	@Keep
  	private static void reset(View view) {
 -		InputMethodManager imm = view.getContext().getSystemService(InputMethodManager.class);
@@ -35,21 +64,21 @@
 +				imm.restartInput(view);
 +		});
  	}
- 
+
  	final class ImeConnection extends BaseInputConnection {
 --- a/gdk/android/glue/java/org/gtk/android/ToplevelActivity.java
 +++ b/gdk/android/glue/java/org/gtk/android/ToplevelActivity.java
 @@ -561,6 +561,21 @@
  		super.onDestroy();
  	}
- 
-+	// Hopea: document-picker requests originate on the GTK thread. Android may
+
++	// Hopea: GTK document-picker bridge. Requests originate on the GTK thread. Android may
 +	// touch the decor view while launching them, so dispatch without blocking GTK.
-+	@Override
-+	public void startActivityForResult(Intent intent, int requestCode, @Nullable Bundle options) {
++	@Keep
++	public void launchActivityForResult(Intent intent, int requestCode) {
 +		runOnUiThread(() -> {
 +			try {
-+				super.startActivityForResult(intent, requestCode, options);
++				super.startActivityForResult(intent, requestCode, null);
 +			} catch (android.content.ActivityNotFoundException | SecurityException error) {
 +				Logger.getLogger("Toplevel").warning("Unable to launch requested Android activity");
 +				if (requestCode >= 0)

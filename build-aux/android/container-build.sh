@@ -50,7 +50,7 @@ fi
 if ! grep -q 'atomic_uint_least64_t presentation_time' subprojects/gtk/gdk/android/gdkandroidchoreographersource.c; then
   patch --batch --fuzz=0 -d subprojects/gtk -p1 < build-aux/android/choreographer-armv7.patch
 fi
-if ! grep -q 'Hopea: document-picker requests' subprojects/gtk/gdk/android/glue/java/org/gtk/android/ToplevelActivity.java; then
+if ! grep -q 'Hopea: GTK document-picker bridge' subprojects/gtk/gdk/android/glue/java/org/gtk/android/ToplevelActivity.java; then
   patch --batch --fuzz=0 -d subprojects/gtk -p1 < build-aux/android/gtk-runtime-compat.patch
 fi
 runtime_target=$arch-linux-android
