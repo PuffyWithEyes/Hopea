@@ -70,6 +70,7 @@ text = path.read_text()
 if 'useLegacyPackaging' not in text:
     text = text.replace('android {', 'android {\n    packaging { jniLibs { useLegacyPackaging = true } }', 1)
 text = re.sub(r'minSdk \d+', 'minSdk 28', text)
-text = re.sub(r'versionCode \d+', 'versionCode 20261117', text)
-text = re.sub(r'versionName "[^"]*"', 'versionName "2026.11-android-preview"', text)
+# Monotonic preview revision: Android must accept this over the 2026.3 APK.
+text = re.sub(r'versionCode \d+', 'versionCode 20261118', text)
+text = re.sub(r'versionName "[^"]*"', 'versionName "2026.3.1-android-preview"', text)
 path.write_text(text)

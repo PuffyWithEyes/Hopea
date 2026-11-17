@@ -141,6 +141,12 @@ latency included in the timestamp. Atomic storage prevents torn timestamp reads
 between the Android and GTK threads. Bundled fonts avoid relying on OEM font
 substitutions. Android 8 and 32-bit x86 are not supported by this build.
 
+The Android runtime bridge dispatches input resets and document-picker launches
+to Android's UI thread. Native pointers passed as Java `long` arguments use
+explicit JNI-width conversions, including on ARMv7. Regression checks cover
+argument widths and thread dispatch; the reported Android 10 crashes on Redmi
+7A still need confirmation with an updated APK on that device.
+
 The audio bundle includes software FFmpeg decoders through GStreamer, rather
 than relying on device MediaCodec discovery. The HTTP source loads Android's
 unversioned libsoup library name. Waveforms missing while a network track is

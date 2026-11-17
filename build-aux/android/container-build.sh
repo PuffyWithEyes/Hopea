@@ -50,6 +50,13 @@ fi
 if ! grep -q 'atomic_uint_least64_t presentation_time' subprojects/gtk/gdk/android/gdkandroidchoreographersource.c; then
   patch --batch --fuzz=0 -d subprojects/gtk -p1 < build-aux/android/choreographer-armv7.patch
 fi
+if ! grep -q 'Hopea: document-picker requests' subprojects/gtk/gdk/android/glue/java/org/gtk/android/ToplevelActivity.java; then
+  patch --batch --fuzz=0 -d subprojects/gtk -p1 < build-aux/android/gtk-runtime-compat.patch
+fi
+runtime_target=$arch-linux-android
+if [[ $arch == armv7 ]]; then runtime_target=armv7a-linux-androideabi; fi
+ANDROID_RUNTIME_CC="/opt/android/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/${runtime_target}28-clang" \
+  python3 tests/test_android_runtime.py subprojects/gtk
 python3 tests/test_android_frame_clock.py subprojects/gtk/gdk/android/gdkandroidchoreographersource.c
 if ! grep -q hopea_fdk_security_log subprojects/fdk-aac-2.0.3/libSBRdec/src/lpp_tran.cpp; then
   patch -d subprojects/fdk-aac-2.0.3 -p1 < build-aux/android/fdk-ndk.patch

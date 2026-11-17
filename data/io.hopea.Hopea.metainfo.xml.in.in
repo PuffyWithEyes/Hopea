@@ -34,6 +34,12 @@
     <control>touch</control>
   </recommends>
   <releases>
+    <release version="2026.3.1" date="2026-11-17" type="development">
+      <description>
+        <p>Android compatibility hotfix for input and document-picker calls.
+        Non-Android packages are reused from the 2026.3 alpha.</p>
+      </description>
+    </release>
     <release version="2026.3" date="2026-11-17" type="development">
       <description>
         <p>Alpha release with Android ARMv7, Alpine x86 and Void i686 package builds.</p>

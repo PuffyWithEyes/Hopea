@@ -149,7 +149,7 @@ let
 in
 stdenv.mkDerivation {
   pname = "hopea";
-  version = "2026.3";
+  version = "2026.3.1";
   src = source;
   cargoDeps = rustPlatform.importCargoLock { lockFile = ../Cargo.lock; };
   postPatch = ''

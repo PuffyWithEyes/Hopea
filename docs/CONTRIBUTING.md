@@ -94,6 +94,14 @@ Network and ingest regression tests must continue to enforce authentication,
 resource limits and file validation. A successful Linux build does not establish
 Android, Windows, macOS or BSD runtime compatibility.
 
+The Android container runs `tests/test_android_runtime.py subprojects/gtk`
+after applying the GTK compatibility patches. It exercises the patched Java
+methods with recording UI/GTK queues and checks JNI pointer arguments using the
+selected NDK compiler. To run it separately, provide a staged GTK directory,
+a host C compiler and a JDK; `ANDROID_RUNTIME_CC` selects an additional NDK
+compiler for the width checks. These are boundary regression checks, not a
+substitute for keyboard and document-picker tests on an Android device.
+
 ### Project references
 
 - [Architecture and component interactions](ARCHITECTURE.md).

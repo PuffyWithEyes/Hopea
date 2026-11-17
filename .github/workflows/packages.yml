@@ -12,6 +12,10 @@ on:
         description: Also build Android ARM64, ARMv7 (32-bit) and x86-64 previews (large SDK builds)
         type: boolean
         default: false
+      android_only:
+        description: Build only Android previews and source (no desktop builds or automatic release)
+        type: boolean
+        default: false
       bsd:
         description: Also build native BSD packages in CI VMs (experimental)
         type: boolean
@@ -53,6 +57,7 @@ jobs:
           compression-level: 0
 
   linux:
+    if: ${{ !inputs.android_only }}
     needs: source
     runs-on: ubuntu-24.04
     timeout-minutes: 180
@@ -95,6 +100,7 @@ jobs:
           compression-level: 0
 
   extra-linux:
+    if: ${{ !inputs.android_only }}
     needs: source
     runs-on: ubuntu-24.04
     timeout-minutes: 180
@@ -143,6 +149,7 @@ jobs:
           compression-level: 0
 
   nix:
+    if: ${{ !inputs.android_only }}
     needs: source
     strategy:
       fail-fast: false
@@ -179,6 +186,7 @@ jobs:
           if-no-files-found: error
 
   windows:
+    if: ${{ !inputs.android_only }}
     needs: source
     runs-on: windows-2025
     timeout-minutes: 180
@@ -227,6 +235,7 @@ jobs:
           compression-level: 0
 
   macos:
+    if: ${{ !inputs.android_only }}
     needs: source
     strategy:
       fail-fast: false
@@ -259,6 +268,7 @@ jobs:
           compression-level: 0
 
   flatpak:
+    if: ${{ !inputs.android_only }}
     needs: source
     runs-on: ubuntu-24.04
     timeout-minutes: 180
@@ -278,7 +288,7 @@ jobs:
           compression-level: 0
 
   android:
-    if: github.event_name == 'workflow_dispatch' && inputs.android
+    if: github.event_name == 'workflow_dispatch' && (inputs.android || inputs.android_only)
     needs: source
     runs-on: ubuntu-24.04
     timeout-minutes: 350
@@ -315,7 +325,7 @@ jobs:
           compression-level: 0
 
   bsd:
-    if: github.event_name == 'workflow_dispatch' && inputs.bsd
+    if: github.event_name == 'workflow_dispatch' && inputs.bsd && !inputs.android_only
     needs: source
     strategy:
       fail-fast: false
@@ -397,7 +407,7 @@ jobs:
 
   release:
     if: >-
-      always() && !cancelled() && !failure() &&
+      always() && !cancelled() && !failure() && !inputs.android_only &&
       (github.ref_type == 'tag') &&
       (github.event_name == 'push' || inputs.draft_release)
     needs: [source, linux, extra-linux, nix, windows, macos, flatpak, android, bsd]

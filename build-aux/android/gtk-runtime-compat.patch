@@ -1,0 +1,63 @@
+--- a/gtk/gtkimcontextandroid.c
++++ b/gtk/gtkimcontextandroid.c
+@@ -521,7 +521,7 @@
+   self->context = (*env)->NewGlobalRef(env,
+                                        (*env)->NewObject (env, gtk_im_context_android_java_cache.class,
+                                                           gtk_im_context_android_java_cache.constructor,
+-                                                          self));
++                                                          (jlong)GPOINTER_TO_SIZE (self)));
+   (*env)->PopLocalFrame (env, NULL);
+ 
+   self->preedit_cursor = -1;
+--- a/gdk/android/gdkandroidtoplevel.c
++++ b/gdk/android/gdkandroidtoplevel.c
+@@ -384,7 +384,7 @@
+   (*env)->CallObjectMethod (env, intent,
+                             gdk_android_get_java_cache ()->a_intent.put_extra_long,
+                             gdk_android_get_java_cache ()->toplevel.toplevel_identifier_key,
+-                            (glong) self);
++                            (jlong)GPOINTER_TO_SIZE (self));
+   self->intent = (*env)->NewGlobalRef (env, intent);
+   (*env)->PopLocalFrame (env, NULL);
+ 
+--- a/gdk/android/glue/java/org/gtk/android/ImContext.java
++++ b/gdk/android/glue/java/org/gtk/android/ImContext.java
+@@ -42,8 +42,12 @@
+ 
+ 	@Keep
+ 	private static void reset(View view) {
+-		InputMethodManager imm = view.getContext().getSystemService(InputMethodManager.class);
+-		imm.restartInput(view);
++		// Hopea: JNI calls reset from the GTK thread, not Android's UI thread.
++		view.post(() -> {
++			InputMethodManager imm = view.getContext().getSystemService(InputMethodManager.class);
++			if (imm != null)
++				imm.restartInput(view);
++		});
+ 	}
+ 
+ 	final class ImeConnection extends BaseInputConnection {
+--- a/gdk/android/glue/java/org/gtk/android/ToplevelActivity.java
++++ b/gdk/android/glue/java/org/gtk/android/ToplevelActivity.java
+@@ -561,6 +561,21 @@
+ 		super.onDestroy();
+ 	}
+ 
++	// Hopea: document-picker requests originate on the GTK thread. Android may
++	// touch the decor view while launching them, so dispatch without blocking GTK.
++	@Override
++	public void startActivityForResult(Intent intent, int requestCode, @Nullable Bundle options) {
++		runOnUiThread(() -> {
++			try {
++				super.startActivityForResult(intent, requestCode, options);
++			} catch (android.content.ActivityNotFoundException | SecurityException error) {
++				Logger.getLogger("Toplevel").warning("Unable to launch requested Android activity");
++				if (requestCode >= 0)
++					onActivityResult(requestCode, RESULT_CANCELED, null);
++			}
++		});
++	}
++
+ 	@Override
+ 	protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+ 		GlibContext.runOnMain(() -> notifyActivityResult(requestCode, resultCode, data));

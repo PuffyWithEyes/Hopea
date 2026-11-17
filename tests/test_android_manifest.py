@@ -3,6 +3,7 @@
 """Build configuration check; never reads a device or user profile."""
 import subprocess
 import os
+import re
 import sys
 import tempfile
 from pathlib import Path
@@ -40,4 +41,6 @@ with tempfile.TemporaryDirectory() as directory:
         subprocess.run([sys.executable, str(source / "build-aux/android/configure-package.py")],
                        cwd=root, check=True, env={**os.environ, 'HOPEA_ANDROID_ARCH': architecture})
         assert f'minSdk {minimum}\n' in (app / 'build.gradle').read_text()
+        gradle = (app / 'build.gradle').read_text()
+        assert int(re.search(r'versionCode (\d+)', gradle).group(1)) > 20261117
 print("Android usage-access manifest: passed")
