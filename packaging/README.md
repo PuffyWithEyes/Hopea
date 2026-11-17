@@ -19,12 +19,12 @@ Python's SQLite module. These checks do not constitute full application builds.
 | Artix Linux | The same `PKGBUILD`, built on Artix | No systemd dependency; using an Arch binary depends on Artix library versions. No separate Artix CI run yet |
 | Void Linux | `void/build.sh` → `.xbps` and repository index | Separate glibc and musl CI containers, x86_64; packages for different libc implementations are not interchangeable |
 | Alpine Linux | `alpine/APKBUILD.in` → signed `.apk` | Edge CI, x86_64, musl; aarch64 needs a native builder. This is an Alpine package, not an Android APK |
-| LFS / BLFS | `lfs/build.sh` → installation tree archive | Built against the host libraries; optional CI requires a self-hosted LFS runner |
+| LFS / BLFS | `lfs/build.sh` → installation tree archive | Manual build against the host libraries; no GitHub Actions job |
 | Debian / Ubuntu | `debian/` → `.deb` | Debian sid and Ubuntu 26.10 CI; these DEBs are not intended for older stable releases |
 | Fedora | `rpm/hopea.spec.in` → `.rpm` | Rawhide CI; additional codecs and FFmpeg must be available from the system repositories |
 | openSUSE | The RPM recipe with openSUSE dependencies | Tumbleweed CI |
 | ALT Linux | The RPM recipe with ALT dependencies | Sisyphus CI; stable branches need library version checks |
-| Gentoo | `gentoo/` → ebuild overlay and optional `.gpkg.tar` | Portage source build; import dependencies are enabled by default, with ebuilds for VK, Yandex and Cryptodome |
+| Gentoo | `gentoo/` → ebuild overlay and optional `.gpkg.tar` | Manual Portage build; no GitHub Actions job. Import dependencies are enabled by default, with ebuilds for VK, Yandex and Cryptodome |
 | NixOS, Nix, Home Manager | [Nix recipe and modules](../nix/README.md) | x86_64/aarch64 Linux; CI also exports a binary cache |
 | CentOS Stream / RHEL / Rocky / Alma | Flatpak | Native RPMs need GTK 4.20+ and libadwaita 1.8+; older system libraries are not replaced automatically |
 | Linux Mint and other stable Linux distributions | Flatpak | Requires Flatpak and access to the GNOME runtime on Flathub |
@@ -41,11 +41,19 @@ Native Linux packages require GTK **4.20+**, libadwaita **1.8+** and GStreamer
 these libraries need a separate port, a library upgrade or Flatpak; lowering the
 requirements in package metadata does not make the application compatible.
 
-Gentoo, BSD, Android and LFS are enabled through manual workflow inputs. BSD jobs
+BSD and Android are enabled through manual workflow inputs. Gentoo and LFS
+recipes remain available for manual builds outside GitHub Actions. BSD jobs
 use build VMs because GitHub does not provide standard BSD runners. SSH connects
 the runner to its local BSD guest and executes build commands. Docker supplies
 Linux jobs with the selected distribution's libraries and packaging tools.
 Installed Hopea packages run natively and do not require Docker, SSH or a VM.
+
+The disposable openSUSE Tumbleweed build container refreshes its repositories
+and runs `zypper dist-upgrade --allow-downgrade --no-recommends` before installing
+build dependencies. This aligns libraries from the rolling container image with
+the repository snapshot, including when the available development packages are
+older than the image. Dependency checks remain enabled; this step does not run
+on the host system. See the [Zypper documentation](https://doc.opensuse.org/documentation/tumbleweed/zypper/).
 
 BSD CI reuses the checksummed source artifact, including its vendored Cargo
 dependencies. The host extracts it before the VM starts; an NFS workspace keeps
@@ -129,12 +137,11 @@ does not download dependencies through pip.
   source archives contain different Python wheels and are not interchangeable.
 - **Gentoo:** the recipes archive contains an overlay layout. Add it to Portage,
   create manifests with `ebuild … manifest`, then install `media-sound/hopea`.
-  This remains a private overlay. The optional `gentoo` job builds a binary
-  package; a persistent Gentoo binhost is not configured.
-- **LFS:** the `lfs` input requires a runner labelled `self-hosted`, `Linux` and
-  `hopea-lfs`, with BLFS dependencies already installed. Otherwise leave it off.
-  This job runs manually, not from pull requests; use a separate build account
-  without permission to modify the system.
+  This remains a private overlay. `packaging/gentoo/build.sh` is retained for
+  manual binary package builds; a persistent Gentoo binhost is not configured.
+- **LFS:** run `bash packaging/lfs/build.sh` manually on a host with the BLFS
+  dependencies listed below. Use a separate build account without permission
+  to modify the system.
 - **Alpine:** CI creates a key for each build and exports only its public part
   alongside the APK. A persistent repository needs a persistent signing key;
   automatic updates across different signing keys are not configured.

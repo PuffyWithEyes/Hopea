@@ -26,10 +26,10 @@ requirement for everyday Git work. Tags do not need signatures.
    ```
 
 3. Pushing the tag starts **Packages**. Successful required builds create a draft
-   release for the default platforms. Enable Android, BSD and Gentoo separately:
+   release for the default platforms. Enable Android and BSD separately:
    open **Actions → Packages → Run workflow**, select the **tag** `v2026.2`, enable
-   the desired platforms and `draft_release`. LFS requires a configured
-   self-hosted runner.
+   the desired platforms and `draft_release`. Gentoo and LFS recipes remain
+   available for manual builds; they have no GitHub Actions jobs.
 4. Wait for the builds, open the draft under **Releases**, download and test its
    files, write a description, then select **Publish release**. Windows gets a
    Setup EXE and ZIP; Android gets separate ARM64 and x86-64 APKs; Linux, BSD and

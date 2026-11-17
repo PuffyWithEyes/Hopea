@@ -1,5 +1,0 @@
-# SPDX-FileCopyrightText: 2026 Daniil Klimov
-# SPDX-License-Identifier: CC0-1.0
-self-hosted-runner:
-  labels:
-    - hopea-lfs

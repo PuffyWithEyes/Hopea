@@ -28,6 +28,9 @@ case ${1:-} in
     ;;
   opensuse)
     zypper --non-interactive refresh
+    # The rolling container image can be newer than the available repository
+    # snapshot. Align installed libraries before resolving matching -devel RPMs.
+    zypper --non-interactive dist-upgrade --allow-downgrade --no-recommends
     zypper --non-interactive install ca-certificates git gcc gcc-c++ cargo rust meson ninja pkg-config \
       blueprint-compiler gettext-tools desktop-file-utils gtk4-devel libadwaita-devel libsoup-devel \
       libopenssl-devel gstreamer-devel gstreamer-plugins-base-devel gstreamer-plugins-bad-devel \
