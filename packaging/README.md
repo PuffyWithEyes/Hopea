@@ -17,8 +17,8 @@ Python's SQLite module. These checks do not constitute full application builds.
 | --- | --- | --- |
 | Arch Linux and derivatives | `arch/PKGBUILD.in` → `.pkg.tar.zst` | Arch CI, x86_64; the recipe also allows aarch64 with a native builder |
 | Artix Linux | The same `PKGBUILD`, built on Artix | No systemd dependency; using an Arch binary depends on Artix library versions. No separate Artix CI run yet |
-| Void Linux | `void/build.sh` → `.xbps` and repository index | Separate glibc and musl CI containers, x86_64; packages for different libc implementations are not interchangeable |
-| Alpine Linux | `alpine/APKBUILD.in` → signed `.apk` | Edge CI, x86_64, musl; aarch64 needs a native builder. This is an Alpine package, not an Android APK |
+| Void Linux | `void/build.sh` → `.xbps` and repository index | glibc CI for i686 and x86_64; musl CI for x86_64. Packages for different libc implementations are not interchangeable |
+| Alpine Linux | `alpine/APKBUILD.in` → signed `.apk` | Edge CI, x86 and x86_64, musl; aarch64 needs a native builder. This is an Alpine package, not an Android APK |
 | LFS / BLFS | `lfs/build.sh` → installation tree archive | Manual build against the host libraries; no GitHub Actions job |
 | Debian / Ubuntu | `debian/` → `.deb` | Debian sid and Ubuntu 26.10 CI; these DEBs are not intended for older stable releases |
 | Fedora | `rpm/hopea.spec.in` → `.rpm` | Rawhide CI; additional codecs and FFmpeg must be available from the system repositories |
@@ -33,7 +33,7 @@ Python's SQLite module. These checks do not constitute full application builds.
 | GhostBSD / HardenedBSD and other derivatives | The corresponding base BSD recipe | ABI compatibility and package availability must be checked for each release |
 | Windows 10/11 x64 | MSYS2 UCRT64 → Setup EXE, ZIP and Scoop JSON | Per-user installation; includes GTK, GStreamer, FFmpeg and private Python. See [compatibility and build instructions](windows/README.md) |
 | macOS Apple Silicon / Intel | Homebrew formula and bottle | Native build with Homebrew dependencies; not a standalone `.app`, no Apple notarization |
-| Android ARM64 / ARMv7 / x86-64 | Preview APK | Android 9+ (API 28). ARM64 and ARMv7 APK builds verified; device validation pending. ARMv7 currently uses the local build script. CI builds ARM64/x86-64 with a persistent preview key; x86-64 still needs a full APK build and launch test |
+| Android ARM64 / ARMv7 / x86-64 | Preview APK | Android 9+ (API 28). ARM64 and ARMv7 APK builds verified; device validation pending. CI builds all three ABIs with a persistent preview key; x86-64 still needs a full APK build and launch test |
 | Flatpak | `build-aux/flatpak/` → `hopea.flatpak` | Shared Linux distribution format, GNOME 51 runtime |
 
 Native Linux packages require GTK **4.20+**, libadwaita **1.8+** and GStreamer
@@ -48,12 +48,59 @@ the runner to its local BSD guest and executes build commands. Docker supplies
 Linux jobs with the selected distribution's libraries and packaging tools.
 Installed Hopea packages run natively and do not require Docker, SSH or a VM.
 
+### 32-bit targets
+
+Android ARMv7 uses the `armeabi-v7a` ABI and the same API 28 minimum as ARM64.
+Enable the Android workflow input to build all three Android ABIs. This does not
+add support for Android 8 or the obsolete `armeabi` ABI.
+
+The Alpine x86 and Void glibc i686 jobs select the `linux/386` container platform
+on the 64-bit Linux runner. They use 32-bit Rust and native libraries throughout; setting
+only a Rust target would leave GTK and GStreamer at the wrong architecture.
+Alpine artifact filenames include the architecture so release downloads cannot
+overwrite each other. These packages require Alpine's musl environment and are
+not generic binaries for other Linux distributions. Void i686 uses glibc and
+produces a native `.i686.xbps` package and repository index.
+
+On November 17, 2026, both complete 32-bit Linux package builds passed locally.
+The Alpine package was installed with signature verification, and the Void
+package was installed through its generated XBPS repository. Both installed
+player and Spotify helper binaries were verified as ELF32 x86, and their
+`--help` commands completed. Alpine also passed its 41 service-import tests.
+These checks do not cover graphical playback or physical 32-bit hardware.
+Void packaging now resolves dependencies before publishing, since `xbps-create`
+alone accepts invalid dependency expressions.
+
+The 32-bit musl build needs the upstream `timespec::default()` fix backported to
+quanta 0.12.6, since governor 0.10.4 cannot yet use quanta 0.13. See
+[the patch notes](../vendor/quanta/HOPEA.md). Rate-limit settings and algorithms
+are unchanged.
+
+BSD 32-bit package builds are not enabled in Actions. The November 17, 2026 audit
+found these constraints:
+
+| Target | Finding |
+| --- | --- |
+| FreeBSD i386 | [FreeBSD 15 retired i386](https://www.freebsd.org/releases/15.0R/relnotes/#architectures). A FreeBSD 14 build would require a separate VM and dependency assessment; the current job targets 15.1 |
+| FreeBSD ARMv7 | Still an OS target, but the pinned [VM action](https://github.com/vmactions/freebsd-vm/tree/811efaaac0668df8bfb8308c3ec997b5ab50037b) does not provide an ARMv7 image |
+| NetBSD i386 | The [binary repository](https://cdn.netbsd.org/pub/pkgsrc/packages/NetBSD/i386/10.0/All/) provides Rust 1.96.1, GTK 4.22.4 and libadwaita 1.9.1. The pinned [VM action](https://github.com/vmactions/netbsd-vm/tree/5957cf330aef2e6ddc63c604364c99ce2e02b91d) has no i386 image; a full Hopea build remains unverified |
+| OpenBSD i386 | The [7.9 package repository](https://cdn.openbsd.org/pub/OpenBSD/7.9/packages/i386/) lacks the required Rust and libadwaita packages; the current VM action also has no i386 image |
+| DragonFly i386 | [The OS supports x86-64 only](https://www.dragonflybsd.org/docs/supportedhardware/); i386 support ended after 3.8 |
+
+Availability of a Rust target or an OS port alone does not establish that Hopea's
+complete GTK/GStreamer dependency stack builds and runs there. Existing manual
+BSD recipes remain available for further native testing.
+
+### Rolling distribution containers
+
 The disposable openSUSE Tumbleweed build container refreshes its repositories
 and runs `zypper dist-upgrade --allow-downgrade --no-recommends` before installing
 build dependencies. This aligns libraries from the rolling container image with
 the repository snapshot, including when the available development packages are
 older than the image. Dependency checks remain enabled; this step does not run
 on the host system. See the [Zypper documentation](https://doc.opensuse.org/documentation/tumbleweed/zypper/).
+
+### BSD build environments
 
 BSD CI reuses the checksummed source artifact, including its vendored Cargo
 dependencies. The host extracts it before the VM starts; an NFS workspace keeps
@@ -175,8 +222,8 @@ run `sudo xbps-install --repository=/absolute/path/to/directory hopea`. Choose
 glibc or musl to match the system. A signed online XBPS repository is not configured.
 
 For Alpine, verify the package source and public key, copy the `.pub` file to
-`/etc/apk/keys/`, then run `sudo apk add ./hopea-2026.2-r0.apk`, substituting the
-actual version. Signature verification remains enabled.
+`/etc/apk/keys/`, then run `sudo apk add ./hopea-2026.2-r0-alpine-x86_64.apk`, substituting the
+actual version and architecture (`x86` for 32-bit). Signature verification remains enabled.
 
 For Windows, run `hopea-VERSION-windows-x86_64-setup.exe`. No administrator access
 is required, and newer versions can be installed over an existing installation.

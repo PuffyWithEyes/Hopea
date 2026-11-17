@@ -32,5 +32,11 @@ export HOPEA_ALPINE_WORK="$work"
 # shellcheck disable=SC2016
 su -s /bin/sh -c 'cd "$HOPEA_ALPINE_WORK/aports/community/hopea" && SRCDEST="$HOPEA_ALPINE_WORK/cache" REPODEST="$HOPEA_ALPINE_WORK/packages" abuild -r -d' hopeabuild
 mkdir -p "$root/dist"
-find "$work/packages" -name '*.apk' -exec cp {} "$root/dist/" \;
+# APK filenames do not contain the architecture. Keep them distinct when CI
+# merges x86 and x86_64 artifacts into a single release directory.
+arch=$(apk --print-arch)
+while IFS= read -r package; do
+  name=$(basename "$package" .apk)
+  cp "$package" "$root/dist/$name-alpine-$arch.apk"
+done < <(find "$work/packages" -name '*.apk')
 cp "$public_key" "$root/dist/"

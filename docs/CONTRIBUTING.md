@@ -82,7 +82,10 @@ a different `vergen-lib` API from the one used by `vergen-gitcl` 1.x.
 Cargo updates do not refresh `[patch.crates-io]` path dependencies. Compare each
 vendored crate with its published release, preserve author/license notices and
 carry forward only fixes still needed. The librqbit 9.1.0 refresh still needs our
-HTTP interface-binding guard on BSD. Other vendored crates remain at their latest
+HTTP interface-binding guard on BSD. Quanta 0.12.6 carries the upstream 32-bit
+musl `timespec` fix because governor 0.10.4 still requires quanta 0.12; quanta 0.13
+already includes the fix. See [its patch notes](../vendor/quanta/HOPEA.md) before
+removing the override. Other vendored crates remain at their latest
 published stable versions as checked on November 17, 2026; their local fixes have
 not become removable merely by updating the lockfile.
 

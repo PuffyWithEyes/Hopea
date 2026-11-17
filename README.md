@@ -102,7 +102,7 @@ OS integration is checked separately.
 | FreeBSD | MPRIS, StatusNotifier tray, background handling, tun/tap/wg route detection; network dependency cross-check | Full desktop build/run |
 | NetBSD | Same desktop integration; fixed unsupported multicast API calls; network dependency cross-check | Full desktop build/run |
 | OpenBSD / DragonFly BSD | Same desktop integration; packet-info portability patch | Native compiler and runtime checks; these are not yet verified builds |
-| Android ARM64 | APK build, system media service/notification, shared-player controls, audio focus, headphone-disconnect pause, private document copies and per-app VPN detection | Physical-device tests; service-account imports and independent background P2P require a separate port |
+| Android ARM64 / ARMv7 | APK builds, system media service/notification, shared-player controls, audio focus, headphone-disconnect pause, private document copies and per-app VPN detection | Physical-device tests; service-account imports and independent background P2P require a separate port |
 | Redox OS | Common protocol/format/Lyrics crate cross-compiles for x86_64-unknown-redox | No verified GTK4/libadwaita/GStreamer application stack or full build; requires a dedicated dependency/backend port assessment |
 
 BSD derivatives use their base OS target (for example GhostBSD uses FreeBSD).
@@ -173,9 +173,8 @@ HOPEA_ANDROID_ARCH=x86_64 HOPEA_ANDROID_REBUILD_TOOLCHAIN=1 bash build-aux/andro
 ```
 
 This uses a separate staging directory and produces
-`dist/Hopea-android-x86_64-preview.apk`. The Packages workflow builds both
-architectures independently when its Android option is enabled, using the same
-configured signing key. Install the APK matching the device's Android ABI.
+`dist/Hopea-android-x86_64-preview.apk`. Install the APK matching the device's
+Android ABI.
 For a 32-bit ARM device running Android 9 or newer, use:
 
 ```sh
@@ -184,7 +183,8 @@ HOPEA_ANDROID_ARCH=armv7 bash build-aux/android/build.sh
 
 This uses `/tmp/hopea-android-armv7-src` and writes
 `dist/Hopea-android-armv7-preview.apk`. An existing toolchain image installs the
-missing Rust ARMv7 target automatically. ARMv7 is not yet part of the CI matrix.
+missing Rust ARMv7 target automatically. The optional Android job in Packages
+builds ARM64, ARMv7 and x86-64 APKs separately with the same configured signing key.
 The media service uses Android's mediaPlayback foreground-service type rather
 than a separate audio engine. This is required for background audio on
 [Android 17](https://developer.android.com/about/versions/17/changes/bg-audio).

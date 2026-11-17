@@ -32,8 +32,8 @@ requirement for everyday Git work. Tags do not need signatures.
    available for manual builds; they have no GitHub Actions jobs.
 4. Wait for the builds, open the draft under **Releases**, download and test its
    files, write a description, then select **Publish release**. Windows gets a
-   Setup EXE and ZIP; Android gets separate ARM64 and x86-64 APKs; Linux, BSD and
-   macOS get the packages listed in the [packaging guide](../packaging/README.md).
+   Setup EXE and ZIP; Android gets separate ARM64, ARMv7 (32-bit) and x86-64 APKs.
+   Linux, BSD and macOS get the packages listed in the [packaging guide](../packaging/README.md).
 
 Running again on the same tag updates the **draft's** assets, allowing Android to
 be added later. The workflow will not overwrite a published release. Publish fixes

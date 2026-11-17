@@ -87,10 +87,11 @@ debug = false
 [workspace]
 resolver = "2"
 members = ["spotify"]
-exclude = ["common", "node", "vendor/lofty", "vendor/socket-pktinfo", "vendor/librqbit-dualstack-sockets", "vendor/librqbit", "vendor/dontfrag", "vendor/if-addrs"]
+exclude = ["common", "node", "vendor/lofty", "vendor/socket-pktinfo", "vendor/librqbit-dualstack-sockets", "vendor/librqbit", "vendor/dontfrag", "vendor/if-addrs", "vendor/quanta"]
 default-members = ["."]
 
 [patch.crates-io]
+quanta = { path = "vendor/quanta" }
 if-addrs = { path = "vendor/if-addrs" }
 dontfrag = { path = "vendor/dontfrag" }
 librqbit = { path = "vendor/librqbit" }

@@ -30,6 +30,9 @@ cd "$root/dist"
 xbps-create -A "$arch" -n "hopea-${version}_1" \
   -s 'Music player with peer-to-peer sharing' -l GPL-3.0-or-later \
   --homepage "https://github.com/$repo" \
-  -D 'gtk4>=4.20 libadwaita>=1.8 libsoup3 openssl gstreamer1 gst-plugins-base1 gst-plugins-good1 gst-plugins-bad1 gst-plugins-ugly1 gst-libav python3 ffmpeg adwaita-icon-theme' \
+  -D 'gtk4>=4.20 libadwaita>=1.8 libsoup3>=0 openssl>=0 gstreamer1>=0 gst-plugins-base1>=0 gst-plugins-good1>=0 gst-plugins-bad1>=0 gst-plugins-ugly1>=0 gst-libav>=0 python3>=0 ffmpeg>=0 adwaita-icon-theme>=0' \
   "$work/stage"
 xbps-rindex -a ./*.xbps
+# Package creation accepts malformed dependency strings; resolution catches
+# them before CI publishes an archive that cannot be installed.
+xbps-install -Sn --repository="$root/dist" hopea

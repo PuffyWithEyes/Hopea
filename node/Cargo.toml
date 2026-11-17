@@ -65,6 +65,7 @@ http-body-util = "0.1.5"
 debug = false
 
 [patch.crates-io]
+quanta = { path = "../vendor/quanta" }
 if-addrs = { path = "../vendor/if-addrs" }
 dontfrag = { path = "../vendor/dontfrag" }
 librqbit = { path = "../vendor/librqbit" }

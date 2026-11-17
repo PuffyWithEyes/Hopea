@@ -9,7 +9,7 @@ on:
         type: boolean
         default: false
       android:
-        description: Also build Android ARM64 and x86-64 previews (large SDK builds)
+        description: Also build Android ARM64, ARMv7 (32-bit) and x86-64 previews (large SDK builds)
         type: boolean
         default: false
       bsd:
@@ -102,9 +102,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { platform: void-glibc, image: 'ghcr.io/void-linux/void-glibc-full:latest', script: void }
-          - { platform: void-musl, image: 'ghcr.io/void-linux/void-musl-full:latest', script: void }
-          - { platform: alpine, image: 'alpine:edge', script: alpine }
+          - { platform: void-glibc, image: 'ghcr.io/void-linux/void-glibc-full:latest', script: void, docker_platform: 'linux/amd64' }
+          - { platform: void-glibc-i686, image: 'ghcr.io/void-linux/void-glibc-full:latest', script: void, docker_platform: 'linux/386' }
+          - { platform: void-musl, image: 'ghcr.io/void-linux/void-musl-full:latest', script: void, docker_platform: 'linux/amd64' }
+          - { platform: alpine, image: 'alpine:edge', script: alpine, docker_platform: 'linux/amd64' }
+          - { platform: alpine-x86, image: 'alpine:edge', script: alpine, docker_platform: 'linux/386' }
     env:
       HOPEA_VERSION: ${{ needs.source.outputs.version }}
     steps:
@@ -117,10 +119,11 @@ jobs:
           BUILD_IMAGE: ${{ matrix.image }}
           BUILD_PLATFORM: ${{ matrix.platform }}
           BUILD_SCRIPT: ${{ matrix.script }}
+          DOCKER_PLATFORM: ${{ matrix.docker_platform }}
         run: |
-          docker pull "$BUILD_IMAGE"
+          docker pull --platform "$DOCKER_PLATFORM" "$BUILD_IMAGE"
           docker image inspect "$BUILD_IMAGE" --format '{{index .RepoDigests 0}}' > "dist/build-image-$BUILD_PLATFORM.txt"
-          docker run --rm -v "$PWD:/work" -w /work \
+          docker run --rm --platform "$DOCKER_PLATFORM" -v "$PWD:/work" -w /work \
             -e HOPEA_CI_CONTAINER=1 -e HOPEA_VERSION -e HOPEA_REPOSITORY -e CARGO_BUILD_JOBS \
             "$BUILD_IMAGE" sh -ec '
               if [ "$1" = alpine ]; then apk add --no-cache bash; fi
@@ -282,7 +285,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        arch: [aarch64, x86_64]
+        arch: [aarch64, armv7, x86_64]
     env:
       HOPEA_ANDROID_ARCH: ${{ matrix.arch }}
     steps:

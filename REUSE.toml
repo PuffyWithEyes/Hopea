@@ -1,6 +1,12 @@
 version = 1
 
 [[annotations]]
+path = "vendor/quanta/**"
+precedence = "aggregate"
+SPDX-FileCopyrightText = ["2019 Nuclear Furnace", "2026 Leon White"]
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
 path = "vendor/if-addrs/**"
 precedence = "aggregate"
 SPDX-FileCopyrightText = ["2018 MaidSafe.net limited.", "2020 messense"]

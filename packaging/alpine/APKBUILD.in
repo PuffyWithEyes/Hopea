@@ -5,7 +5,7 @@ pkgver=@VERSION@
 pkgrel=0
 pkgdesc="Music player with peer-to-peer sharing"
 url="https://github.com/@REPOSITORY@"
-arch="x86_64 aarch64"
+arch="x86 x86_64 aarch64"
 license="GPL-3.0-or-later"
 depends="gtk4.0>=4.20 libadwaita>=1.8 libsoup3 gstreamer gst-plugins-base gst-plugins-good gst-plugins-bad gst-plugins-ugly gst-libav python3 ffmpeg adwaita-icon-theme"
 makedepends="bash cargo rust meson ninja pkgconf blueprint-compiler gettext-dev desktop-file-utils
