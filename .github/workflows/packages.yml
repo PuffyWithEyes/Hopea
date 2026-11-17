@@ -390,6 +390,7 @@ jobs:
           name: bsd-${{ matrix.os }}
           path: |
             dist/*.pkg
+            dist/*.txz
             dist/*.tgz
             dist/*.tar.gz
           if-no-files-found: error

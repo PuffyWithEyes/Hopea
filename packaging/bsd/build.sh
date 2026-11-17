@@ -84,7 +84,14 @@ if [[ $os == FreeBSD || $os == DragonFly ]]; then
   # DragonFly's system libarchive may lack built-in zstd support. pkg treats
   # that as an error, so explicitly use its supported xz compression there.
   if [[ $os == DragonFly ]]; then package_format=(-f txz); fi
-  pkg create "${package_format[@]}" -m "$stage" -r "$stage/root" -p "$stage/plist" -o "$dist"
+  mkdir -p "$stage/packages"
+  pkg create "${package_format[@]}" -m "$stage" -r "$stage/root" -p "$stage/plist" -o "$stage/packages"
+  # FreeBSD and DragonFly both default to hopea-VERSION.pkg. Keep their
+  # incompatible packages distinct when Actions merges platform artifacts.
+  shopt -s nullglob
+  packages=("$stage/packages/"*.pkg "$stage/packages/"*.txz)
+  [[ ${#packages[@]} == 1 ]] || { echo 'Expected one native BSD package' >&2; exit 1; }
+  mv "${packages[0]}" "$dist/hopea-$version-$os-$arch.${packages[0]##*.}"
 fi
 if [[ $os == NetBSD || $os == OpenBSD ]]; then
   printf '%s\n' 'Hopea music player with peer-to-peer sharing.' > "$stage/description"

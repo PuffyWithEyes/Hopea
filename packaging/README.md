@@ -126,7 +126,9 @@ existing packages before adding dependencies to avoid mixing library versions.
 DragonFly explicitly uses `pkg create -f txz`: its system libarchive may lack
 built-in zstd support, causing the default compression to fail. Current pkg
 versions still name the resulting xz-compressed package `.pkg`; installation
-and artifact collection use that filename. FreeBSD keeps pkg's default format.
+and artifact collection retain that extension. Package filenames include the OS
+and architecture so FreeBSD and DragonFly cannot overwrite each other when
+release artifacts are combined. FreeBSD keeps pkg's default format.
 See the [DragonFly zstd report](https://lists.dragonflybsd.org/pipermail/users/2026-April/452630.html).
 NetBSD first installs `pkgin` through the base system's `pkg_add`, using the
 release-matched mirrors configured by the VM; see the

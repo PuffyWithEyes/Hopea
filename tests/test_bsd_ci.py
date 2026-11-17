@@ -103,6 +103,7 @@ elif name == "pkg":
         elif "-f" in args:
             sys.exit("FreeBSD should retain its default compression")
         shutil.copyfile(pathlib.Path(args[args.index("-m")+1]) / "+MANIFEST", os.environ["TEST_MANIFEST"])
+        (pathlib.Path(args[args.index("-o")+1]) / "hopea-1.2.pkg").write_text(os.environ["TEST_SYSTEM"])
 ''')
                 stub.chmod(0o755)
                 for command in ("uname", "pkg-config", "pkg", "python-fixture"):
@@ -124,6 +125,9 @@ elif name == "pkg":
                     self.assertIn("gtk4", deps)
                     self.assertIn("py312-sqlite3", deps)
                     self.assertIn("python312", deps)
+                    package = root / "dist" / f"hopea-1.2-{system}-amd64.pkg"
+                    self.assertEqual(package.read_text(), system)
+                    self.assertFalse((root / "dist/hopea-1.2.pkg").exists())
 
     def test_file_lock_preflight(self):
         with tempfile.TemporaryDirectory() as directory:
