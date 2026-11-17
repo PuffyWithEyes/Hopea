@@ -31,15 +31,7 @@ root=$PWD
 prefix=$root/_windows/Hopea
 sys=/ucrt64
 
-pacman -S --needed --noconfirm \
-    zip unzip curl \
-    mingw-w64-ucrt-x86_64-{toolchain,rust,meson,ninja,pkgconf,cmake,nasm} \
-    mingw-w64-ucrt-x86_64-{gtk4,libadwaita,libsoup3,blueprint-compiler} \
-    mingw-w64-ucrt-x86_64-{desktop-file-utils,appstream,gettext} \
-    mingw-w64-ucrt-x86_64-gstreamer \
-    mingw-w64-ucrt-x86_64-gst-plugins-{base,good,bad,ugly} \
-    mingw-w64-ucrt-x86_64-gst-libav \
-    mingw-w64-ucrt-x86_64-{python-pip,ffmpeg}
+bash build-aux/windows/install-deps.sh
 
 python3 tests/test_cargo_build.py
 

@@ -55,6 +55,13 @@ First create the portable runtime in an MSYS2 UCRT64 shell:
 bash build-aux/windows/build.sh
 ```
 
+Dependency downloads use up to three Pacman attempts, waiting 10 and then 20
+seconds between failures and reusing cached packages. Signature verification and
+download timeouts remain enabled. Installation runs once after downloads
+succeed; an installation failure stops the build. This handles temporary
+[MSYS2 mirror](https://www.msys2.org/docs/mirrors/) outages without restarting
+the entire player build. A persistent mirror outage still requires a later retry.
+
 Then, from the repository in PowerShell 7:
 
 ```powershell
