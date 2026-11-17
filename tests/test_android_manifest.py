@@ -22,6 +22,7 @@ with tempfile.TemporaryDirectory() as directory:
         subprocess.run([sys.executable, str(source / "build-aux/android/configure-package.py")], cwd=root, check=True)
     xml = ET.parse(manifest).getroot()
     name = "{http://schemas.android.com/apk/res/android}name"
+    assert xml.find("application").get(name) == "io.hopea.hopea.HopeaApplication"
     permissions = [node.get(name) for node in xml.findall("uses-permission")]
     assert permissions.count("android.permission.PACKAGE_USAGE_STATS") == 1
     assert "android.permission.QUERY_ALL_PACKAGES" not in permissions

@@ -12,7 +12,15 @@ javac -d "$work/classes" \
 java -ea -cp "$work/classes" io.hopea.hopea.GameActivityStateTest
 python3 "$root/tests/test_android_app_links.py"
 python3 "$root/tests/test_android_storage.py"
-# Compile every Android bridge class against the real SDK, not mock APIs.
+python3 "$root/tests/test_android_crash_report.py"
+# These checks run before Pixiewood downloads GTK. Supply only its Application
+# superclass contract; Android APIs come from the real SDK. Gradle subsequently
+# compiles HopeaApplication together with the actual GTK Java sources.
+cat > "$work/RuntimeApplication.java" <<'JAVA'
+package org.gtk.android;
+public class RuntimeApplication extends android.app.Application {}
+JAVA
 javac -Xlint:deprecation -cp "$sdk/platforms/android-36/android.jar" -d "$work/android" \
+  "$work/RuntimeApplication.java" \
   "$root"/build-aux/android/java/io/hopea/hopea/*.java
 python3 "$root/tests/test_android_manifest.py"

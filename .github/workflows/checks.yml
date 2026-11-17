@@ -45,6 +45,7 @@ jobs:
         run: |
           bash tests/test_android_build.sh
           python3 tests/test_android_manifest.py
+          python3 tests/test_android_crash_report.py
       - run: nix shell --inputs-from . nixpkgs#actionlint nixpkgs#shellcheck --command actionlint
       - run: nix shell --inputs-from . nixpkgs#shellcheck --command shellcheck packaging/*.sh packaging/*/*.sh tests/test_packaging.sh tests/test_native_install.sh
       - name: Build and test the player

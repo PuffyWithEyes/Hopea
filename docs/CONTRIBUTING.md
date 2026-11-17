@@ -102,6 +102,18 @@ a host C compiler and a JDK; `ANDROID_RUNTIME_CC` selects an additional NDK
 compiler for the width checks. These are boundary regression checks, not a
 substitute for keyboard and document-picker tests on an Android device.
 
+Android builds save unhandled Java exceptions locally and offer to copy the
+report on the next launch, without developer mode or USB debugging. Reports
+contain the app version, device model, process bitness and bounded Java stack
+traces. Exception messages, input text and file names are omitted. Nothing is
+uploaded automatically; the dialog also offers deletion. Reports are stored
+outside GTK's runtime asset directory and excluded from backups.
+This does not capture native signals, low-memory kills, initialization before
+the application handler is installed, or Android ANRs. Absence of a report does
+not mean the app did not crash. Run `python3 tests/test_android_crash_report.py`
+with a JDK to verify formatting and privacy limits, and
+`python3 tests/test_android_manifest.py` to check the application registration.
+
 ### Project references
 
 - [Architecture and component interactions](ARCHITECTURE.md).

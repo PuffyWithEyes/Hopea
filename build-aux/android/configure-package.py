@@ -13,6 +13,7 @@ path = app / 'src/main/AndroidManifest.xml'
 tree = ET.parse(path)
 root = tree.getroot()
 application = root.find('application')
+application.set(key('name'), 'io.hopea.hopea.HopeaApplication')
 application.set(key('allowBackup'), 'false')
 application.set(key('extractNativeLibs'), 'true')
 # Do not exclude tablets, foldables or devices without touch input. Playback
@@ -70,7 +71,7 @@ text = path.read_text()
 if 'useLegacyPackaging' not in text:
     text = text.replace('android {', 'android {\n    packaging { jniLibs { useLegacyPackaging = true } }', 1)
 text = re.sub(r'minSdk \d+', 'minSdk 28', text)
-# Monotonic preview revision: Android must accept this over the 2026.3 APK.
-text = re.sub(r'versionCode \d+', 'versionCode 20261118', text)
-text = re.sub(r'versionName "[^"]*"', 'versionName "2026.3.1-android-preview"', text)
+# Diagnostic preview installs over 2026.3.1 without clearing application data.
+text = re.sub(r'versionCode \d+', 'versionCode 20261119', text)
+text = re.sub(r'versionName "[^"]*"', 'versionName "2026.3.1-diagnostics.1"', text)
 path.write_text(text)
