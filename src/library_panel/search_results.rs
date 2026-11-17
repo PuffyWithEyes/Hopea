@@ -102,7 +102,7 @@ impl LibraryPanel {
         {
             return;
         }
-        let query = imp.search_entry.text().trim().to_string();
+        let query = imp.active_query.borrow().clone();
         if query.is_empty() {
             return;
         }
@@ -208,6 +208,7 @@ impl LibraryPanel {
         }
         self.imp().albums_section.set_visible(false);
         self.imp().albums_scroll.hadjustment().set_value(0.0);
+        self.imp().results_scroll.vadjustment().set_value(0.0);
     }
 
     pub(super) fn reset_search(&self) {
@@ -224,6 +225,92 @@ impl LibraryPanel {
 
     pub(super) fn append_result(&self, track: &Track) {
         self.push_result(ResultItem::Song(track.clone()));
+    }
+
+    /// Reconcile snapshots without clearing/rebuilding already visible rows or
+    /// scrolling to the top every time another peer answers.
+    pub(super) fn sync_live_results(&self, tracks: &[Track]) {
+        let model = self.imp().results.get().unwrap();
+        if model.n_items() == 0 {
+            let items: Vec<_> = tracks
+                .iter()
+                .map(|track| glib::BoxedAnyObject::new(ResultItem::Song(track.clone())))
+                .collect();
+            model.splice(0, 0, &items);
+            self.append_album_results(tracks);
+            if !items.is_empty() {
+                self.imp()
+                    .results_list
+                    .scroll_to(0, gtk::ListScrollFlags::NONE, None);
+            }
+            return;
+        }
+        for (position, track) in tracks.iter().enumerate() {
+            let position = position as u32;
+            let existing = (position..model.n_items()).find_map(|index| {
+                let object = model.item(index)?.downcast::<glib::BoxedAnyObject>().ok()?;
+                let same = matches!(&*object.borrow::<ResultItem>(), ResultItem::Song(t) if t.id == track.id);
+                same.then_some((index, object))
+            });
+            match existing {
+                Some((index, object)) => {
+                    let changed = matches!(&*object.borrow::<ResultItem>(), ResultItem::Song(old) if old != track);
+                    if index != position {
+                        model.remove(index);
+                        model.insert(position, &object);
+                    }
+                    if changed {
+                        model.splice(
+                            position,
+                            1,
+                            &[glib::BoxedAnyObject::new(ResultItem::Song(track.clone()))],
+                        );
+                    }
+                }
+                None => model.insert(
+                    position,
+                    &glib::BoxedAnyObject::new(ResultItem::Song(track.clone())),
+                ),
+            }
+        }
+        if model.n_items() > tracks.len() as u32 {
+            model.splice(
+                tracks.len() as u32,
+                model.n_items() - tracks.len() as u32,
+                &[] as &[glib::BoxedAnyObject],
+            );
+        }
+        let albums = self.imp().album_results.get().unwrap();
+        let keys: std::collections::HashSet<_> = tracks
+            .iter()
+            .filter_map(|track| {
+                let title = track.album.as_ref()?.trim();
+                if title.is_empty() {
+                    return None;
+                }
+                Some((
+                    title.to_lowercase(),
+                    track
+                        .album_artist
+                        .as_ref()
+                        .filter(|s| !s.trim().is_empty())
+                        .or(track.artist.as_ref())
+                        .map(|s| s.trim().to_lowercase())
+                        .unwrap_or_default(),
+                ))
+            })
+            .collect();
+        for index in (0..albums.n_items()).rev() {
+            let item = albums
+                .item(index)
+                .unwrap()
+                .downcast::<glib::BoxedAnyObject>()
+                .unwrap();
+            if !keys.contains(&item.borrow::<AlbumResult>().key()) {
+                albums.remove(index);
+            }
+        }
+        self.append_album_results(tracks);
     }
 
     fn push_result(&self, item: ResultItem) {
@@ -407,7 +494,12 @@ impl LibraryPanel {
         }
         let adjustment = imp.results_scroll.vadjustment();
         let page = adjustment.page_size();
-        if page > 0.0 && adjustment.upper() - adjustment.value() - page <= page * 0.75 {
+        // A newly populated ListView can briefly retain the empty viewport's
+        // adjustment. That is not evidence that the user reached page end.
+        if page > 0.0
+            && adjustment.upper() > page
+            && adjustment.upper() - adjustment.value() - page <= page * 0.75
+        {
             self.load_page(imp.loaded.get());
         }
     }
@@ -547,7 +639,10 @@ impl LibraryPanel {
                     .unwrap()
                     .parse()
                     .unwrap();
-                requested.lock().unwrap().push(offset);
+                // Local snapshots of page zero are not peer searches/pages.
+                if !line.contains("network=false&") || offset > 0 {
+                    requested.lock().unwrap().push(offset);
+                }
                 let tracks: Vec<_> = (offset..offset + 50)
                     .map(|id| fixture(i64::from(id) + 1))
                     .collect();
@@ -689,6 +784,27 @@ impl LibraryPanel {
             vec![0, 50],
             "one request per page"
         );
+        // Wait for the second page to be allocated before recording position.
+        glib::timeout_future(std::time::Duration::from_millis(200)).await;
+        scroll.set_value((scroll.upper() - scroll.page_size()) / 2.0);
+        glib::timeout_future(std::time::Duration::from_millis(100)).await;
+        let generation = imp.generation.get();
+        let position = scroll.value();
+        for text in ["test ", "te st", "\ttest\u{a0}"] {
+            imp.search_entry.set_text(text);
+            glib::timeout_future(std::time::Duration::from_millis(350)).await;
+            assert_eq!(
+                imp.generation.get(),
+                generation,
+                "whitespace must not restart discovery"
+            );
+            assert_eq!(imp.loaded.get(), 100);
+            assert!(
+                (scroll.value() - position).abs() < 1.0,
+                "whitespace must not reset scrolling"
+            );
+        }
+        assert_eq!(*offsets.lock().unwrap(), vec![0, 50]);
         // The following pages are injected directly, as they would be while
         // a search request owns the loading guard. Do not let intermediate
         // one-song fixtures trigger unrelated network pagination.
@@ -788,6 +904,10 @@ impl LibraryPanel {
         assert_eq!(player.state().current_song().unwrap().library_id(), Some(1));
         assert_eq!(player.album_preview_next(), Some(false));
         player.stop();
+        // Starting a new search clears the model; subsequent live snapshots
+        // deliberately preserve its scroll position.
+        self.reset_search();
+        imp.page_loading.set(true);
         self.show_page("new query", 0, &[fixture(4)], 1);
         assert_eq!(imp.album_results.get().unwrap().n_items(), 0);
         assert!(
@@ -802,6 +922,8 @@ impl LibraryPanel {
                 track
             })
             .collect();
+        self.reset_search();
+        imp.page_loading.set(true);
         self.show_page("", 0, &albums, 30);
         let horizontal = imp.albums_scroll.hadjustment();
         for _ in 0..100 {
@@ -856,6 +978,8 @@ impl LibraryPanel {
         horizontal.set_value(horizontal.upper() - horizontal.page_size());
         assert!(horizontal.value() > 0.0);
         let tracks: Vec<_> = (1..=5000).map(fixture).collect();
+        self.reset_search();
+        imp.page_loading.set(true);
         self.show_page("", 0, &tracks, 5000);
         scroll.set_value(0.0);
         for _ in 0..100 {

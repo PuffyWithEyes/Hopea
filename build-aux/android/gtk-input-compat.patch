@@ -1,0 +1,377 @@
+--- /dev/null
++++ b/gdk/android/gdkandroidinput-compat-private.h
+@@ -0,0 +1,121 @@
++/* SPDX-FileCopyrightText: 2026 Daniil Klimov
++ * SPDX-License-Identifier: LGPL-2.1-or-later
++ */
++#pragma once
++#include <jni.h>
++#include <android/input.h>
++
++/* Hopea: Java input events are available before Android 12's fromJava NDK
++ * bridges. Borrow the event only for the synchronous GTK-thread dispatch;
++ * never retain a JNI local reference beyond that call. */
++typedef struct { JNIEnv *env; jobject object; } HopeaInputEvent;
++static inline jmethodID
++hopea_input_method (const HopeaInputEvent *event, const char *name, const char *signature)
++{
++  jclass klass = (*event->env)->GetObjectClass (event->env, event->object);
++  jmethodID method = (*event->env)->GetMethodID (event->env, klass, name, signature);
++  (*event->env)->DeleteLocalRef (event->env, klass);
++  return method;
++}
++static inline jint
++hopea_AInputEvent_getSource (const HopeaInputEvent *event)
++{
++  return (*event->env)->CallIntMethod (event->env, event->object,
++      hopea_input_method (event, "getSource", "()I"));
++}
++static inline jint
++hopea_AInputEvent_getDeviceId (const HopeaInputEvent *event)
++{
++  return (*event->env)->CallIntMethod (event->env, event->object,
++      hopea_input_method (event, "getDeviceId", "()I"));
++}
++static inline jint
++hopea_AMotionEvent_getAction (const HopeaInputEvent *event)
++{
++  return (*event->env)->CallIntMethod (event->env, event->object,
++      hopea_input_method (event, "getAction", "()I"));
++}
++static inline jint
++hopea_AMotionEvent_getMetaState (const HopeaInputEvent *event)
++{
++  return (*event->env)->CallIntMethod (event->env, event->object,
++      hopea_input_method (event, "getMetaState", "()I"));
++}
++static inline jint
++hopea_AMotionEvent_getPointerCount (const HopeaInputEvent *event)
++{
++  return (*event->env)->CallIntMethod (event->env, event->object,
++      hopea_input_method (event, "getPointerCount", "()I"));
++}
++static inline jint
++hopea_AMotionEvent_getButtonState (const HopeaInputEvent *event)
++{
++  return (*event->env)->CallIntMethod (event->env, event->object,
++      hopea_input_method (event, "getButtonState", "()I"));
++}
++static inline jint
++hopea_AKeyEvent_getAction (const HopeaInputEvent *event)
++{
++  return (*event->env)->CallIntMethod (event->env, event->object,
++      hopea_input_method (event, "getAction", "()I"));
++}
++static inline jint
++hopea_AKeyEvent_getMetaState (const HopeaInputEvent *event)
++{
++  return (*event->env)->CallIntMethod (event->env, event->object,
++      hopea_input_method (event, "getMetaState", "()I"));
++}
++static inline jint
++hopea_AKeyEvent_getKeyCode (const HopeaInputEvent *event)
++{
++  return (*event->env)->CallIntMethod (event->env, event->object,
++      hopea_input_method (event, "getKeyCode", "()I"));
++}
++static inline jlong
++hopea_AMotionEvent_getEventTime (const HopeaInputEvent *event)
++{
++  return (*event->env)->CallLongMethod (event->env, event->object,
++      hopea_input_method (event, "getEventTime", "()J")) * 1000000;
++}
++static inline jlong
++hopea_AMotionEvent_getDownTime (const HopeaInputEvent *event)
++{
++  return (*event->env)->CallLongMethod (event->env, event->object,
++      hopea_input_method (event, "getDownTime", "()J")) * 1000000;
++}
++static inline jlong
++hopea_AKeyEvent_getEventTime (const HopeaInputEvent *event)
++{
++  return (*event->env)->CallLongMethod (event->env, event->object,
++      hopea_input_method (event, "getEventTime", "()J")) * 1000000;
++}
++static inline jint
++hopea_AMotionEvent_getToolType (const HopeaInputEvent *event, size_t index)
++{
++  return (*event->env)->CallIntMethod (event->env, event->object,
++      hopea_input_method (event, "getToolType", "(I)I"), (jint)index);
++}
++static inline jint
++hopea_AMotionEvent_getPointerId (const HopeaInputEvent *event, size_t index)
++{
++  return (*event->env)->CallIntMethod (event->env, event->object,
++      hopea_input_method (event, "getPointerId", "(I)I"), (jint)index);
++}
++static inline jfloat
++hopea_AMotionEvent_getX (const HopeaInputEvent *event, size_t index)
++{
++  return (*event->env)->CallFloatMethod (event->env, event->object,
++      hopea_input_method (event, "getX", "(I)F"), (jint)index);
++}
++static inline jfloat
++hopea_AMotionEvent_getY (const HopeaInputEvent *event, size_t index)
++{
++  return (*event->env)->CallFloatMethod (event->env, event->object,
++      hopea_input_method (event, "getY", "(I)F"), (jint)index);
++}
++static inline jfloat
++hopea_AMotionEvent_getAxisValue (const HopeaInputEvent *event, int axis, size_t index)
++{
++  return (*event->env)->CallFloatMethod (event->env, event->object,
++      hopea_input_method (event, "getAxisValue", "(II)F"), (jint)axis, (jint)index);
++}
+--- a/gdk/android/gdkandroidevents.c
++++ b/gdk/android/gdkandroidevents.c
+@@ -86,9 +86,9 @@
+ 
+ #define GDK_ANDROID_TOUCH_EVENT_TYPE_MASK (3) // least significant 2 bits
+ static GdkEventType
+-gdk_android_events_touch_action_to_gdk (const AInputEvent *event, size_t pointer_index)
+-{
+-  gint32 action = AMotionEvent_getAction (event);
++gdk_android_events_touch_action_to_gdk (const HopeaInputEvent *event, size_t pointer_index)
++{
++  gint32 action = hopea_AMotionEvent_getAction (event);
+   gint32 masked_action = action & AMOTION_EVENT_ACTION_MASK;
+   if (masked_action == AMOTION_EVENT_ACTION_POINTER_DOWN ||
+       masked_action == AMOTION_EVENT_ACTION_POINTER_UP)
+@@ -128,13 +128,13 @@
+ static void
+ gdk_android_events_emit_button_press (gint32 mask, guint32 state, guint button,
+                                       GdkAndroidSurface *surface,
+-                                      const AInputEvent *event, GdkDevice *dev,
++                                      const HopeaInputEvent *event, GdkDevice *dev,
+                                       guint32 time, GdkModifierType mods,
+                                       gdouble x, gdouble y)
+ {
+   GdkDisplay *display = gdk_surface_get_display ((GdkSurface *) surface);
+   GdkDeviceTool *tool = gdk_android_seat_get_device_tool (GDK_ANDROID_DISPLAY (display)->seat,
+-                                                          AMotionEvent_getToolType (event, 0));
++                                                          hopea_AMotionEvent_getToolType (event, 0));
+   g_debug ("Mouse %u event: (%d & %d) %p [%s]: %s", button, mask, state, surface, G_OBJECT_TYPE_NAME (surface), (state & mask) != 0 ? "press" : "release");
+   GdkEvent *ev = gdk_button_event_new ((state & mask) != 0 ? GDK_BUTTON_PRESS : GDK_BUTTON_RELEASE,
+                                        (GdkSurface *) surface, dev, tool,
+@@ -153,18 +153,19 @@
+   GdkAndroidDisplay *display = (GdkAndroidDisplay *) gdk_surface_get_display ((GdkSurface *) surface);
+ 
+   JNIEnv *env = gdk_android_get_env ();
+-  const AInputEvent *event = AMotionEvent_fromJava (env, motion_event);
+-
+-  gint32 masked_action = AMotionEvent_getAction (event) & AMOTION_EVENT_ACTION_MASK;
+-  gint32 src = AInputEvent_getSource (event);
++  HopeaInputEvent borrowed = { env, motion_event };
++  const HopeaInputEvent *event = &borrowed;
++
++  gint32 masked_action = hopea_AMotionEvent_getAction (event) & AMOTION_EVENT_ACTION_MASK;
++  gint32 src = hopea_AInputEvent_getSource (event);
+ 
+   GdkDevice *dev = gdk_seat_get_pointer ((GdkSeat *) display->seat);
+   GdkAndroidDevice *dev_impl = GDK_ANDROID_DEVICE (dev);
+ 
+-  GdkModifierType mods = gdk_android_events_meta_to_gdk (AMotionEvent_getMetaState (event));
++  GdkModifierType mods = gdk_android_events_meta_to_gdk (hopea_AMotionEvent_getMetaState (event));
+   mods |= gdk_android_events_buttons_to_gdkmods (dev_impl->button_state);
+ 
+-  gint64 time = AMotionEvent_getEventTime (event) / 1000000 /* ns to ms */;
++  gint64 time = hopea_AMotionEvent_getEventTime (event) / 1000000 /* ns to ms */;
+ 
+   // Update keyboard focus on motion events only for autohide surfaces
+   // This *doesn't really* match the behaviour of Mutter (autohide popups
+@@ -180,17 +181,17 @@
+   if (GDK_ANDROID_EVENTS_COMPARE_MASK (src, AINPUT_SOURCE_TOUCHSCREEN))
+     {
+       // I think it might be better to drop the down time and only rely on the event identity
+-      guint base_sequence = gdk_android_surface_long_hash ((guint64) AMotionEvent_getDownTime (event));
++      guint base_sequence = gdk_android_surface_long_hash ((guint64) hopea_AMotionEvent_getDownTime (event));
+       base_sequence ^= (guint) event_identifier;
+ 
+-      size_t pointers = AMotionEvent_getPointerCount (event);
++      size_t pointers = hopea_AMotionEvent_getPointerCount (event);
+       for (size_t i = 0; i < pointers; i++)
+         {
+           GdkEventType ev_type = gdk_android_events_touch_action_to_gdk (event, i);
+ 
+-          guint sequence = base_sequence ^ gdk_android_events_int_hash(AMotionEvent_getPointerId (event, i));
+-          gfloat x = AMotionEvent_getX (event, i) / surface->cfg.scale;
+-          gfloat y = AMotionEvent_getY (event, i) / surface->cfg.scale;
++          guint sequence = base_sequence ^ gdk_android_events_int_hash(hopea_AMotionEvent_getPointerId (event, i));
++          gfloat x = hopea_AMotionEvent_getX (event, i) / surface->cfg.scale;
++          gfloat y = hopea_AMotionEvent_getY (event, i) / surface->cfg.scale;
+ 
+           GdkEvent *ev = gdk_touch_event_new (ev_type, GUINT_TO_POINTER (sequence), (GdkSurface *) surface,
+                                               display->seat->logical_touchscreen,
+@@ -202,15 +203,15 @@
+     }
+   else if (GDK_ANDROID_EVENTS_COMPARE_MASK (src, AINPUT_SOURCE_CLASS_POINTER))
+     {
+-      gfloat x = AMotionEvent_getX (event, 0) / surface->cfg.scale;
+-      gfloat y = AMotionEvent_getY (event, 0) / surface->cfg.scale;
++      gfloat x = hopea_AMotionEvent_getX (event, 0) / surface->cfg.scale;
++      gfloat y = hopea_AMotionEvent_getY (event, 0) / surface->cfg.scale;
+ 
+       if (masked_action == AMOTION_EVENT_ACTION_SCROLL)
+         {
+           GdkEvent *ev = gdk_scroll_event_new ((GdkSurface *) surface, dev, NULL,
+                                                time, mods,
+-                                               AMotionEvent_getAxisValue (event, AMOTION_EVENT_AXIS_HSCROLL, 0),
+-                                               AMotionEvent_getAxisValue (event, AMOTION_EVENT_AXIS_VSCROLL, 0),
++                                               hopea_AMotionEvent_getAxisValue (event, AMOTION_EVENT_AXIS_HSCROLL, 0),
++                                               hopea_AMotionEvent_getAxisValue (event, AMOTION_EVENT_AXIS_VSCROLL, 0),
+                                                FALSE, // how am I supposed to know if the current scroll event is the last?
+                                                GDK_SCROLL_UNIT_WHEEL,
+                                                GDK_SCROLL_RELATIVE_DIRECTION_UNKNOWN);
+@@ -223,10 +224,10 @@
+           // button up event, as GDK does not
+           // provide a cancel mechanism for
+           // button events.
+-          gint32 tool_type = AMotionEvent_getToolType (event, 0);
++          gint32 tool_type = hopea_AMotionEvent_getToolType (event, 0);
+           if (tool_type == AMOTION_EVENT_TOOL_TYPE_MOUSE || tool_type == AMOTION_EVENT_TOOL_TYPE_FINGER)
+             {
+-              gint32 button_state = AMotionEvent_getButtonState (event);
++              gint32 button_state = hopea_AMotionEvent_getButtonState (event);
+               if (GDK_ANDROID_EVENTS_BUTTON_IS_DIFFERENT (button_state, dev_impl->button_state, AMOTION_EVENT_BUTTON_PRIMARY))
+                 gdk_android_events_emit_button_press (AMOTION_EVENT_BUTTON_PRIMARY, button_state,
+                                                       GDK_BUTTON_PRIMARY,
+@@ -277,7 +278,7 @@
+           // are seemingly not actually passed to the application. Instead
+           // BUTTON_BACK triggers the navigate back action and BUTTON_FORWARD does
+           // (at least visibly) nothing.
+-          /*gint32 button_state = AMotionEvent_getButtonState(event);
++          /*gint32 button_state = hopea_AMotionEvent_getButtonState(event);
+ 
+           if (GDK_ANDROID_EVENTS_BUTTON_IS_DIFFERENT(button_state, dev_impl->button_state, AMOTION_EVENT_BUTTON_BACK))
+                   gdk_android_events_emit_button_press(AMOTION_EVENT_BUTTON_BACK, 4, button_state, surface, event, dev, time, mods | GDK_BUTTON4_MASK, x, y);
+@@ -291,7 +292,7 @@
+                masked_action == AMOTION_EVENT_ACTION_HOVER_MOVE)
+         {
+           GdkDeviceTool *tool = gdk_android_seat_get_device_tool (display->seat,
+-                                                                  AMotionEvent_getToolType (event, 0));
++                                                                  hopea_AMotionEvent_getToolType (event, 0));
+           GdkEvent *ev = gdk_motion_event_new ((GdkSurface *) surface, dev, tool,
+                                                time, mods,
+                                                x, y,
+@@ -302,7 +303,7 @@
+           // event, we'll have to check for changes during move events. This should
+           // be fine, given that it's quite hard if not impossible (depending on the
+           // tablet) to press a stylus button without causing a move event.
+-          gint32 button_state = AMotionEvent_getButtonState (event);
++          gint32 button_state = hopea_AMotionEvent_getButtonState (event);
+           if (GDK_ANDROID_EVENTS_BUTTON_IS_DIFFERENT (button_state, dev_impl->button_state, AMOTION_EVENT_BUTTON_STYLUS_PRIMARY))
+             gdk_android_events_emit_button_press (AMOTION_EVENT_BUTTON_STYLUS_PRIMARY, button_state,
+                                                   GDK_BUTTON_MIDDLE,
+@@ -369,7 +370,7 @@
+       (*env)->PopLocalFrame (env, NULL);
+     }
+ 
+-  AInputEvent_release (event);
++  (void)event; /* Borrowed Java event; nothing to release. */
+ }
+ 
+ void
+@@ -379,9 +380,10 @@
+   GdkAndroidDisplay *display = (GdkAndroidDisplay *) gdk_surface_get_display ((GdkSurface *) surface);
+ 
+   JNIEnv *env = gdk_android_get_env ();
+-  const AInputEvent *event = AKeyEvent_fromJava (env, key_event);
+-
+-  gint32 action = AKeyEvent_getAction (event);
++  HopeaInputEvent borrowed = { env, key_event };
++  const HopeaInputEvent *event = &borrowed;
++
++  gint32 action = hopea_AKeyEvent_getAction (event);
+   // The AKeyState enum values UP and DOWN are actually inversed
+   // when the key is depressed the keystate is 0 (UP), while the
+   // keystate becomes 1 (DOWN) once the key was released again.
+@@ -390,12 +392,12 @@
+   GdkDevice *dev = gdk_seat_get_keyboard ((GdkSeat *) display->seat);
+   gdk_android_device_keyboard_maybe_update_surface_focus ((GdkAndroidDevice *) dev, surface);
+ 
+-  GdkModifierType mods = gdk_android_events_meta_to_gdk (AKeyEvent_getMetaState (event));
++  GdkModifierType mods = gdk_android_events_meta_to_gdk (hopea_AKeyEvent_getMetaState (event));
+   mods |= gdk_android_events_buttons_to_gdkmods (((GdkAndroidDevice *) display->seat->logical_pointer)->button_state);
+ 
+-  gint64 time = AKeyEvent_getEventTime (event) / 1000000 /* ns to ms */;
+-
+-  gint32 keycode = AKeyEvent_getKeyCode (event);
++  gint64 time = hopea_AKeyEvent_getEventTime (event) / 1000000 /* ns to ms */;
++
++  gint32 keycode = hopea_AKeyEvent_getKeyCode (event);
+ 
+   if (keycode >= AKEYCODE_BUTTON_1 && keycode <= AKEYCODE_BUTTON_16)
+     {
+@@ -423,5 +425,5 @@
+                                     &translated, &translated, NULL);
+   gdk_android_seat_consume_event ((GdkDisplay *) display, ev);
+ cleanup:
+-  AInputEvent_release (event);
+-}
++  (void)event; /* Borrowed Java event; nothing to release. */
++}
+--- a/gdk/android/gdkandroidseat.c
++++ b/gdk/android/gdkandroidseat.c
+@@ -232,7 +232,7 @@
+ 
+ gboolean
+ gdk_android_seat_normalize_range (JNIEnv *env, jobject device,
+-                                  const AInputEvent *event, size_t pointer_index,
++                                  const HopeaInputEvent *event, size_t pointer_index,
+                                   guint32 mask,
+                                   gfloat from, gfloat to,
+                                   gdouble *out)
+@@ -252,7 +252,7 @@
+   gfloat max = (*env)->CallFloatMethod (env,
+                                         axis,
+                                         gdk_android_get_java_cache ()->a_motion_range.get_max);
+-  gfloat value = AMotionEvent_getAxisValue (event, mask, pointer_index);
++  gfloat value = hopea_AMotionEvent_getAxisValue (event, mask, pointer_index);
+ 
+   // $v_\text{new}=from+\frac{(v-min)*(to-from)}{max-min}$
+   *out = from + ((value - min) * (to - from)) / (max - min);
+@@ -260,18 +260,18 @@
+ }
+ 
+ gdouble *
+-gdk_android_seat_create_axes_from_motion_event (const AInputEvent *event, size_t pointer_index)
++gdk_android_seat_create_axes_from_motion_event (const HopeaInputEvent *event, size_t pointer_index)
+ {
+   gdouble axes[GDK_AXIS_LAST] = { 0 };
+-  axes[0] = AMotionEvent_getX (event, pointer_index);
+-  axes[1] = AMotionEvent_getY (event, pointer_index);
++  axes[0] = hopea_AMotionEvent_getX (event, pointer_index);
++  axes[1] = hopea_AMotionEvent_getY (event, pointer_index);
+ 
+   JNIEnv *env = gdk_android_get_env ();
+   (*env)->PushLocalFrame (env, 1);
+   jobject device = (*env)->CallStaticObjectMethod (env,
+                                                    gdk_android_get_java_cache ()->a_input_device.klass,
+                                                    gdk_android_get_java_cache ()->a_input_device.get_device_from_id,
+-                                                   AInputEvent_getDeviceId (event));
++                                                   hopea_AInputEvent_getDeviceId (event));
+   if (device)
+     {
+       // The values from the from/to parameters are from the switch statement in
+--- a/gdk/android/gdkandroidseat-private.h
++++ b/gdk/android/gdkandroidseat-private.h
+@@ -19,7 +19,7 @@
+ 
+ #pragma once
+ 
+-#include <android/input.h>
++#include "gdkandroidinput-compat-private.h"
+ 
+ #include "gdkseatprivate.h"
+ 
+@@ -54,8 +54,8 @@
+ 
+ GdkDeviceTool *gdk_android_seat_get_device_tool (GdkAndroidSeat *self, gint32 tool_type);
+ 
+-gboolean gdk_android_seat_normalize_range (JNIEnv *env, jobject device, const AInputEvent *event, size_t pointer_index, guint32 mask, gfloat from, gfloat to, gdouble *out);
+-gdouble *gdk_android_seat_create_axes_from_motion_event (const AInputEvent *event, size_t pointer_index);
++gboolean gdk_android_seat_normalize_range (JNIEnv *env, jobject device, const HopeaInputEvent *event, size_t pointer_index, guint32 mask, gfloat from, gfloat to, gdouble *out);
++gdouble *gdk_android_seat_create_axes_from_motion_event (const HopeaInputEvent *event, size_t pointer_index);
+ void gdk_android_seat_consume_event (GdkDisplay *display, GdkEvent *event);
+ 
+ G_END_DECLS

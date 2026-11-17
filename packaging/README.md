@@ -33,7 +33,7 @@ Python's SQLite module. These checks do not constitute full application builds.
 | GhostBSD / HardenedBSD and other derivatives | The corresponding base BSD recipe | ABI compatibility and package availability must be checked for each release |
 | Windows 10/11 x64 | MSYS2 UCRT64 → Setup EXE, ZIP and Scoop JSON | Per-user installation; includes GTK, GStreamer, FFmpeg and private Python. See [compatibility and build instructions](windows/README.md) |
 | macOS Apple Silicon / Intel | Homebrew formula and bottle | Native build with Homebrew dependencies; not a standalone `.app`, no Apple notarization |
-| Android ARM64 / x86-64 | Preview APK | Separate expensive jobs with a persistent preview key; Android 12+. x86-64 still needs a full APK build and launch test |
+| Android ARM64 / ARMv7 / x86-64 | Preview APK | Android 9+ (API 28). ARM64 and ARMv7 APK builds verified; device validation pending. ARMv7 currently uses the local build script. CI builds ARM64/x86-64 with a persistent preview key; x86-64 still needs a full APK build and launch test |
 | Flatpak | `build-aux/flatpak/` → `hopea.flatpak` | Shared Linux distribution format, GNOME 51 runtime |
 
 Native Linux packages require GTK **4.20+**, libadwaita **1.8+** and GStreamer

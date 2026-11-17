@@ -6,8 +6,9 @@ repo=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
 arch=${HOPEA_ANDROID_ARCH:-aarch64}
 case "$arch" in
   aarch64) abi=arm64-v8a; label=arm64; default_stage=/tmp/hopea-android-src ;;
+  armv7) abi=armeabi-v7a; label=armv7; default_stage=/tmp/hopea-android-armv7-src ;;
   x86_64) abi=x86_64; label=x86_64; default_stage=/tmp/hopea-android-x86_64-src ;;
-  *) echo 'HOPEA_ANDROID_ARCH must be aarch64 or x86_64.' >&2; exit 1 ;;
+  *) echo 'HOPEA_ANDROID_ARCH must be aarch64, armv7 or x86_64.' >&2; exit 1 ;;
 esac
 stage=${1:-$default_stage}
 mkdir -p "$stage"

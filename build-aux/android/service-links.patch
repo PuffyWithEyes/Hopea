@@ -1,0 +1,133 @@
+--- a/gdk/android/glue/java/org/gtk/android/ToplevelActivity.java
++++ b/gdk/android/glue/java/org/gtk/android/ToplevelActivity.java
+@@ -1,37 +1,99 @@
+-	// Hopea: prefer an installed app for web links, then the user's browser.
++	// Hopea: official client, other link handlers, then an external browser.
+ 	@Override
+ 	public void startActivity(Intent intent, Bundle options) {
+ 		Uri uri = intent.getData();
+-		if (Intent.ACTION_VIEW.equals(intent.getAction()) && uri != null
+-				&& ("https".equalsIgnoreCase(uri.getScheme()) || "http".equalsIgnoreCase(uri.getScheme()))
+-				&& intent.getComponent() == null && intent.getPackage() == null) {
+-			Intent appIntent = new Intent(intent);
+-			appIntent.addCategory(Intent.CATEGORY_BROWSABLE);
+-			String host = uri.getHost();
+-			boolean yandexConfirmation = ("ya.ru".equalsIgnoreCase(host)
+-					|| "oauth.yandex.ru".equalsIgnoreCase(host) || "oauth.yandex.com".equalsIgnoreCase(host))
+-					&& ("/device".equals(uri.getPath()) || "/device/".equals(uri.getPath()));
+-			if ("https".equalsIgnoreCase(uri.getScheme()) && (yandexConfirmation
+-					|| "music.yandex.ru".equalsIgnoreCase(host) || "music.yandex.com".equalsIgnoreCase(host))) {
+-				// Hopea: Yandex Music gets the original link before any browser.
+-				appIntent.setPackage("ru.yandex.music");
+-				try {
+-					super.startActivity(appIntent, options);
+-					return;
+-				} catch (android.content.ActivityNotFoundException | SecurityException noMusicHandler) {
+-					// Missing, disabled, or unable to handle this confirmation URL.
+-					// Do not substitute the app's home screen for authorization.
+-				}
+-				super.startActivity(intent, options);
+-				return;
+-			}
+-			appIntent.addFlags(Intent.FLAG_ACTIVITY_REQUIRE_NON_BROWSER);
+-			try {
+-				super.startActivity(appIntent, options);
+-				return;
+-			} catch (android.content.ActivityNotFoundException noApp) {
+-				// The original intent preserves the user's browser preferences.
++		if (!Intent.ACTION_VIEW.equals(intent.getAction()) || uri == null
++				|| !"https".equalsIgnoreCase(uri.getScheme()) || uri.getUserInfo() != null
++				|| (uri.getPort() != -1 && uri.getPort() != 443)
++				|| intent.getComponent() != null || intent.getPackage() != null) {
++			super.startActivity(intent, options);
++			return;
++		}
++		String host = uri.getHost();
++		String path = uri.getPath();
++		boolean confirmation = ("ya.ru".equalsIgnoreCase(host)
++				|| "oauth.yandex.ru".equalsIgnoreCase(host) || "oauth.yandex.com".equalsIgnoreCase(host))
++				&& ("/device".equals(path) || "/device/".equals(path))
++				&& uri.getQuery() == null && uri.getFragment() == null;
++		String official = null;
++		if (confirmation || "music.yandex.ru".equalsIgnoreCase(host) || "music.yandex.com".equalsIgnoreCase(host))
++			official = "ru.yandex.music";
++		else if (("vk.ru".equalsIgnoreCase(host) || "vk.com".equalsIgnoreCase(host)
++				|| "m.vk.ru".equalsIgnoreCase(host) || "m.vk.com".equalsIgnoreCase(host))
++				&& path != null && (path.equals("/audio") || path.startsWith("/audio/") || path.startsWith("/audio-")))
++			official = "com.vkontakte.android";
++		else if ("open.spotify.com".equalsIgnoreCase(host))
++			official = "com.spotify.music";
++		else if ("music.youtube.com".equalsIgnoreCase(host))
++			official = "com.google.android.apps.youtube.music";
++		if (official == null) {
++			super.startActivity(intent, options);
++			return;
++		}
++
++		// Build a plain VIEW intent: do not inherit Custom Tabs extras, grant
++		// flags or the Hopea task. Keep the exact URL, including its path.
++		Intent external = new Intent(Intent.ACTION_VIEW, uri);
++		external.addCategory(Intent.CATEGORY_BROWSABLE);
++		external.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
++		if (hopeaTryLink(new Intent(external).setPackage(official), options))
++			return;
++
++		android.content.pm.PackageManager pm = getPackageManager();
++		Intent generic = new Intent(Intent.ACTION_VIEW, Uri.parse("https://"));
++		generic.addCategory(Intent.CATEGORY_BROWSABLE);
++		java.util.Set<String> browsers = new java.util.LinkedHashSet<>();
++		for (android.content.pm.ResolveInfo info : pm.queryIntentActivities(generic, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY))
++			if (info.activityInfo != null)
++				browsers.add(info.activityInfo.packageName);
++
++		// A device-confirmation code belongs to the official client/browser,
++		// never to an arbitrary app advertising that it handles OAuth URLs.
++		java.util.ArrayList<Intent> clients = new java.util.ArrayList<>();
++		java.util.Set<String> seen = new java.util.HashSet<>();
++		if (!confirmation) {
++			for (android.content.pm.ResolveInfo info : pm.queryIntentActivities(external, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)) {
++				android.content.pm.ActivityInfo activity = info.activityInfo;
++				if (activity != null && activity.exported && activity.enabled
++						&& !browsers.contains(activity.packageName)
++						&& !official.equals(activity.packageName) && !getPackageName().equals(activity.packageName)
++						&& seen.add(activity.packageName))
++					clients.add(new Intent(external).setComponent(new android.content.ComponentName(activity.packageName, activity.name)));
+ 			}
+ 		}
+-		super.startActivity(intent, options);
++		if (!clients.isEmpty() && hopeaTryLink(hopeaLinkChoice(clients), options))
++			return;
++
++		// Resolve a generic web URL to respect the default browser, without
++		// handing the original service URL back to the failed native client.
++		android.content.pm.ResolveInfo preferred = pm.resolveActivity(generic, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY);
++		if (preferred != null && preferred.activityInfo != null && browsers.contains(preferred.activityInfo.packageName)
++				&& hopeaTryLink(new Intent(external).setPackage(preferred.activityInfo.packageName), options))
++			return;
++		java.util.ArrayList<Intent> choices = new java.util.ArrayList<>();
++		for (String browser : browsers)
++			if (!getPackageName().equals(browser))
++				choices.add(new Intent(external).setPackage(browser));
++		if (!choices.isEmpty() && hopeaTryLink(hopeaLinkChoice(choices), options))
++			return;
++		throw new android.content.ActivityNotFoundException("No browser or service client can open this link");
+ 	}
++
++	private Intent hopeaLinkChoice(java.util.ArrayList<Intent> choices) {
++		if (choices.size() == 1)
++			return choices.get(0);
++		// Null title lets Android supply its localized chooser heading.
++		Intent chooser = Intent.createChooser(choices.get(0), null);
++		chooser.putExtra(Intent.EXTRA_INITIAL_INTENTS, choices.subList(1, choices.size()).toArray(new Intent[0]));
++		chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
++		return chooser;
++	}
++
++	private boolean hopeaTryLink(Intent intent, Bundle options) {
++		try {
++			super.startActivity(intent, options);
++			return true;
++		} catch (android.content.ActivityNotFoundException | SecurityException unavailable) {
++			return false;
++		}
++	}

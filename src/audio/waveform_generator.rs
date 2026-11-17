@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2022  Emmanuele Bassi
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 
 use glib::clone;
 use gst::prelude::*;
@@ -24,6 +24,11 @@ mod imp {
         pub song: RefCell<Option<Song>>,
         pub peaks: RefCell<Option<Vec<(f64, f64)>>>,
         pub pipeline: RefCell<Option<(gst::Element, gst::bus::BusWatchGuard)>>,
+        pub generation: Cell<u64>,
+        pub remote_pending: Cell<bool>,
+        pub remote_missing: Cell<bool>,
+        pub remote_retried: Cell<bool>,
+        pub audio_started: Cell<bool>,
     }
 
     #[glib::object_subclass]
@@ -59,6 +64,115 @@ mod imp {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    #[ignore = "requires temporary XDG directories and the generated GSettings schema"]
+    fn remote_waveform_retries_once_after_audio_starts() {
+        use std::{
+            io::{BufRead, Write},
+            sync::{
+                atomic::{AtomicBool, AtomicUsize, Ordering},
+                Arc,
+            },
+            time::{Duration, Instant},
+        };
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let address = listener.local_addr().unwrap();
+        let requests = Arc::new(AtomicUsize::new(0));
+        let stop = Arc::new(AtomicBool::new(false));
+        let (count, done) = (requests.clone(), stop.clone());
+        let server = std::thread::spawn(move || {
+            let deadline = Instant::now() + Duration::from_secs(10);
+            while !done.load(Ordering::SeqCst) && Instant::now() < deadline {
+                let Ok((mut socket, _)) = listener.accept() else {
+                    std::thread::sleep(Duration::from_millis(5));
+                    continue;
+                };
+                socket
+                    .set_read_timeout(Some(Duration::from_secs(2)))
+                    .unwrap();
+                let mut reader = std::io::BufReader::new(socket.try_clone().unwrap());
+                let mut request = String::new();
+                reader.read_line(&mut request).unwrap();
+                loop {
+                    let mut header = String::new();
+                    if reader.read_line(&mut header).unwrap() == 0 || header == "\r\n" {
+                        break;
+                    }
+                }
+                if !request.contains("/tracks/42/peaks ") {
+                    // Connecting the client also schedules publication of
+                    // saved lyrics; this fixture has no lyrics endpoint.
+                    write!(
+                        socket,
+                        "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+                    )
+                    .unwrap();
+                    continue;
+                }
+                // The initial request precedes verification of the download.
+                let (status, body) = if count.fetch_add(1, Ordering::SeqCst) == 0 {
+                    ("404 Not Found", "{}")
+                } else {
+                    ("200 OK", "[[0.25,0.5]]")
+                };
+                write!(socket, "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).unwrap();
+            }
+        });
+        glib::MainContext::default().block_on(async {
+            library::set_client(Some(
+                library::LibraryClient::new(&format!("http://{address}"), "test").unwrap(),
+            ));
+            let track = serde_json::from_value(serde_json::json!({
+                "id":42, "title":"Waveform regression", "artist":null, "album":null,
+                "duration_ms":1000, "format":"flac", "codec":"flac", "sample_rate":44100,
+                "channels":2, "size":1024, "sha256":"waveform-regression",
+                "has_cover":false, "uploader":"Test", "uploaded_at":0,
+                "mine":false, "local":false, "favorite":false, "sources":1
+            }))
+            .unwrap();
+            let song = Song::from_remote(&track, "http://127.0.0.1/unused-audio", None);
+            let generator = WaveformGenerator::new();
+            generator.imp().song.replace(Some(song));
+            generator.fetch_remote_peaks(42);
+            for _ in 0..100 {
+                if !generator.imp().remote_pending.get() {
+                    break;
+                }
+                glib::timeout_future(Duration::from_millis(10)).await;
+            }
+            assert!(generator.imp().remote_missing.get());
+            assert!(generator.peaks().is_none());
+            assert_eq!(requests.load(Ordering::SeqCst), 1);
+            generator.set_position(1, false);
+            for _ in 0..100 {
+                if generator.peaks().is_some() {
+                    break;
+                }
+                glib::timeout_future(Duration::from_millis(10)).await;
+            }
+            assert_eq!(generator.peaks(), Some(vec![(0.25, 0.5)]));
+            for position in 2..100 {
+                generator.set_position(position, false);
+            }
+            glib::timeout_future(Duration::from_millis(50)).await;
+            assert_eq!(requests.load(Ordering::SeqCst), 2);
+            // A late cache read from the previous selection cannot replace it.
+            generator
+                .load_peaks_cache("/nonexistent/old-waveform", u64::MAX)
+                .await;
+            assert_eq!(generator.peaks(), Some(vec![(0.25, 0.5)]));
+            library::set_client(None);
+        });
+        stop.store(true, Ordering::SeqCst);
+        server.join().unwrap();
+    }
+}
+
 glib::wrapper! {
     pub struct WaveformGenerator(ObjectSubclass<imp::WaveformGenerator>);
 }
@@ -73,11 +187,27 @@ impl Controller for WaveformGenerator {
     fn set_playback_state(&self, _playback_state: &PlaybackState) {}
 
     fn set_song(&self, song: &Song) {
+        let imp = self.imp();
+        imp.generation.set(imp.generation.get().wrapping_add(1));
+        imp.remote_pending.set(false);
+        imp.remote_missing.set(false);
+        imp.remote_retried.set(false);
+        imp.audio_started.set(false);
+        imp.peaks.replace(None);
+        if let Some((pipeline, _watch)) = imp.pipeline.take() {
+            let _ = pipeline.set_state(gst::State::Null);
+        }
         self.imp().song.replace(Some(song.clone()));
+        self.notify("has-peaks");
         self.load_peaks();
     }
 
-    fn set_position(&self, _position: u64, _notify: bool) {}
+    fn set_position(&self, position: u64, _notify: bool) {
+        if position > 0 {
+            self.imp().audio_started.set(true);
+            self.retry_remote_peaks();
+        }
+    }
     fn set_repeat_mode(&self, _mode: RepeatMode) {}
 }
 
@@ -125,17 +255,21 @@ impl WaveformGenerator {
         self.notify("has-peaks");
     }
 
-    async fn load_peaks_cache(&self, cache: impl AsRef<std::path::Path>) {
+    async fn load_peaks_cache(&self, cache: impl AsRef<std::path::Path>, generation: u64) {
         let file = gio::File::for_path(&cache);
-        if let Ok(bytes) = crate::utils::read_file_limited(&file, 4 * 1024 * 1024).await {
-            match serde_json::from_slice(&bytes[..]) {
-                Ok(p) => {
+        let bytes = crate::utils::read_file_limited(&file, 4 * 1024 * 1024).await;
+        if self.imp().generation.get() != generation {
+            return;
+        }
+        if let Ok(bytes) = bytes {
+            match serde_json::from_slice::<Vec<(f64, f64)>>(&bytes[..]) {
+                Ok(p) if !p.is_empty() => {
                     debug!("Loaded cached waveform file");
                     self.imp().peaks.replace(Some(p));
                     self.notify("has-peaks");
                 }
-                Err(err) => {
-                    debug!("Could not parse cached waveform file: {}", err);
+                _ => {
+                    debug!("Cached waveform is empty or invalid");
                     self.generate_peaks();
                 }
             }
@@ -146,6 +280,7 @@ impl WaveformGenerator {
     }
 
     fn load_peaks(&self) {
+        let generation = self.imp().generation.get();
         let song = match self.imp().song.borrow().as_ref() {
             Some(s) => s.clone(),
             None => return,
@@ -160,8 +295,28 @@ impl WaveformGenerator {
             ctx.spawn_local(clone!(
                 #[weak(rename_to = this)]
                 self,
-                async move { this.load_peaks_cache(&cache).await }
+                async move { this.load_peaks_cache(&cache, generation).await }
             ));
+        } else {
+            self.generate_peaks();
+        }
+    }
+
+    fn retry_remote_peaks(&self) {
+        let imp = self.imp();
+        if !imp.audio_started.get()
+            || !imp.remote_missing.get()
+            || imp.remote_pending.get()
+            || imp.remote_retried.get()
+        {
+            return;
+        }
+        let id = imp.song.borrow().as_ref().and_then(Song::remote_id);
+        if let Some(id) = id {
+            // One local API retry after audio actually starts. Do not poll peers
+            // or repeatedly retry on every position update/pause/resume.
+            imp.remote_retried.set(true);
+            self.fetch_remote_peaks(id);
         }
     }
 
@@ -172,6 +327,8 @@ impl WaveformGenerator {
             self.notify("has-peaks");
             return;
         };
+        self.imp().remote_pending.set(true);
+        let generation = self.imp().generation.get();
 
         glib::MainContext::default().spawn_local(clone!(
             #[weak(rename_to = this)]
@@ -186,9 +343,10 @@ impl WaveformGenerator {
                     .borrow()
                     .as_ref()
                     .and_then(|s| s.remote_id());
-                if current != Some(id) {
+                if current != Some(id) || this.imp().generation.get() != generation {
                     return;
                 }
+                this.imp().remote_pending.set(false);
 
                 match peaks {
                     Ok(peaks) => {
@@ -200,8 +358,12 @@ impl WaveformGenerator {
                         this.save_peaks();
                     }
                     Err(err) => {
+                        this.imp()
+                            .remote_missing
+                            .set(matches!(err, library::ClientError::NotFound));
                         warn!("Unable to fetch the waveform: {err}");
                         this.notify("has-peaks");
+                        this.retry_remote_peaks();
                     }
                 }
             }
@@ -300,7 +462,10 @@ impl WaveformGenerator {
                                 .expect("Unable to set 'null' state");
                             // We're done
                             this.imp().pipeline.replace(None);
-                            this.save_peaks();
+                            // Missing codecs must not leave a permanently empty
+                            // cache that survives an application upgrade.
+                            this.imp().peaks.replace(None);
+                            this.notify("has-peaks");
                             return glib::ControlFlow::Break;
                         }
                         MessageView::Element(element) => {

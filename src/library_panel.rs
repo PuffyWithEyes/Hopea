@@ -39,6 +39,10 @@ use crate::{
 /// Longest name shown next to shared songs, as the node accepts it
 const MAX_NAME_CHARS: usize = 32;
 
+pub(crate) fn import_subscription_notice() -> String {
+    i18n("Service imports require an active subscription to that service. Importing without one violates Hopea’s import rules.")
+}
+
 /// Which list a row is shown in; rows behave slightly differently in each.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum ListKind {
@@ -163,6 +167,8 @@ mod imp {
         // Incremented for every search, so that late responses to an older
         // query are ignored
         pub generation: Cell<u64>,
+        pub search_text_key: RefCell<String>,
+        pub active_query: RefCell<String>,
         /// Whether the favorites were put in the playlist since the app started
         pub favorites_in_playlist: Cell<bool>,
         pub availability_loading: Cell<bool>,
@@ -361,7 +367,22 @@ impl LibraryPanel {
         imp.search_entry.connect_search_changed(clone!(
             #[weak(rename_to = this)]
             self,
-            move |_| this.search()
+            move |_| {
+                // Replacing entry text can emit an intermediate empty value.
+                // Compare the settled text so whitespace-only replacements do
+                // not clear results and restart network discovery.
+                glib::idle_add_local_once(clone!(
+                    #[weak]
+                    this,
+                    move || {
+                        let key = crate::search::text_key(&this.imp().search_entry.text());
+                        if *this.imp().search_text_key.borrow() != key {
+                            this.imp().search_text_key.replace(key);
+                            this.search();
+                        }
+                    }
+                ));
+            }
         ));
 
         imp.retry_page_button.connect_clicked(clone!(
@@ -663,9 +684,11 @@ impl LibraryPanel {
     /// Imports downloaded audio, or song lists to look for on the network.
     pub async fn import_music(&self) {
         let group = adw::PreferencesGroup::builder()
-            .description(i18n(
-                "Downloaded audio files are checked, added to your library and shared. For exported song lists, the app looks for the songs on the network and stars the ones people share. The others are looked for again later.",
-            ))
+            .description([
+                i18n("Choose your music service, audio files or an exported song list. Imported audio is added to your library and shared; songs from lists are searched for on the network."),
+                import_subscription_notice(),
+                i18n("A subscription does not grant permission to share music. Share only what you have permission to share."),
+            ].join("\n\n"))
             .build();
         let alert = adw::AlertDialog::builder()
             .heading(i18n("Bring Your Music Over"))
@@ -1288,11 +1311,6 @@ impl LibraryPanel {
         privacy_group.add(&protected_row);
         privacy_group.add(&status_row);
 
-        let unliked_group = adw::PreferencesGroup::builder()
-            .title(i18n("Favorites and Sharing"))
-            .description(i18n("Stars add songs to your personal playlist. Removing a star keeps the audio and albums on this computer, and they continue to be shared while sharing is enabled."))
-            .build();
-
         let import_row = adw::ButtonRow::builder()
             .title(i18n("Bring Your Music Over…"))
             .start_icon_name("hopea-document-open-symbolic")
@@ -1418,20 +1436,10 @@ impl LibraryPanel {
         let game_row = adw::SwitchRow::builder()
             .title(i18n("Game Mode"))
             .subtitle(crate::gaming::description())
-            .active(settings.boolean("game-mode"))
+            .active(crate::gaming::supported() && settings.boolean("game-mode"))
+            .visible(crate::gaming::supported())
             .build();
         group.add(&game_row);
-        let game_force = adw::SwitchRow::builder()
-            .title(i18n("Keep Game Mode Active"))
-            .subtitle(i18n("Use reduced activity until you turn this off, including for games that are not detected automatically."))
-            .active(settings.boolean("game-mode-force"))
-            .sensitive(game_row.is_active())
-            .build();
-        game_row
-            .bind_property("active", &game_force, "sensitive")
-            .sync_create()
-            .build();
-        group.add(&game_force);
         #[cfg(target_os = "android")]
         {
             let access = adw::ActionRow::builder()
@@ -1471,13 +1479,20 @@ impl LibraryPanel {
         let accent = crate::accent::Settings::new(self);
         let appearance = crate::artwork::Settings::new(self);
         let language = crate::language::Settings::new();
-        groups.append(&language.group);
-        groups.append(&accent.group);
-        groups.append(&appearance.group);
+        let appearance_section = adw::PreferencesGroup::builder()
+            .title(i18n("Appearance"))
+            .build();
+        let appearance_content = gtk::Box::new(gtk::Orientation::Vertical, 12);
+        accent.group.set_title("");
+        appearance.group.set_title("");
+        appearance_content.append(&language.group);
+        appearance_content.append(&accent.group);
+        appearance_content.append(&appearance.group);
+        appearance_section.add(&appearance_content);
+        groups.append(&appearance_section);
         groups.append(&startup_group);
         groups.append(&privacy_group);
         groups.append(&group);
-        groups.append(&unliked_group);
         groups.append(&import_group);
         groups.append(&cache_group);
         if !crate::dialogs::confirm_form(
@@ -1510,7 +1525,7 @@ impl LibraryPanel {
         }
         stored.push(settings.set_boolean("library-only-protected", protected_row.is_active()));
         stored.push(settings.set_boolean("game-mode", game_row.is_active()));
-        stored.push(settings.set_boolean("game-mode-force", game_force.is_active()));
+
         for result in stored {
             if let Err(err) = result {
                 warn!("Unable to store a setting: {err}");
@@ -1583,6 +1598,14 @@ impl LibraryPanel {
     }
 
     fn search(&self) {
+        self.imp().active_query.replace(
+            self.imp()
+                .search_entry
+                .text()
+                .split_whitespace()
+                .collect::<Vec<_>>()
+                .join(" "),
+        );
         self.imp().loaded.set(0);
         self.imp().has_more.set(false);
         self.imp().results_scroll.vadjustment().set_value(0.0);
@@ -1596,7 +1619,7 @@ impl LibraryPanel {
         if offset > 0 && imp.page_loading.get() {
             return;
         }
-        let query = imp.search_entry.text().trim().to_string();
+        let query = imp.active_query.borrow().clone();
         if query.is_empty() {
             self.reset_search();
             imp.empty_page.set_title(&i18n("Start Searching"));
@@ -1631,9 +1654,26 @@ impl LibraryPanel {
                 if this.imp().generation.get() != generation {
                     return;
                 }
-                let result = client
-                    .discover(&query, offset, offset == 0, this.order())
-                    .await;
+                let result = if offset == 0 {
+                    let result = client
+                        .discover_live(&query, this.order(), |page| {
+                            if this.imp().generation.get() != generation {
+                                return false;
+                            }
+                            if let Some(page) = page.filter(|page| !page.tracks.is_empty()) {
+                                this.sync_live_results(&page.tracks);
+                                this.imp().search_stack.set_visible_child_name("results");
+                            }
+                            true
+                        })
+                        .await;
+                    let Some(result) = result else {
+                        return;
+                    };
+                    result
+                } else {
+                    client.discover(&query, offset, false, this.order()).await
+                };
                 if this.imp().generation.get() != generation {
                     return;
                 }
@@ -1665,25 +1705,11 @@ impl LibraryPanel {
     fn show_page(&self, query: &str, offset: u32, tracks: &[Track], total: u64) {
         let imp = self.imp();
         if offset == 0 {
-            self.clear_results();
-        }
-        self.append_album_results(tracks);
-        for track in tracks {
-            self.append_result(track);
-        }
-        if offset == 0 && !tracks.is_empty() {
-            // Reset the ListView anchor after replacing its model contents.
-            // Setting only the adjustment before loading lets GTK restore the
-            // previous end-of-list position when the new rows are allocated.
-            imp.results_list
-                .scroll_to(0, gtk::ListScrollFlags::NONE, None);
-            if imp
-                .album_results
-                .get()
-                .is_some_and(|model| model.n_items() > 0)
-            {
-                imp.albums_list
-                    .scroll_to(0, gtk::ListScrollFlags::NONE, None);
+            self.sync_live_results(tracks);
+        } else {
+            self.append_album_results(tracks);
+            for track in tracks {
+                self.append_result(track);
             }
         }
         let loaded = if offset == 0 {

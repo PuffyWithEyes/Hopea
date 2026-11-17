@@ -24,6 +24,20 @@ mod desktop;
 mod macos;
 #[cfg(target_os = "android")]
 static ANDROID_STATUS: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::new(-2);
+/// Only platforms with an implemented automatic detector expose Game Mode.
+pub const fn supported() -> bool {
+    cfg!(any(
+        target_os = "linux",
+        target_os = "windows",
+        target_os = "macos",
+        target_os = "android",
+        target_os = "freebsd",
+        target_os = "openbsd",
+        target_os = "netbsd",
+        target_os = "dragonfly"
+    ))
+}
+
 pub fn active() -> bool {
     ACTIVE.load(Ordering::Relaxed)
 }
@@ -37,30 +51,23 @@ fn apply(active: bool) {
 
 pub fn init() {
     let settings = crate::utils::settings_manager();
-    for key in ["game-mode", "game-mode-force"] {
-        settings.connect_changed(Some(key), |settings, key| {
-            if !settings.boolean("game-mode") {
-                apply(false);
-            } else if settings.boolean("game-mode-force") {
-                apply(true);
-            } else if key == "game-mode-force" {
-                // Remove the manual override immediately; the next automatic
-                // probe can re-enable it if a game is still running.
-                apply(false);
-            }
-        });
+    // The retired game-mode-force key is deliberately ignored, including
+    // installations that previously persisted it as true.
+    if !supported() {
+        apply(false);
+        return;
     }
+    settings.connect_changed(Some("game-mode"), |settings, _| {
+        if !settings.boolean("game-mode") {
+            apply(false);
+        }
+    });
     let busy = Rc::new(Cell::new(false));
     let misses = Rc::new(Cell::new(0u8));
     let check = move || {
         if !settings.boolean("game-mode") {
             misses.set(0);
             apply(false);
-            return;
-        }
-        if settings.boolean("game-mode-force") {
-            misses.set(0);
-            apply(true);
             return;
         }
         if busy.replace(true) {
@@ -76,10 +83,6 @@ pub fn init() {
             busy.set(false);
             if !settings.boolean("game-mode") {
                 apply(false);
-                return;
-            }
-            if settings.boolean("game-mode-force") {
-                apply(true);
                 return;
             }
             // Short Alt-Tab/probe failures should not oscillate the traffic caps.
@@ -115,11 +118,11 @@ pub fn description() -> String {
         target_os = "netbsd",
         target_os = "dragonfly"
     )) {
-        i18n("Automatically detect running games from installed desktop entries. Unclassified games can use the manual override below.")
+        i18n("Automatically detect running games from installed desktop entries.")
     } else if cfg!(target_os = "android") {
         android_description()
     } else {
-        i18n("Automatic detection is unavailable on this platform. Use the manual override below to reduce activity.")
+        i18n("Automatic detection is unavailable on this platform.")
     }
 }
 
@@ -127,7 +130,7 @@ fn android_description() -> String {
     #[cfg(target_os = "android")]
     match ANDROID_STATUS.load(Ordering::Relaxed) {
         -1 => return i18n("Allow Usage Access below to detect games. Recent app activity is processed only on this device and is not saved or shared."),
-        -2 => return i18n("Game detection is temporarily unavailable. You can use the manual override below."),
+        -2 => return i18n("Game detection is temporarily unavailable."),
         _ => {},
     }
     i18n("Automatically reduce traffic and background work while the foreground Android app is categorized as a game.")

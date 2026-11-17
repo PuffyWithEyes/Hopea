@@ -72,11 +72,10 @@ suspended. Games lacking a category, wrapped desktop executables and Flatpak's
 restricted view of host processes may not be detected. Flatpak can still use the
 host's Feral GameMode service. BSD needs its usual `ps` utility on PATH.
 
-**Keep Game Mode Active** is a manual override on every platform, off by default.
-It keeps reduced activity enabled without detection or special permissions until
-disabled; the main Game Mode switch always takes precedence. Redox still lacks a
-working Hopea GUI dependency stack, so it has no usable automatic detector yet;
-the portable override is ready for that port. No game-monitoring SDK was added.
+Game Mode is automatic only. The switch enables detection; it does not force
+reduced activity without a detected game. Platforms without an implemented
+detector do not expose the setting. Previously saved manual-override settings
+are ignored. No game-monitoring SDK was added.
 
 ## Source layout
 
@@ -123,19 +122,35 @@ use `bash build-aux/windows/build.sh` instead.
 
 ## Android preview
 
-Android builds target Android 12 or newer, including Android 17. ARM64 is the
-default; an x86-64 build recipe is also available for compatible devices and
-emulators. The x86-64 recipe still needs a complete APK/runtime verification.
+Android previews now target Android 9 (API 28) or newer. ARM64 is the
+default; ARMv7 (`armeabi-v7a`) and x86-64 build recipes are also available for
+compatible devices and emulators. ARMv7 targets 32-bit Android installations,
+including phones whose processor supports ARM64 but whose OS does not.
+The ARMv7 APK has been built and verified; Android 9 device testing is still
+pending. The x86-64 recipe still needs complete APK/runtime verification.
 There is no Google Play Services dependency or phone-brand restriction. The
 manifest allows small screens, tablets, foldables and devices without touch.
-Both APK variants retain the 16 KiB alignment check.
+All APK variants retain the 16 KiB alignment check.
 
-Android 11 and older and 32-bit ARM/x86 are not supported by the current GTK
-toolchain. It only provides ARM64/x86-64 targets and directly loads Android 12's
-`system_accent1_600` resource during GTK initialization. Simply lowering minSdk
-would permit installation of an app that fails at runtime. Supporting older
-devices requires a separate GTK/backend and native-library compatibility port,
-plus device/emulator tests, rather than a packaging-only change.
+The API 28 ARM64 and ARMv7 APKs build and pass signature and 16 KiB alignment checks;
+Android 9/12/14 device behavior is still being tested. GTK compatibility changes
+guard Android 12 dynamic colors and use the legacy Choreographer callback
+on Android 9. On ARMv7, its truncated timestamp is replaced by the full monotonic
+clock sampled at callback delivery. Vsync scheduling is retained, with delivery
+latency included in the timestamp. Atomic storage prevents torn timestamp reads
+between the Android and GTK threads. Bundled fonts avoid relying on OEM font
+substitutions. Android 8 and 32-bit x86 are not supported by this build.
+
+The audio bundle includes software FFmpeg decoders through GStreamer, rather
+than relying on device MediaCodec discovery. The HTTP source loads Android's
+unversioned libsoup library name. Waveforms missing while a network track is
+being verified are requested once more from the local node after audio starts.
+No additional peer search is triggered by that retry.
+
+Private settings and music live outside GTK's replaceable resource directory.
+Existing files are moved before refreshing assets; a destination conflict stops
+startup without overwriting either copy. Keep application data when updating.
+
 It uses the same Rust/GTK player and sharing node. Account imports and the
 desktop browser-cookie reader are not available on Android. Service links
 try an installed app first, then fall back to the browser. Playback, file
@@ -161,6 +176,15 @@ This uses a separate staging directory and produces
 `dist/Hopea-android-x86_64-preview.apk`. The Packages workflow builds both
 architectures independently when its Android option is enabled, using the same
 configured signing key. Install the APK matching the device's Android ABI.
+For a 32-bit ARM device running Android 9 or newer, use:
+
+```sh
+HOPEA_ANDROID_ARCH=armv7 bash build-aux/android/build.sh
+```
+
+This uses `/tmp/hopea-android-armv7-src` and writes
+`dist/Hopea-android-armv7-preview.apk`. An existing toolchain image installs the
+missing Rust ARMv7 target automatically. ARMv7 is not yet part of the CI matrix.
 The media service uses Android's mediaPlayback foreground-service type rather
 than a separate audio engine. This is required for background audio on
 [Android 17](https://developer.android.com/about/versions/17/changes/bg-audio).

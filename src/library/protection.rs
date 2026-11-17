@@ -39,6 +39,32 @@ pub enum Protection {
     Offline,
 }
 
+/// Reachability announcements belong to a particular route, not just to its
+/// VPN classification. A tunnel can reconnect with the same interface name
+/// but a different address, so retain both address families as well.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) struct ConnectionRoute {
+    pub protection: Protection,
+    ipv4: Option<std::net::IpAddr>,
+    ipv6: Option<std::net::IpAddr>,
+}
+
+impl ConnectionRoute {
+    pub fn current() -> Self {
+        fn source(bind: &str, target: &str) -> Option<std::net::IpAddr> {
+            let socket = std::net::UdpSocket::bind(bind).ok()?;
+            // UDP connect selects a route without sending any datagrams.
+            socket.connect(target).ok()?;
+            Some(socket.local_addr().ok()?.ip())
+        }
+        Self {
+            protection: check(),
+            ipv4: source("0.0.0.0:0", "1.1.1.1:53"),
+            ipv6: source("[::]:0", "[2606:4700:4700::1111]:53"),
+        }
+    }
+}
+
 impl Protection {
     #[cfg(test)]
     pub fn is_protected(&self) -> bool {

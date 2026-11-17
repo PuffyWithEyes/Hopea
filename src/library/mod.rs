@@ -45,6 +45,7 @@ thread_local! {
     /// Whether the listener wants to be on the network in this session
     static WANTED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
     static CLIENT: RefCell<Option<LibraryClient>> = const { RefCell::new(None) };
+    static CONNECTION_ROUTE: RefCell<Option<protection::ConnectionRoute>> = const { RefCell::new(None) };
     static STARTING: RefCell<Option<Shared<LocalBoxFuture<'static, Result<(), String>>>>> =
         const { RefCell::new(None) };
 }
@@ -68,8 +69,13 @@ pub async fn ensure_started() -> Result<LibraryClient, String> {
 
 async fn start() -> Result<(), String> {
     let settings = crate::utils::settings_manager();
-    let ipv4_only = network_mode(&settings)
-        .ok_or_else(|| crate::i18n::i18n("Connect to your VPN before sharing music"))?;
+    let route = protection::ConnectionRoute::current();
+    let ipv4_only = (if settings.boolean("library-only-protected") {
+        route.protection.sharing_ipv4_only()
+    } else {
+        Some(false)
+    })
+    .ok_or_else(|| crate::i18n::i18n("Connect to your VPN before sharing music"))?;
     let name = settings.string("library-name").trim().to_string();
     let peers = settings
         .strv("library-peers")
@@ -95,7 +101,8 @@ async fn start() -> Result<(), String> {
         node::start((!name.is_empty()).then_some(name), peers, speed, ipv4_only).await?;
     // Routes can change while starting the node. Do not expose its client
     // until the current preference and the socket mode still agree.
-    if network_mode(&settings) != Some(ipv4_only) {
+    if network_mode(&settings) != Some(ipv4_only) || protection::ConnectionRoute::current() != route
+    {
         let _ = gio::spawn_blocking(node::stop).await;
         return Err(crate::i18n::i18n(
             "The connection changed. Please try joining again.",
@@ -103,6 +110,7 @@ async fn start() -> Result<(), String> {
     }
     let client = LibraryClient::new(&url, &token).map_err(|e| e.to_string())?;
     set_client(Some(client));
+    CONNECTION_ROUTE.with(|r| r.replace(Some(route)));
     Ok(())
 }
 
@@ -135,6 +143,16 @@ pub fn network_mode(settings: &gio::Settings) -> Option<bool> {
 
 pub fn uses_ipv4_only() -> bool {
     node::ipv4_only()
+}
+
+/// A different routed interface invalidates reachability and DHT announcements
+/// even when both connections have the same IPv4/IPv6 socket mode.
+pub fn route_changed() -> bool {
+    CONNECTION_ROUTE.with(|r| {
+        r.borrow()
+            .as_ref()
+            .is_some_and(|old| *old != protection::ConnectionRoute::current())
+    })
 }
 
 /// Leaves the network for now: disconnects right away, then stops the node
@@ -179,6 +197,9 @@ pub fn client() -> Option<LibraryClient> {
 }
 
 pub fn set_client(client: Option<LibraryClient>) {
+    if client.is_none() {
+        CONNECTION_ROUTE.with(|r| r.replace(None));
+    }
     let auth = client.as_ref().map(|c| Auth {
         origin: c.origin().clone(),
         header: c.authorization(),

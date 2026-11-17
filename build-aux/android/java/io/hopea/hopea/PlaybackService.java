@@ -95,7 +95,10 @@ public final class PlaybackService extends Service {
         return START_NOT_STICKY; // Never unexpectedly restart music after a kill.
     }
     private void promote() {
-        startForeground(NOTIFICATION, notification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK);
+        if (Build.VERSION.SDK_INT >= 29)
+            startForeground(NOTIFICATION, notification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK);
+        else
+            startForeground(NOTIFICATION, notification());
         foreground = true;
     }
     private void resume() {

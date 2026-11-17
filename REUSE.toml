@@ -52,7 +52,7 @@ SPDX-FileCopyrightText = "2026 Daniil Klimov"
 SPDX-License-Identifier = "GPL-3.0-or-later"
 
 [[annotations]]
-path = ["build-aux/android/app-links.patch", "build-aux/android/yandex-app-links.patch", "build-aux/android/runtime-paths.patch", "build-aux/android/fdk-ndk.patch"]
+path = ["build-aux/android/app-links.patch", "build-aux/android/yandex-app-links.patch", "build-aux/android/service-links.patch", "build-aux/android/storage-preservation.patch", "build-aux/android/choreographer-compat.patch", "build-aux/android/choreographer-armv7.patch", "build-aux/android/gstreamer-soup.patch", "build-aux/android/runtime-paths.patch", "build-aux/android/fdk-ndk.patch", "build-aux/android/gtk-compat.patch", "build-aux/android/gtk-input-compat.patch"]
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 Daniil Klimov"
 SPDX-License-Identifier = "GPL-3.0-or-later"

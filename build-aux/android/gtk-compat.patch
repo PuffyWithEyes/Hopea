@@ -1,0 +1,268 @@
+--- a/gdk/android/gdkandroidinit.c
++++ b/gdk/android/gdkandroidinit.c
+@@ -20,6 +20,7 @@
+ #include "config.h"
+ 
+ #include <android/log.h>
++#include <android/api-level.h>
+ 
+ #include "gdkandroiddisplay-private.h"
+ #include "gdkandroidcontentfile-private.h"
+@@ -330,7 +331,10 @@
+   POPULATE_STATIC_REFCACHE_METHOD (a_documents_contract, copy_document, "copyDocument", "(Landroid/content/ContentResolver;Landroid/net/Uri;Landroid/net/Uri;)Landroid/net/Uri;");
+   POPULATE_STATIC_REFCACHE_METHOD (a_documents_contract, create_document, "createDocument", "(Landroid/content/ContentResolver;Landroid/net/Uri;Ljava/lang/String;Ljava/lang/String;)Landroid/net/Uri;");
+   POPULATE_STATIC_REFCACHE_METHOD (a_documents_contract, delete_document, "deleteDocument", "(Landroid/content/ContentResolver;Landroid/net/Uri;)Z");
+-  POPULATE_STATIC_REFCACHE_METHOD (a_documents_contract, is_child_document, "isChildDocument", "(Landroid/content/ContentResolver;Landroid/net/Uri;Landroid/net/Uri;)Z");
++  if (android_get_device_api_level () >= 29)
++    {
++      POPULATE_STATIC_REFCACHE_METHOD (a_documents_contract, is_child_document, "isChildDocument", "(Landroid/content/ContentResolver;Landroid/net/Uri;Landroid/net/Uri;)Z");
++    }
+   POPULATE_STATIC_REFCACHE_METHOD (a_documents_contract, is_document, "isDocumentUri", "(Landroid/content/Context;Landroid/net/Uri;)Z");
+   POPULATE_STATIC_REFCACHE_METHOD (a_documents_contract, is_tree, "isTreeUri", "(Landroid/net/Uri;)Z");
+   POPULATE_STATIC_REFCACHE_METHOD (a_documents_contract, rename_document, "renameDocument", "(Landroid/content/ContentResolver;Landroid/net/Uri;Ljava/lang/String;)Landroid/net/Uri;");
+@@ -376,7 +380,11 @@
+ 
+   jclass android_res_color = (*env)->FindClass (env, "android/R$color");
+   gdk_android_java_cache.a_res_color.klass = (*env)->NewGlobalRef (env, android_res_color);
+-  POPULATE_REFCACHE_FIELD (a_res_color, system_accent1_600, "system_accent1_600")
++  /* Hopea: dynamic system colors only exist on Android 12+. */
++  if (android_get_device_api_level () >= 31)
++    {
++      POPULATE_REFCACHE_FIELD (a_res_color, system_accent1_600, "system_accent1_600")
++    }
+ 
+   jclass android_clipboard_manager = (*env)->FindClass (env, "android/content/ClipboardManager");
+   gdk_android_java_cache.a_clipboard_manager.klass = (*env)->NewGlobalRef (env, android_clipboard_manager);
+@@ -522,11 +530,11 @@
+ 
+   jclass android_canvas_class = (*env)->FindClass (env, "android/graphics/Canvas");
+   gdk_android_java_cache.a_canvas.klass = (*env)->NewGlobalRef (env, android_canvas_class);
+-  POPULATE_REFCACHE_METHOD (a_canvas, draw_color, "drawColor", "(ILandroid/graphics/BlendMode;)V")
+-
+-  jclass android_blendmode = (*env)->FindClass (env, "android/graphics/BlendMode");
++  POPULATE_REFCACHE_METHOD (a_canvas, draw_color, "drawColor", "(ILandroid/graphics/PorterDuff$Mode;)V")
++
++  jclass android_blendmode = (*env)->FindClass (env, "android/graphics/PorterDuff$Mode");
+   gdk_android_java_cache.a_blendmode.klass = (*env)->NewGlobalRef (env, android_blendmode);
+-  POPULATE_REFCACHE_ENUM (a_blendmode, clear, "CLEAR", "Landroid/graphics/BlendMode;")
++  POPULATE_REFCACHE_ENUM (a_blendmode, clear, "CLEAR", "Landroid/graphics/PorterDuff$Mode;")
+ 
+   jclass android_rect_class = (*env)->FindClass (env, "android/graphics/Rect");
+   gdk_android_java_cache.a_rect.klass = (*env)->NewGlobalRef (env, android_rect_class);
+--- a/gdk/android/gdkandroiddisplay.c
++++ b/gdk/android/gdkandroiddisplay.c
+@@ -445,9 +445,12 @@
+   jobject configuration = (*env)->CallObjectMethod (env, resources, gdk_android_get_java_cache ()->a_resources.get_configuration);
+   jint ui = (*env)->GetIntField (env, configuration, gdk_android_get_java_cache ()->a_configuration.ui);
+ 
+-  guint32 color = (guint32)(*env)->CallIntMethod (env, context,
+-                                                  gdk_android_get_java_cache ()->a_context.get_color,
+-                                                  gdk_android_get_java_cache ()->a_res_color.system_accent1_600);
++  /* Hopea: use Adwaita blue when the OS has no dynamic accent resource. */
++  guint32 color = 0xff3584e4;
++  if (gdk_android_get_java_cache ()->a_res_color.system_accent1_600 != 0)
++    color = (guint32)(*env)->CallIntMethod (env, context,
++                                         gdk_android_get_java_cache ()->a_context.get_color,
++                                         gdk_android_get_java_cache ()->a_res_color.system_accent1_600);
+   (*env)->PopLocalFrame (env, NULL);
+ 
+   GdkAndroidDisplayNightMode night_mode = GDK_ANDROID_DISPLAY_NIGHT_UNDEFINED;
+--- a/gtk/gtkimcontextandroid.c
++++ b/gtk/gtkimcontextandroid.c
+@@ -355,7 +355,7 @@
+ }
+ 
+ static void
+-gtk_im_context_android_update_ime_keyboard (GtkIMContextAndroid *self)
++gtk_im_context_android_update_ime_keyboard (GtkIMContextAndroid *self, gboolean show_keyboard)
+ {
+   GdkAndroidSurface *surface = gtk_im_context_android_get_surface (self);
+   if (!surface || !surface->surface)
+@@ -364,10 +364,10 @@
+   JNIEnv *env = gdk_android_display_get_env (gdk_surface_get_display ((GdkSurface *)surface));
+   (*env)->CallVoidMethod (env, surface->surface,
+                           gdk_android_get_java_cache ()->surface.set_active_im_context,
+-                          self->context);
++                          self->focused ? self->context : NULL);
+   (*env)->CallVoidMethod (env, surface->surface,
+                           gdk_android_get_java_cache ()->surface.set_ime_keyboard_state,
+-                          self->focused);
++                          self->focused && show_keyboard);
+ }
+ 
+ static void
+@@ -383,7 +383,7 @@
+   if (widget != NULL)
+     {
+       g_object_add_weak_pointer ((GObject *)self->client_widget, (gpointer *)&self->client_widget);
+-      gtk_im_context_android_update_ime_keyboard (self);
++      gtk_im_context_android_update_ime_keyboard (self, FALSE);
+     }
+ 
+   if (GTK_IM_CONTEXT_CLASS (gtk_im_context_android_parent_class)->set_client_widget)
+@@ -459,7 +459,7 @@
+ 
+   GtkIMContextAndroid *self = GTK_IM_CONTEXT_ANDROID (context);
+   self->focused = TRUE;
+-  gtk_im_context_android_update_ime_keyboard (self);
++  gtk_im_context_android_update_ime_keyboard (self, FALSE);
+ 
+   if (GTK_IM_CONTEXT_CLASS (gtk_im_context_android_parent_class)->focus_in)
+     GTK_IM_CONTEXT_CLASS (gtk_im_context_android_parent_class)->focus_in (context);
+@@ -472,7 +472,7 @@
+ 
+   GtkIMContextAndroid *self = GTK_IM_CONTEXT_ANDROID (context);
+   self->focused = FALSE;
+-  gtk_im_context_android_update_ime_keyboard (self);
++  gtk_im_context_android_update_ime_keyboard (self, FALSE);
+ 
+   if (GTK_IM_CONTEXT_CLASS (gtk_im_context_android_parent_class)->focus_out)
+     GTK_IM_CONTEXT_CLASS (gtk_im_context_android_parent_class)->focus_out (context);
+@@ -483,7 +483,8 @@
+                                       GdkEvent     *event)
+ {
+   GtkIMContextAndroid *self = (GtkIMContextAndroid *)context;
+-  gtk_im_context_android_update_ime_keyboard (self);
++  /* Hopea: only an explicit editor activation opens the soft keyboard. */
++  gtk_im_context_android_update_ime_keyboard (self, TRUE);
+   return self->focused;
+ }
+ 
+--- a/gdk/android/glue/java/org/gtk/android/ToplevelActivity.java
++++ b/gdk/android/glue/java/org/gtk/android/ToplevelActivity.java
+@@ -27,7 +27,7 @@
+ import android.content.pm.ActivityInfo;
+ import android.content.res.Configuration;
+ import android.graphics.Bitmap;
+-import android.graphics.Insets;
++import android.graphics.Rect;
+ import android.graphics.PixelFormat;
+ import android.graphics.RectF;
+ import android.net.Uri;
+@@ -145,14 +145,14 @@
+ 					boolean imeKeyboardState = queuedImeKeyboardState > 0;
+ 					queuedImeKeyboardState = 0;
+ 					runOnUiThread(() -> {
+-						WindowInsetsController controller = getWindowInsetsController();
+-						if (imeKeyboardState) {
++						// Hopea: InputMethodManager also works on Android 8-10.
++						InputMethodManager imm = getSystemService(InputMethodManager.class);
++						if (imeKeyboardState && activeImContext != null) {
+ 							requestFocus();
+-							if (controller != null)
+-								controller.show(WindowInsets.Type.ime());
+-						 } else if (controller != null) {
+-							controller.hide(WindowInsets.Type.ime());
+-						 }
++							imm.showSoftInput(this, InputMethodManager.SHOW_IMPLICIT);
++						} else {
++							imm.hideSoftInputFromWindow(getWindowToken(), 0);
++						}
+ 					});
+ 				});
+ 			}
+@@ -191,11 +191,13 @@
+ 			}
+ 
+ 			public void setActiveImContext(ImContext context) {
+-				if (activeImContext == context)
+-					return;
+-				activeImContext = context;
+-				InputMethodManager imm = getSystemService(InputMethodManager.class);
+-				imm.restartInput(this);
++				runOnUiThread(() -> {
++					if (activeImContext == context)
++						return;
++					activeImContext = context;
++					InputMethodManager imm = getSystemService(InputMethodManager.class);
++					imm.restartInput(this);
++				});
+ 			}
+ 
+ 			public void reposition(int x, int y, int width, int height) {
+@@ -347,7 +349,7 @@
+ 		public Surface toplevel;
+ 		private Surface grabbed;
+ 
+-		private Insets insets = Insets.NONE;
++		private final Rect insets = new Rect();
+ 
+ 		public ToplevelView() {
+ 			super(ToplevelActivity.this);
+@@ -392,9 +394,15 @@
+ 
+ 		@Override
+ 		public WindowInsets onApplyWindowInsets(WindowInsets insets) {
+-			this.insets = insets.getInsets(WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout() | WindowInsets.Type.ime());
++			if (Build.VERSION.SDK_INT >= 30) {
++				android.graphics.Insets bars = insets.getInsets(WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout() | WindowInsets.Type.ime());
++				this.insets.set(bars.left, bars.top, bars.right, bars.bottom);
++			} else {
++				this.insets.set(insets.getSystemWindowInsetLeft(), insets.getSystemWindowInsetTop(),
++						insets.getSystemWindowInsetRight(), insets.getSystemWindowInsetBottom());
++			}
+ 			requestLayout();
+-			return WindowInsets.CONSUMED;
++			return Build.VERSION.SDK_INT >= 30 ? WindowInsets.CONSUMED : insets.consumeSystemWindowInsets();
+ 		}
+ 
+ 		public void setGrabbedSurface(@Nullable Surface grabbed) {
+@@ -438,7 +446,12 @@
+ 
+ 		super.onCreate(savedInstanceState);
+ 		setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_USER);
+-		getWindow().setDecorFitsSystemWindows(false);
++		if (Build.VERSION.SDK_INT >= 30)
++			getWindow().setDecorFitsSystemWindows(false);
++		else
++			getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_STABLE | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN);
++		getWindow().setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN
++				| android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
+ 
+ 		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+ 			this.defaultBack = new OnBackInvokedCallback() {
+@@ -556,7 +569,7 @@
+ 	public void postWindowConfiguration(int color, boolean fullscreen) {
+ 		runOnUiThread(() -> {
+ 			Window window = getWindow();
+-			WindowInsetsController controller = window.getInsetsController();
++			WindowInsetsController controller = Build.VERSION.SDK_INT >= 30 ? window.getInsetsController() : null;
+ 
+ 			view.setBackgroundColor(color);
+ 			// Taken from SO: https://stackoverflow.com/a/3943023
+@@ -565,6 +578,7 @@
+ 			                   ((color >>  8) & 0xFF) * 0.587 +
+ 			                   ((color >>  0) & 0xFF) * 0.114) > 186;
+ 
++			if (Build.VERSION.SDK_INT >= 30 && controller != null) {
+ 			int bars = WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS | WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS;
+ 			controller.setSystemBarsAppearance(dark_fg ? bars : 0, bars);
+ 
+@@ -575,6 +589,13 @@
+ 			} else {
+ 				controller.show(WindowInsets.Type.statusBars() | WindowInsets.Type.navigationBars());
+ 				controller.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_DEFAULT);
++			}
++			} else {
++				int flags = View.SYSTEM_UI_FLAG_LAYOUT_STABLE | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN;
++				if (dark_fg) flags |= View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
++				if (fullscreen) flags |= View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY;
++				window.getDecorView().setSystemUiVisibility(flags);
++				this.fullscreenState = fullscreen;
+ 			}
+ 			updateToplevelState();
+ 		});
+--- a/gdk/android/gdkandroidcontentfile.c
++++ b/gdk/android/gdkandroidcontentfile.c
+@@ -1554,6 +1554,11 @@
+   if (prefix->child_name)
+     return FALSE; // if prefix does not exist, it cant be a prefix
+ 
++  /* Android < 10 cannot verify ancestry via the public Documents API.
++   * Fail closed; opening individual documents remains available. */
++  if (gdk_android_get_java_cache ()->a_documents_contract.is_child_document == NULL)
++    return FALSE;
++
+   JNIEnv *env = gdk_android_get_env();
+   (*env)->PushLocalFrame (env, 1);
+   jobject resolver = (*env)->CallObjectMethod (env, file->context,

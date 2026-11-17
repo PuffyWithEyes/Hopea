@@ -36,6 +36,14 @@ fn navigation_preserves_playback_and_settings_open_without_search() {
     app.set_flags(app.flags() | gio::ApplicationFlags::NON_UNIQUE);
     app.register(gio::Cancellable::NONE).unwrap();
     assert!(!app.is_remote());
+    assert!(
+        app.actions_for_accel("<primary>a").is_empty(),
+        "Ctrl+A must reach the focused text editor"
+    );
+    assert!(app
+        .accels_for_action("queue.add-folder")
+        .iter()
+        .all(|key| key.as_str() != "<Primary>a"));
     assert!(!settings.boolean("game-mode-force"));
     settings.set_boolean("game-mode-force", true).unwrap();
     assert!(
@@ -44,8 +52,8 @@ fn navigation_preserves_playback_and_settings_open_without_search() {
     );
     settings.set_boolean("game-mode", true).unwrap();
     assert!(
-        crate::gaming::active(),
-        "manual mode must not need a detector or permission"
+        !crate::gaming::active(),
+        "retired manual setting must not force Game Mode"
     );
     settings.set_boolean("game-mode-force", false).unwrap();
     assert!(
@@ -511,15 +519,10 @@ fn navigation_preserves_playback_and_settings_open_without_search() {
         .expect("Game Mode belongs in Settings");
     assert!(!game.is_active());
     game.set_active(true);
-    let manual_game = descendants(dialog.upcast_ref())
+    assert!(!descendants(dialog.upcast_ref())
         .into_iter()
         .filter_map(|w| w.downcast::<adw::SwitchRow>().ok())
-        .find(|row| row.title() == "Keep Game Mode Active")
-        .expect("manual fallback belongs in Settings");
-    assert!(manual_game.is_sensitive());
-    assert!(!manual_game.is_active());
-    manual_game.set_active(true);
-    assert!(!settings.boolean("game-mode-force"));
+        .any(|row| row.title() == "Keep Game Mode Active"));
     assert!(
         !settings.boolean("game-mode"),
         "unsaved changes must not affect the detector"

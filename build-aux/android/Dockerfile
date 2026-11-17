@@ -7,14 +7,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libglib-perl libglib-object-introspection-perl libipc-run-perl libjson-perl \
     libset-scalar-perl libxml-libxml-perl libxml-libxslt-perl gir1.2-appstream \
     glslc gobject-introspection libglib2.0-dev-bin libxml2-utils sassc gettext \
-    cmake bison flex gperf libssl-dev
+    cmake bison flex gperf libssl-dev fonts-dejavu-core
 RUN python3 -m venv /opt/build-tools && /opt/build-tools/bin/pip install meson==1.11.0
 ENV PATH=/opt/build-tools/bin:/root/.cargo/bin:$PATH
 ENV ANDROID_HOME=/opt/android
 RUN sdkmanager --sdk_root=/opt/android 'build-tools;36.0.0' 'platforms;android-36' 'ndk;28.2.13676358'
 RUN curl --fail --proto '=https' --tlsv1.2 https://sh.rustup.rs -o /tmp/rustup.sh && \
     sh /tmp/rustup.sh -y --profile minimal --default-toolchain 1.100.0 && \
-    rustup target add aarch64-linux-android x86_64-linux-android
+    rustup target add aarch64-linux-android x86_64-linux-android armv7-linux-androideabi
 RUN git clone https://github.com/sp1ritCS/gtk-android-builder.git /opt/pixiewood && \
     git -C /opt/pixiewood checkout de3719725a8f6e3efe0f28203e803e7ce1904902 && \
     mkdir -p /opt/mini-studio

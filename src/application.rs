@@ -114,7 +114,8 @@ mod imp {
             obj.set_accels_for_action("app.quit", &["<primary>q"]);
 
             obj.set_accels_for_action("queue.add-song", &["<primary>s"]);
-            obj.set_accels_for_action("queue.add-folder", &["<primary>a"]);
+            // Ctrl+A belongs to the focused text editor, including search.
+            obj.set_accels_for_action("queue.add-folder", &["<primary><shift>o"]);
             obj.set_accels_for_action("queue.clear", &["<primary>L"]);
             obj.set_accels_for_action("queue.toggle", &["F9"]);
             obj.set_accels_for_action("queue.search", &["<primary>F"]);
@@ -413,7 +414,7 @@ impl Application {
         let connected = library::client().is_some();
         let mode = library::network_mode(settings);
         let allowed = mode.is_some();
-        if connected && mode != Some(library::uses_ipv4_only()) {
+        if connected && (mode != Some(library::uses_ipv4_only()) || library::route_changed()) {
             imp.switching.set(true);
             glib::spawn_future_local(clone!(
                 #[weak(rename_to = app)]

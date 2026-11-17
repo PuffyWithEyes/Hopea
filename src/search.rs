@@ -3,6 +3,11 @@
 
 use gtk::{glib, prelude::*, subclass::prelude::*};
 
+/// Editing only Unicode whitespace must not restart a search or reset its UI.
+pub(crate) fn text_key(text: &str) -> String {
+    text.chars().filter(|c| !c.is_whitespace()).collect()
+}
+
 mod imp {
 
     use std::cell::RefCell;
@@ -90,9 +95,38 @@ impl FuzzyFilter {
     }
 
     pub fn set_search(&self, search: Option<String>) {
-        if *self.imp().search.borrow() != search {
-            *self.imp().search.borrow_mut() = search.map(|x| x.to_lowercase());
+        let search = search.map(|s| {
+            s.split_whitespace()
+                .collect::<Vec<_>>()
+                .join(" ")
+                .to_lowercase()
+        });
+        if text_key(self.imp().search.borrow().as_deref().unwrap_or_default())
+            != text_key(search.as_deref().unwrap_or_default())
+        {
+            *self.imp().search.borrow_mut() = search;
             self.changed(gtk::FilterChange::Different);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::text_key;
+
+    #[test]
+    fn whitespace_edits_do_not_change_search_identity() {
+        let original = text_key("Егор Летов");
+        for query in [
+            " Егор Летов ",
+            "Егор\tЛетов",
+            "Егор\nЛетов",
+            "Егор\u{a0}\u{2003}Летов",
+            "ЕгорЛетов",
+        ] {
+            assert_eq!(text_key(query), original);
+        }
+        assert_eq!(text_key("\t\n\u{a0} "), "");
+        assert_ne!(text_key("Егор Летов Н"), original);
     }
 }

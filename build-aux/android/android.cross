@@ -1,8 +1,11 @@
 # SPDX-FileCopyrightText: 2026 Daniil Klimov
 # SPDX-License-Identifier: GPL-3.0-or-later
 [binaries]
-rust = ['rustc', '--target=' + arch + '-linux-android']
-rust_ld = toolchain / 'bin' / (arch + '-linux-android31-clang')
+rust = ['rustc', '--target=' + rust_target]
+rust_ld = toolchain / 'bin' / (arch + '-linux-' + platform + api + '-clang')
+
+[pixman:project options]
+cpu-features-path = '/opt/android/ndk/28.2.13676358/sources/android/cpufeatures'
 
 [gstreamer-full:project options]
 tests = 'disabled'
@@ -17,6 +20,13 @@ python = 'disabled'
 libnice = 'disabled'
 qt5 = 'disabled'
 qt6 = 'disabled'
+
+[gdk-pixbuf:project options]
+# Android's native ImageDecoder loader needs API 30/31. Use the portable
+# PNG/JPEG loaders on every supported Android release instead.
+android = 'disabled'
+png = 'enabled'
+jpeg = 'enabled'
 
 [libsoup:project options]
 introspection = 'disabled'

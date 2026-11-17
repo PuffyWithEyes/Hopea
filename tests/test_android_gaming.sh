@@ -11,6 +11,7 @@ javac -d "$work/classes" \
   "$root/tests/GameActivityStateTest.java"
 java -ea -cp "$work/classes" io.hopea.hopea.GameActivityStateTest
 python3 "$root/tests/test_android_app_links.py"
+python3 "$root/tests/test_android_storage.py"
 # Compile every Android bridge class against the real SDK, not mock APIs.
 javac -Xlint:deprecation -cp "$sdk/platforms/android-36/android.jar" -d "$work/android" \
   "$root"/build-aux/android/java/io/hopea/hopea/*.java

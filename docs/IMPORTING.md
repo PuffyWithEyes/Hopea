@@ -4,6 +4,13 @@ Open the player menu → **Bring Your Music Over… → Import Account…**.
 Import reads an account's personal collection: saved songs, playlists and albums.
 It does not crawl the service's entire catalogue.
 
+Hopea's import rule requires an active subscription to the source music service.
+Importing from that service without a subscription violates this application
+rule. The welcome dialog and import chooser display this requirement. It is
+not a new condition of the software's GPL license, and a subscription alone
+does not grant permission to redistribute music. Share only music you have
+permission to share. This notice does not perform subscription verification.
+
 The **Import** button becomes available after you enter session data or a token;
 VK also requires a positive numeric profile ID. The button is disabled during
 sign-in, and missing information is listed below the form. Empty links and lists

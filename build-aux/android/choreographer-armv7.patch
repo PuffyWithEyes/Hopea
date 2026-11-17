@@ -1,0 +1,71 @@
+--- a/gdk/android/gdkandroidchoreographersource.c
++++ b/gdk/android/gdkandroidchoreographersource.c
+@@ -48,11 +48,17 @@
+ 
+ #include <android/choreographer.h>
+ #include <stdint.h>
+-
+-/* Hopea: the legacy callback has a full 64-bit timestamp on our LP64
+- * Android 9 targets. Never use it with a 32-bit long (timestamp overflow). */
+-#if __ANDROID_API__ < 29 && defined(__LP64__)
++#include <stdatomic.h>
++
++/* Hopea: API 28 provides only the legacy callback, whose timestamp is a
++ * 32-bit long on ARMv7. Use the full monotonic clock at callback delivery
++ * there; never interpret a wrapped frame timestamp as a full timestamp.
++ * Vsync scheduling is retained, but this fallback includes delivery latency. */
++#if __ANDROID_API__ < 29
+ #define AChoreographer_postFrameCallback64 AChoreographer_postFrameCallback
++typedef long GdkAndroidFrameTime;
++#else
++typedef int64_t GdkAndroidFrameTime;
+ #endif
+ 
+ struct _GdkAndroidChoreographerSource
+@@ -61,14 +67,14 @@
+ 
+   gint          needs_dispatch;    /* atomic; set on UI thread, cleared on GTK thread */
+   gint          paused;            /* atomic; read on UI thread, written on GTK thread */
+-  uint64_t      presentation_time; /* ns, CLOCK_MONOTONIC; naturally atomic on 64-bit */
++  atomic_uint_least64_t presentation_time; /* ns, CLOCK_MONOTONIC; shared across threads */
+ 
+   AChoreographer *choreographer;
+   GMainContext *context;
+ };
+ 
+ static void
+-gdk_android_choreographer_source_on_frame (int64_t frame_time_nanos,
++gdk_android_choreographer_source_on_frame (GdkAndroidFrameTime frame_time_nanos,
+                                            void *data)
+ {
+   GdkAndroidChoreographerSource *self = data;
+@@ -76,7 +82,12 @@
+   if (!self || g_atomic_int_get (&self->paused))
+     return;
+ 
+-  self->presentation_time = frame_time_nanos;
++#if __ANDROID_API__ < 29 && !defined(__LP64__)
++  (void) frame_time_nanos;
++  atomic_store (&self->presentation_time, g_get_monotonic_time () * G_GINT64_CONSTANT (1000));
++#else
++  atomic_store (&self->presentation_time, frame_time_nanos);
++#endif
+ 
+   if (g_atomic_int_compare_and_exchange (&self->needs_dispatch, FALSE, TRUE))
+     g_main_context_wakeup (self->context);
+@@ -148,6 +159,7 @@
+   source = g_source_new (&gdk_android_choreographer_source_funcs, sizeof *self);
+   self = (GdkAndroidChoreographerSource *) source;
+   self->context = context;
++  atomic_init (&self->presentation_time, 0);
+   g_atomic_int_set (&self->paused, TRUE);
+ 
+   self->choreographer = AChoreographer_getInstance ();
+@@ -194,5 +206,5 @@
+ {
+   g_return_val_if_fail (self != NULL, 0);
+ 
+-  return self->presentation_time;
+-}
++  return atomic_load (&self->presentation_time);
++}

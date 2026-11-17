@@ -98,8 +98,12 @@ impl FuzzySorter {
     }
 
     pub fn set_search(&self, search: Option<String>) {
-        let search = search.filter(|s| !s.trim().is_empty());
-        if *self.imp().search.borrow() != search {
+        let search = search
+            .map(|s| s.split_whitespace().collect::<Vec<_>>().join(" "))
+            .filter(|s| !s.is_empty());
+        if crate::search::text_key(self.imp().search.borrow().as_deref().unwrap_or_default())
+            != crate::search::text_key(search.as_deref().unwrap_or_default())
+        {
             *self.imp().search.borrow_mut() = search;
             self.changed(gtk::SorterChange::Different);
         }

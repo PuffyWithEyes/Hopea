@@ -72,11 +72,11 @@ the JNI bridge on GTK's thread, then attaches/detaches the blocking worker to th
 VM without accessing GTK objects there. No event/package data is logged, saved
 or shared. JNI readiness and API/permission failures are reflected in Settings.
 
-`game-mode-force` defaults to false and provides a manual override under the
-default-on master switch. It works without a detector or Android permission.
-Disabling either the master switch or an active manual override clears the
-temporary policy immediately. Redox's unported GUI stack still prevents native
-automatic detection; this is not represented as completed platform support.
+The default-on `game-mode` switch enables automatic detection only. The retired
+`game-mode-force` schema key remains for compatibility but is ignored. Disabling
+the master switch clears the temporary policy immediately. Settings omit Game
+Mode on platforms without an implemented detector; Redox's unported GUI stack
+is not represented as completed platform support.
 
 Platform contracts: [Android usage access and events](https://developer.android.com/reference/android/app/usage/UsageStatsManager),
 [Android application categories](https://developer.android.com/reference/android/content/pm/ApplicationInfo),
@@ -105,7 +105,7 @@ The main header has a "My Music"/"For You" switch (`Window::set_for_you`) and a 
 
 Lyrics (`src/lyrics.rs`, the `win.lyrics` toggle, and `cover_stack` in place of the cover art) come from a kept copy, an `.lrc` next to a local song, or its tags. Only when the listener presses "Search Online" are they looked up on lrclib.net, which then learns the title and artist. Synced (LRC) lines are lit up and scrolled to as the song plays (`update_lyrics_line`).
 
-`Window::show_rules_once` explains the rules of sharing on first start (`library-rules-seen`). `library/import.rs` brings music over from streaming services. For exported lists, names come over: JSON, CSV and plain-list exports, and Yandex Music playlist links. The same dialog also imports downloaded files and whole service accounts (see below). They go to `wanted.json` in the user data dir. `Window::look_for_wanted` searches for each one three seconds apart, on joining and every hour, and stars what it finds. Songs not found are retried after 12 hours. Its dialog is `LibraryPanel::import_music`, reached from the welcome page, the panel menu, the settings and the main menu.
+`Window::show_rules_once` presents a short welcome on first start (`library-rules-seen`), with Get Started and Import Music actions. It shows the active-subscription rule for service imports and a brief sharing/privacy notice; technical settings stay outside the welcome dialog. Import Music opens the existing chooser without signing in or transferring anything automatically. Closing either way records that the welcome was shown. `library/import.rs` brings music over from streaming services. For exported lists, names come over: JSON, CSV and plain-list exports, and Yandex Music playlist links. The same dialog also imports downloaded files and whole service accounts (see below). They go to `wanted.json` in the user data dir. `Window::look_for_wanted` searches for each one three seconds apart, on joining and every hour, and stars what it finds. Songs not found are retried after 12 hours. Its dialog is `LibraryPanel::import_music`, reached from the welcome page, the panel menu, the settings and the main menu.
 
 ### Importing service accounts
 

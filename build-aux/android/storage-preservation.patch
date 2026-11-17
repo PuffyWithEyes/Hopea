@@ -1,0 +1,45 @@
+--- a/gdk/android/glue/java/org/gtk/android/RuntimeApplication.java
++++ b/gdk/android/glue/java/org/gtk/android/RuntimeApplication.java
+@@ -42,12 +42,16 @@
+ 		super.onCreate();
+ 		// Hopea uses private, writable Android locations for caches and settings.
+ 		try {
+-			android.system.Os.setenv("HOME", getFilesDir().getAbsolutePath(), true);
++			java.io.File home = getDir("hopea-home", MODE_PRIVATE);
++			hopeaPreserveUserFiles(home);
++			android.system.Os.setenv("HOME", home.getAbsolutePath(), true);
++			android.system.Os.setenv("XDG_CONFIG_HOME", new java.io.File(home, ".config").getAbsolutePath(), true);
++			android.system.Os.setenv("XDG_DATA_HOME", new java.io.File(home, ".local/share").getAbsolutePath(), true);
+ 			android.system.Os.setenv("XDG_CACHE_HOME", getCacheDir().getAbsolutePath(), true);
+ 			android.system.Os.setenv("TMPDIR", getCacheDir().getAbsolutePath(), true);
+ 			android.system.Os.setenv("FONTCONFIG_FILE", new java.io.File(getFilesDir(), "etc/fonts/fonts.conf").getAbsolutePath(), true);
+ 			android.system.Os.setenv("GSETTINGS_BACKEND", "keyfile", true);
+-		} catch (android.system.ErrnoException error) {
++		} catch (android.system.ErrnoException | java.io.IOException error) {
+ 			throw new IllegalStateException("Unable to initialize Hopea storage", error);
+ 		}
+ 
+@@ -72,4 +76,23 @@
+ 			);
+ 		}
+ 	}
++	// Hopea: move legacy user files before GTK refreshes its asset directory.
++	private void hopeaPreserveUserFiles(java.io.File home) throws java.io.IOException {
++		String[] assets = getAssets().list("");
++		java.io.File[] files = getFilesDir().listFiles();
++		if (assets == null || files == null)
++			throw new java.io.IOException("Unable to list legacy data or runtime assets");
++		java.util.Set<String> resources = new java.util.HashSet<>(java.util.Arrays.asList(assets));
++		resources.add("afpr");
++		for (java.io.File file : files) {
++			if (resources.contains(file.getName()))
++				continue;
++			java.io.File target = new java.io.File(home, file.getName());
++			// Never overwrite an existing directory or continue to the asset
++			// cleanup after a failed migration. Both copies remain recoverable.
++			if (target.exists() || !file.renameTo(target))
++				throw new java.io.IOException("Unable to preserve legacy user data");
++		}
++	}
++
+ }

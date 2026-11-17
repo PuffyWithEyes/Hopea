@@ -51,13 +51,31 @@ device-confirmation path before opening it.
 An adapter version without Device Flow reports an update/manual-sign-in hint.
 See the [adapter's authorization guide](https://ym.marshal.dev/token/).
 
-On Android, service links first target the official Yandex Music package
-(`ru.yandex.music`). If it is missing, disabled or cannot handle the original
-link, Hopea falls back to normal system URL handling and the user's browser.
-Confirmation URLs are never replaced with the app's home screen. This opening
-policy does not implement Android account authorization or account import:
-those remain unavailable until the desktop adapter workflow is ported.
-Native app handling still needs physical-device verification.
+### Android service links
+
+**Open Service App…** tries the official client first: VK, Yandex Music,
+Spotify or YouTube Music, according to the link. The client must handle the
+original URL; Hopea never substitutes its home screen for the requested page.
+If the official client is unavailable, public music links are offered to other
+installed apps that advertise support for that URL. A single compatible client
+opens directly; several clients produce Android's app chooser. There is no
+hard-coded list of third-party clients: Kate Mobile, Sova variants and other
+clients are eligible only if their installed version registers a matching link
+handler. Installing an app alone does not establish link compatibility.
+
+If no client handles the link, Hopea opens the default browser, or a browser
+chooser if no default is available. It uses a plain external activity, without
+Custom Tabs extras. The routing uses APIs available on Android 9 and queries
+HTTPS handlers without requesting `QUERY_ALL_PACKAGES`; see Android's
+[package visibility guidance](https://developer.android.com/training/package-visibility/use-cases).
+Explicitly targeted intents and unrelated links retain their normal handling.
+Yandex device-confirmation links are offered only to the official client and
+then a browser, never automatically to third-party music clients.
+
+This opening policy does not implement Android account authorization or account
+import: those remain unavailable until the adapter workflow is ported. Opening
+an app does not return its session to Hopea. Automated tests cover routing and
+fallback decisions; installed-client behavior still needs device verification.
 
 ### Import timeouts
 

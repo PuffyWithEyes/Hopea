@@ -39,7 +39,7 @@ for name in permissions:
     name = 'android.permission.' + name
     if name not in seen:
         ET.SubElement(root, 'uses-permission', {key('name'): name})
-# Classify launchable apps only; do not request QUERY_ALL_PACKAGES.
+# Query launchable apps and URL handlers; do not request QUERY_ALL_PACKAGES.
 queries = root.find('queries')
 if queries is None:
     queries = ET.SubElement(root, 'queries')
@@ -51,6 +51,15 @@ for category in ['LAUNCHER', 'LEANBACK_LAUNCHER']:
         intent = ET.SubElement(queries, 'intent')
         ET.SubElement(intent, 'action', {key('name'): 'android.intent.action.MAIN'})
         ET.SubElement(intent, 'category', {key('name'): category})
+if not any(i.find('action') is not None
+           and i.find('action').get(key('name')) == 'android.intent.action.VIEW'
+           and i.find('data') is not None
+           and i.find('data').get(key('scheme')) == 'https'
+           for i in queries.findall('intent')):
+    intent = ET.SubElement(queries, 'intent')
+    ET.SubElement(intent, 'action', {key('name'): 'android.intent.action.VIEW'})
+    ET.SubElement(intent, 'category', {key('name'): 'android.intent.category.BROWSABLE'})
+    ET.SubElement(intent, 'data', {key('scheme'): 'https'})
 name = 'io.hopea.hopea.PlaybackService'
 if not any(s.get(key('name')) == name for s in application.findall('service')):
     ET.SubElement(application, 'service', {key('name'): name,
@@ -60,6 +69,7 @@ path = app / 'build.gradle'
 text = path.read_text()
 if 'useLegacyPackaging' not in text:
     text = text.replace('android {', 'android {\n    packaging { jniLibs { useLegacyPackaging = true } }', 1)
-text = re.sub(r'versionCode \d+', 'versionCode 20261114', text)
+text = re.sub(r'minSdk \d+', 'minSdk 28', text)
+text = re.sub(r'versionCode \d+', 'versionCode 20261117', text)
 text = re.sub(r'versionName "[^"]*"', 'versionName "2026.11-android-preview"', text)
 path.write_text(text)

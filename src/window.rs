@@ -726,8 +726,8 @@ impl Window {
         self.imp().library_sheet.set_open(false);
     }
 
-    /// The first time the app starts, explains what matters when sharing
-    /// music with everyone: names others can find, and sharing back.
+    /// Introduce the player and offer import once, with its subscription rule
+    /// and the essential sharing and privacy notice.
     fn show_rules_once(&self) {
         let settings = utils::settings_manager();
         if settings.boolean("library-rules-seen") {
@@ -738,23 +738,40 @@ impl Window {
             self,
             move || {
                 let alert = adw::AlertDialog::builder()
-                    .heading(i18n("Sharing Music Together"))
-                    .body(i18n(
-                        "Everyone here shares the music they keep, so a few things matter.\n\n• Name songs properly. Others find music only by its title and artist: set them in the song’s tags, or name the file “Artist - Title”. Songs whose title and artist together have fewer than 5 letters aren’t shared.\n\n• Don’t be greedy. What you download and star is shared from your computer in turn. Keep sharing on, also with the window closed (the app stays in the tray), and don’t limit sharing far below downloading.\n\n• Share only music, and only what you may share. Every file is checked, and anything that isn’t clean audio is refused.\n\n• Others see the address you share from. A VPN shows them its address instead: see Shared Music Settings.",
-                    ))
+                    .heading(i18n("Welcome to Hopea"))
+                    .body([
+                        i18n("Play your music or import your collection."),
+                        crate::library_panel::import_subscription_notice(),
+                        i18n("Share only music you have permission to share. Other listeners can see your network address."),
+                    ].join("\n\n"))
                     .default_response("ok")
                     .close_response("ok")
+                    .prefer_wide_layout(true)
                     .build();
                 use adw::prelude::AlertDialogExt;
-                alert.add_response("ok", &i18n("_Got It"));
-                alert.set_response_appearance("ok", adw::ResponseAppearance::Suggested);
-                AlertDialogExt::connect_response(&alert, None, |_, _| {
-                    if let Err(err) =
-                        utils::settings_manager().set_boolean("library-rules-seen", true)
-                    {
-                        log::warn!("Unable to remember that the rules were shown: {err}");
-                    }
-                });
+                alert.add_response("ok", &i18n("_Get Started"));
+                alert.add_response("import", &i18n("_Import Music…"));
+                alert.set_response_appearance("import", adw::ResponseAppearance::Suggested);
+                AlertDialogExt::connect_response(
+                    &alert,
+                    None,
+                    clone!(
+                        #[weak]
+                        win,
+                        move |_, response| {
+                            if let Err(err) =
+                                utils::settings_manager().set_boolean("library-rules-seen", true)
+                            {
+                                log::warn!("Unable to remember that the rules were shown: {err}");
+                            }
+                            if response == "import" {
+                                glib::spawn_future_local(async move {
+                                    win.imp().library_panel.import_music().await;
+                                });
+                            }
+                        }
+                    ),
+                );
                 adw::prelude::AdwDialogExt::present(&alert, Some(&win));
             }
         ));
@@ -1581,12 +1598,18 @@ impl Window {
                 .bind_property("text", &sorter, "search")
                 .sync_create()
                 .build();
+            let previous_search = std::cell::RefCell::new(String::new());
             imp.playlist_view
                 .playlist_searchentry()
                 .connect_search_changed(clone!(
                     #[weak(rename_to = win)]
                     self,
-                    move |_| {
+                    move |entry| {
+                        let key = crate::search::text_key(&entry.text());
+                        if *previous_search.borrow() == key {
+                            return;
+                        }
+                        previous_search.replace(key);
                         if let Some(adjustment) = win.imp().playlist_view.queue_view().vadjustment()
                         {
                             adjustment.set_value(0.0);

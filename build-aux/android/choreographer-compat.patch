@@ -1,0 +1,15 @@
+--- a/gdk/android/gdkandroidchoreographersource.c
++++ b/gdk/android/gdkandroidchoreographersource.c
+@@ -48,6 +48,12 @@
+ 
+ #include <android/choreographer.h>
+ #include <stdint.h>
++
++/* Hopea: the legacy callback has a full 64-bit timestamp on our LP64
++ * Android 9 targets. Never use it with a 32-bit long (timestamp overflow). */
++#if __ANDROID_API__ < 29 && defined(__LP64__)
++#define AChoreographer_postFrameCallback64 AChoreographer_postFrameCallback
++#endif
+ 
+ struct _GdkAndroidChoreographerSource
+ {

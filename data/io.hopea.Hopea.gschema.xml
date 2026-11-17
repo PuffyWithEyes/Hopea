@@ -48,8 +48,8 @@
       </key>
       <key name="game-mode-force" type="b">
         <default>false</default>
-        <summary>Keep game mode active without automatic detection</summary>
-        <description>Apply reduced activity while Game Mode is enabled, even when the platform cannot recognize the game.</description>
+        <summary>Retired manual game mode setting</summary>
+        <description>Kept for settings compatibility only. This value is ignored; Game Mode uses automatic detection.</description>
       </key>
 	  <key name="library-upload-limit" type="u">
 	    <default>10240</default>

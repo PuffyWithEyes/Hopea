@@ -52,18 +52,22 @@ upper=${lower^^}
 linker=CARGO_TARGET_${upper}_LINKER
 compiler=CC_${lower}
 archiver=AR_${lower}
-[[ ${!linker} == */"${target}31-clang" ]]
+expected=${target}28-clang
+if [[ $target == armv7-linux-androideabi ]]; then expected=armv7a-linux-androideabi28-clang; fi
+[[ ${!linker} == */"$expected" ]]
 [[ ${!compiler} == "${!linker}" && ${!archiver} == */llvm-ar ]]
 [[ $PKG_CONFIG_PATH == "${directory%/cargo-target}/meson-uninstalled" ]]
 mkdir -p "$directory/$target/debug"
 printf '%s\n' "$target" > "$directory/$target/debug/libhopea.a"
 EOF
 chmod +x "$work/bin/cargo"
-for arch in aarch64 x86_64; do
+for arch in aarch64 x86_64 armv7; do
   build_dir="$work/bin-$arch"
   mkdir -p "$build_dir"
   PATH="$work/bin:$PATH" sh "$root/build-aux/android/cargo.sh" "$build_dir" "$work/$arch.a"
-  [[ $(cat "$work/$arch.a") == "$arch-linux-android" ]]
+  expected=$arch-linux-android
+  if [[ $arch == armv7 ]]; then expected=armv7-linux-androideabi; fi
+  [[ $(cat "$work/$arch.a") == "$expected" ]]
 done
 if PATH="$work/bin:$PATH" sh "$root/build-aux/android/cargo.sh" "$work/bin-unknown" "$work/bad.a" 2>/dev/null; then
   echo 'Unsupported architecture accepted' >&2; exit 1

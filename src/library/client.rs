@@ -364,6 +364,39 @@ impl LibraryClient {
         .await
     }
 
+    /// One bounded peer search, with bounded snapshots of the node's local
+    /// result database while replies arrive. Snapshots never contact peers.
+    /// Returning false from `update` cancels a superseded UI search.
+    pub async fn discover_live(
+        &self,
+        query: &str,
+        order: SearchOrder,
+        mut update: impl FnMut(Option<&TrackPage>) -> bool,
+    ) -> Option<Result<TrackPage, ClientError>> {
+        use futures::future::{select, Either};
+        let search = Box::pin(self.discover(query, 0, true, order));
+        let snapshots = Box::pin(async {
+            for _ in 0..60 {
+                if !update(None) {
+                    return;
+                }
+                if let Ok(page) = self.discover(query, 0, false, order).await {
+                    if !update(Some(&page)) {
+                        return;
+                    }
+                }
+                glib::timeout_future(std::time::Duration::from_millis(400)).await;
+            }
+            // The normal request timeout remains authoritative. Reaching the
+            // snapshot budget must neither retry nor start a new peer search.
+            futures::future::pending::<()>().await;
+        });
+        match select(search, snapshots).await {
+            Either::Left((result, _)) => Some(result),
+            Either::Right(_) => None,
+        }
+    }
+
     /// How a track's file is coming along, and how it is shared from here.
     pub async fn transfer(&self, id: i64) -> Result<Transfer, ClientError> {
         self.get_json(&api::transfer_path(id)).await
@@ -613,6 +646,99 @@ async fn read_limited(stream: &gio::InputStream, limit: usize) -> Result<Vec<u8>
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn discovery_yields_local_results_before_network_finishes() {
+        use std::{
+            io::{BufRead, Write},
+            sync::{
+                atomic::{AtomicUsize, Ordering},
+                Arc,
+            },
+            time::{Duration, Instant},
+        };
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let snapshots = Arc::new(AtomicUsize::new(0));
+        let searches = Arc::new(AtomicUsize::new(0));
+        let finished = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let (observed, network, done) = (snapshots.clone(), searches.clone(), finished.clone());
+        let server = std::thread::spawn(move || {
+            let deadline = Instant::now() + Duration::from_secs(5);
+            let mut handlers = Vec::new();
+            while Instant::now() < deadline && !done.load(Ordering::SeqCst) {
+                let Ok((mut stream, _)) = listener.accept() else {
+                    std::thread::sleep(Duration::from_millis(5));
+                    continue;
+                };
+                let (observed, network) = (observed.clone(), network.clone());
+                handlers.push(std::thread::spawn(move || {
+                    stream.set_read_timeout(Some(Duration::from_secs(2))).unwrap();
+                    let mut reader = std::io::BufReader::new(stream.try_clone().unwrap());
+                    let mut request = String::new();
+                    reader.read_line(&mut request).unwrap();
+                    loop {
+                        let mut header = String::new();
+                        if reader.read_line(&mut header).unwrap() == 0 || header == "\r\n" { break; }
+                    }
+                    assert!(request.contains("limit=50&offset=0&"));
+                    let total = if request.contains("network=true") {
+                        network.fetch_add(1, Ordering::SeqCst);
+                        // The final network response cannot complete until two
+                        // separate local snapshots have become available.
+                        while observed.load(Ordering::SeqCst) < 2 && Instant::now() < deadline {
+                            std::thread::sleep(Duration::from_millis(5));
+                        }
+                        3
+                    } else {
+                        assert!(request.contains("network=false"));
+                        observed.fetch_add(1, Ordering::SeqCst) + 1
+                    };
+                    let body = format!("{{\"tracks\":[],\"total\":{total}}}");
+                    let _ = write!(stream, "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len());
+                }));
+            }
+            for handler in handlers {
+                handler.join().unwrap();
+            }
+        });
+        let context = glib::MainContext::new();
+        let pages = context
+            .with_thread_default(|| {
+                context.block_on(async {
+                    let client =
+                        LibraryClient::new(&format!("http://{address}"), "fixture").unwrap();
+                    let mut pages = Vec::new();
+                    let final_page = client
+                        .discover_live("fixture", SearchOrder::BestMatch, |page| {
+                            if let Some(page) = page {
+                                pages.push(page.total);
+                            }
+                            true
+                        })
+                        .await
+                        .unwrap()
+                        .unwrap();
+                    assert_eq!(final_page.total, 3);
+                    pages
+                })
+            })
+            .unwrap();
+        finished.store(true, Ordering::SeqCst);
+        server.join().unwrap();
+        assert_eq!(
+            pages.first(),
+            Some(&1),
+            "first result must arrive before the final peer reply"
+        );
+        assert_eq!(
+            searches.load(Ordering::SeqCst),
+            1,
+            "snapshots must not repeat network discovery"
+        );
+        assert!(snapshots.load(Ordering::SeqCst) >= 2);
+    }
 
     #[test]
     fn server_addresses() {
