@@ -85,6 +85,13 @@ const MAX_ENTRIES_PER_ANSWER: usize = 50;
 const MAX_OFFERS: usize = 4096;
 /// When no relay is found, how long to wait before looking again
 const RETRY_INTERVAL: Duration = Duration::from_secs(2 * 60);
+const MAX_RELAY_CANDIDATES: usize = 64;
+const PARALLEL_RELAY_PROBES: usize = 4;
+const MAX_REGISTRATION_ATTEMPTS: usize = 4;
+const MAX_CLIENT_TASKS: usize = 2;
+// A hostile relay can reply immediately instead of long-polling. Do not let
+// that turn into unlimited requests or background task creation.
+const MIN_POLL_INTERVAL: Duration = Duration::from_millis(500);
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Register {
@@ -901,26 +908,69 @@ pub async fn request_fetch(
     Ok(())
 }
 
-/// The client side: finds a relay among `nodes` (configured relays first)
+fn candidates_for_round(nodes: &[SocketAddr], round: usize) -> Vec<SocketAddr> {
+    let mut seen = HashSet::new();
+    let mut candidates: Vec<_> = nodes
+        .iter()
+        .copied()
+        .filter(|addr| seen.insert(*addr))
+        .take(MAX_RELAY_CANDIDATES)
+        .collect();
+    if !candidates.is_empty() {
+        let start = round.wrapping_mul(MAX_REGISTRATION_ATTEMPTS) % candidates.len();
+        candidates.rotate_left(start);
+    }
+    candidates
+}
+
+/// The client side: finds a relay among `nodes` (configured relays first on
+/// the initial round, then rotating so failed registrations cannot monopolize it)
 /// and serves through it until `duration` is over or it fails.
-pub async fn run_client(state: &AppState, nodes: &[SocketAddr], duration: Duration) {
+pub async fn run_client(state: &AppState, nodes: &[SocketAddr], duration: Duration, round: usize) {
     let deadline = Instant::now() + duration;
+    let fallback = state.reach.reported();
     let me = state.identity.public_hex();
-    for &candidate in nodes {
-        if Instant::now() >= deadline {
-            return;
+    let candidates = candidates_for_round(nodes, round);
+    let mut probes = futures_util::stream::iter(
+        candidates
+            .into_iter()
+            .map(|candidate| async move { (candidate, fetch_hello(state, candidate).await) }),
+    )
+    .buffer_unordered(PARALLEL_RELAY_PROBES);
+    let mut attempts = 0;
+    while let Ok(Some((candidate, hello))) = tokio::time::timeout(
+        deadline.saturating_duration_since(Instant::now()),
+        probes.next(),
+    )
+    .await
+    {
+        if !matches!(hello, Ok(ref hello) if hello.relay && hello.node != me) {
+            continue;
         }
-        match fetch_hello(state, candidate).await {
-            Ok(hello) if hello.relay && hello.node != me => {}
-            _ => continue,
-        }
+        attempts += 1;
         match serve_through(state, candidate, deadline).await {
             Ok(()) => return,
             Err(err) => tracing::info!("Relay {candidate} stopped working: {err:#}"),
         }
+        // Do not keep displaying or searching through a failed relay while
+        // checking the remaining candidates.
+        if fallback == Reachability::Checking {
+            state.reach.bootstrap();
+        } else {
+            state.reach.set(Reachability::Unreachable, None);
+        }
+        state.announce.notify_one();
+        if attempts >= MAX_REGISTRATION_ATTEMPTS {
+            break;
+        }
     }
-    tracing::info!("No relay available; music shared from here can't be found right now");
-    state.reach.set(Reachability::Unreachable, None);
+    tracing::info!("No relay available; retrying discovery later");
+    if fallback == Reachability::Checking {
+        state.reach.bootstrap();
+    } else {
+        state.reach.set(Reachability::Unreachable, None);
+    }
+    state.announce.notify_one();
     let wait = RETRY_INTERVAL.min(deadline.saturating_duration_since(Instant::now()));
     tokio::time::sleep(wait).await;
 }
@@ -977,8 +1027,14 @@ async fn serve_through(
     let mut registered_at = Instant::now();
     tracing::info!("Others reach this node through the relay {relay}");
     state.reach.set(Reachability::Relay, Some(relay));
+    state.announce.notify_one();
 
+    let mut tasks = tokio::task::JoinSet::new();
+    let mut next_poll = tokio::time::Instant::now();
     while Instant::now() < deadline {
+        while tasks.try_join_next().is_some() {}
+        tokio::time::sleep_until(next_poll).await;
+        next_poll = tokio::time::Instant::now() + MIN_POLL_INTERVAL;
         if registered_at.elapsed() > REREGISTER_INTERVAL {
             session = register(state, relay, Some(&session)).await?;
             registered_at = Instant::now();
@@ -1011,9 +1067,16 @@ async fn serve_through(
             _ => {}
         }
         let task: Task = read_json(response, 64 * 1024).await?;
+        if tasks.len() >= MAX_CLIENT_TASKS {
+            // Keep polling to preserve the relay lease during long uploads,
+            // but do not queue unbounded work. The relay's existing task
+            // timeout lets a requester retry instead of exhausting this node.
+            tracing::debug!("Relay client busy; declining additional work");
+            continue;
+        }
         let state = state.clone();
         let session = session.clone();
-        tokio::spawn(async move {
+        tasks.spawn(async move {
             if let Err(err) = handle_task(&state, relay, &session, task).await {
                 tracing::debug!("Relay task failed: {err:#}");
             }
@@ -1097,4 +1160,109 @@ async fn handle_task(
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod client_limits_tests {
+    use super::*;
+
+    #[test]
+    fn failed_registration_candidates_rotate_without_duplicates() {
+        let nodes: Vec<SocketAddr> = (1..=7)
+            .map(|n| SocketAddr::from(([127, 0, 0, 1], 10000 + n)))
+            .collect();
+        let duplicate_nodes: Vec<_> = nodes.iter().chain(&nodes).copied().collect();
+        assert_eq!(candidates_for_round(&duplicate_nodes, 0), nodes);
+        assert_eq!(candidates_for_round(&duplicate_nodes, 1)[0], nodes[4]);
+        assert_eq!(candidates_for_round(&duplicate_nodes, 2)[0], nodes[1]);
+        assert!(candidates_for_round(&[], usize::MAX).is_empty());
+    }
+
+    async fn exercise_fast_relay(send_tasks: bool, duration: Duration) -> (usize, usize) {
+        use axum::{
+            routing::{get, post},
+            Router,
+        };
+        let count = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let answers = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let submitted = answers.clone();
+        let polls = count.clone();
+        let router = Router::new()
+            .route(
+                REGISTER_PATH,
+                post(|| async {
+                    Json(Registered {
+                        session: "fixture".into(),
+                    })
+                }),
+            )
+            .route(
+                POLL_PATH,
+                get(move || {
+                    let polls = polls.clone();
+                    async move {
+                        let id = polls.fetch_add(1, Ordering::Relaxed) as u64;
+                        if send_tasks {
+                            Json(Task::Search {
+                                id,
+                                q: "song".into(),
+                            })
+                            .into_response()
+                        } else {
+                            StatusCode::NO_CONTENT.into_response()
+                        }
+                    }
+                }),
+            )
+            .route(
+                ANSWER_PATH,
+                post(move || {
+                    submitted.fetch_add(1, Ordering::Relaxed);
+                    async {
+                        tokio::time::sleep(Duration::from_secs(60)).await;
+                        StatusCode::NO_CONTENT
+                    }
+                }),
+            );
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            axum::serve(listener, router).await.unwrap();
+        });
+        let dir = tempfile::tempdir().unwrap();
+        let state = AppState::new(
+            crate::config::Config::isolated(dir.path().join("node")),
+            &crate::auth::generate_token(),
+        )
+        .await
+        .unwrap();
+        tokio::time::timeout(
+            duration + Duration::from_secs(3),
+            serve_through(&state, addr, Instant::now() + duration),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        server.abort();
+        (
+            count.load(Ordering::Relaxed),
+            answers.load(Ordering::Relaxed),
+        )
+    }
+
+    #[tokio::test]
+    async fn immediate_empty_polls_cannot_create_a_busy_loop() {
+        let (polls, _) = exercise_fast_relay(false, Duration::from_millis(1200)).await;
+        assert!((2..=4).contains(&polls), "unexpected poll count: {polls}");
+    }
+
+    #[tokio::test]
+    async fn a_fast_relay_cannot_spawn_unbounded_blocked_tasks() {
+        let (polls, answers) = exercise_fast_relay(true, Duration::from_millis(1200)).await;
+        assert!(
+            (3..=4).contains(&polls),
+            "polling must maintain the session while busy"
+        );
+        assert_eq!(answers, MAX_CLIENT_TASKS);
+    }
 }

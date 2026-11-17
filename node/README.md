@@ -166,9 +166,28 @@ tries, in order (`src/reach.rs`):
    download, and shares it over BitTorrent. Every reachable node relays for
    up to 16 others unless told not to.
 
-The check is repeated every 30 minutes. The player shows a banner when
-nothing worked: searching and listening still work then, but nobody can find
-what is shared from that computer.
+Successful reachability is checked again every 30 minutes. Inconclusive checks
+and unsuccessful relay discovery retry after two minutes, rotating the helpers
+instead of repeatedly asking the same first three addresses. A failed or
+unsupported dialback does not stop a node from trying a relay. Relay hello probes
+use at most four concurrent requests over 64 distinct candidates, with at most
+four registration attempts per round; candidate order rotates between rounds. Configured relays and the active relay also
+participate in searches when DHT is unavailable, within the existing peer budget.
+
+The search screen shows the last checked reachability and connection suggestions.
+An unconfirmed bootstrap state never appears as confirmed online status. When a
+node is unreachable, searching reachable sources can still work, but its own
+shares may remain undiscoverable.
+
+Public DHT answers used for Hopea HTTP discovery must contain a native global
+unicast address and an unprivileged port. Local, loopback, link-local, multicast,
+reserved and IPv4 transition/translation destinations are rejected. Explicit
+local peers and LAN discovery remain separate paths. Peer HTTP redirects are
+never followed. Relay clients limit polling frequency and keep at most two tasks
+in flight. Polling maintains the session during long tasks; excess work is not
+queued and expires under the relay’s existing request timeout.
+Pending tasks are cancelled when their relay session ends. Existing
+public request admission, signature checks and media validation remain in force.
 
 There is no bundled, permanently available public relay. Two nodes behind
 restrictive NATs need another reachable Hopea node to relay for them (discovered

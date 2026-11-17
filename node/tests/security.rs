@@ -130,3 +130,29 @@ async fn chunked_peer_response_cannot_bypass_json_size_limit() {
     assert!(error.to_string().contains("too large"));
     server.await.unwrap();
 }
+
+#[tokio::test]
+async fn peer_redirect_cannot_probe_another_service() {
+    let target = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let peer = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = peer.local_addr().unwrap();
+    let location = format!("http://{}/private", target.local_addr().unwrap());
+    let server = tokio::spawn(async move {
+        let (mut stream, _) = peer.accept().await.unwrap();
+        let mut request = [0; 4096];
+        stream.read(&mut request).await.unwrap();
+        stream.write_all(format!("HTTP/1.1 302 Found\r\nLocation: {location}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").as_bytes()).await.unwrap();
+    });
+    let dir = tempfile::tempdir().unwrap();
+    let state =
+        hopea_node::AppState::new(Config::isolated(dir.path().join("node")), &generate_token())
+            .await
+            .unwrap();
+    assert!(hopea_node::reach::fetch_hello(&state, addr).await.is_err());
+    assert!(
+        tokio::time::timeout(Duration::from_millis(100), target.accept())
+            .await
+            .is_err()
+    );
+    server.await.unwrap();
+}

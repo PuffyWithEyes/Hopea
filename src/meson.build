@@ -8,6 +8,7 @@ pkgdatadir = get_option('prefix') / get_option('datadir') / meson.project_name()
 gnome.compile_resources('hopea',
   'hopea.gresource.xml',
   gresource_bundle: true,
+  build_by_default: true,
   dependencies: blueprints,
   install: true,
   install_dir: pkgdatadir,

@@ -189,12 +189,6 @@ template $HopeaLibraryPanel: Adw.Bin {
                 child: Box {
                   orientation: vertical;
 
-                  Adw.Banner reach_banner {
-                    title: _(
-                      "Other people can’t reach this computer right now, so they can’t find the music you share. Searching and listening still work."
-                    );
-                  }
-
                   Adw.ViewStack view_stack {
                     vexpand: true;
 
@@ -205,6 +199,22 @@ template $HopeaLibraryPanel: Adw.Bin {
 
                       child: Box {
                         orientation: vertical;
+
+                        Adw.Banner reach_banner {
+                          title: _("Availability Unconfirmed");
+                          button-label: _("Details");
+                          revealed: true;
+                        }
+                        Label reach_summary {
+                          xalign: 0;
+                          wrap: true;
+                          wrap-mode: word_char;
+                          margin-start: 12;
+                          margin-end: 12;
+                          margin-top: 6;
+                          margin-bottom: 6;
+                          styles [ "dim-label" ]
+                        }
 
                         Adw.Clamp {
                           maximum-size: 560;

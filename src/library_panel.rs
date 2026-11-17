@@ -102,6 +102,8 @@ mod imp {
         #[template_child]
         pub reach_banner: TemplateChild<adw::Banner>,
         #[template_child]
+        pub reach_summary: TemplateChild<gtk::Label>,
+        #[template_child]
         pub vpn_banner: TemplateChild<adw::Banner>,
         #[template_child]
         pub connection_title: TemplateChild<gtk::Label>,
@@ -157,6 +159,7 @@ mod imp {
         pub upload_progress: TemplateChild<gtk::ProgressBar>,
 
         pub me: RefCell<Option<Me>>,
+        pub me_loading: Cell<bool>,
         pub settings: once_cell::unsync::OnceCell<gio::Settings>,
         pub loaded: Cell<u32>,
         pub results: once_cell::unsync::OnceCell<gio::ListStore>,
@@ -273,6 +276,7 @@ impl LibraryPanel {
         let imp = self.imp();
         if imp.stack.visible_child_name().as_deref() == Some("library") {
             imp.view_stack.set_visible_child_name("search");
+            self.refresh_me();
             imp.search_entry.grab_focus();
         }
     }
@@ -281,20 +285,52 @@ impl LibraryPanel {
     /// reach it.
     fn refresh_me(&self) {
         let Some(client) = library::client() else {
+            self.imp().reach_banner.set_title(&i18n("Not Connected"));
+            self.imp()
+                .reach_summary
+                .set_text(&i18n("Join the network to discover and share music."));
             return;
         };
+        if self.imp().me_loading.replace(true) {
+            return;
+        }
         glib::spawn_future_local(clone!(
             #[weak(rename_to = this)]
             self,
             async move {
-                if let Ok(me) = client.me().await {
-                    this.imp()
-                        .reach_banner
-                        .set_revealed(me.reachability == Reachability::Unreachable);
-                    this.imp().me.replace(Some(me));
+                let result = client.me().await;
+                this.imp().me_loading.set(false);
+                // Ignore replies from a node that stopped while we were waiting.
+                if !library::client().is_some_and(|current| current.origin() == client.origin()) {
+                    return;
+                }
+                match result {
+                    Ok(me) => this.update_me(me),
+                    Err(_) => {
+                        this.imp().me.replace(None);
+                        this.imp().reach_summary.set_text(&i18n(
+                            "The local node is not responding. Retrying automatically.",
+                        ));
+                        this.imp()
+                            .reach_banner
+                            .set_title(&i18n("Network Status Unavailable"));
+                    }
                 }
             }
         ));
+    }
+
+    fn update_me(&self, me: Me) {
+        let (title, _) = sharing_status(Some(me.reachability));
+        self.imp().reach_banner.set_title(&title);
+        self.imp().reach_summary.set_text(&match me.reachability {
+            Reachability::Checking => i18n("Your shares have not been checked by another listener yet."),
+            Reachability::Direct => i18n("Other listeners can reach your shares directly."),
+            Reachability::Ipv6 => i18n("Your shares are reachable over IPv6. IPv4-only listeners may need a relay."),
+            Reachability::Relay => i18n("A relay helps other listeners find and download your music."),
+            Reachability::Unreachable => i18n("You can search reachable sources, but your own shares are not reachable from outside."),
+        });
+        self.imp().me.replace(Some(me));
     }
 
     fn settings(&self) -> gio::Settings {
@@ -306,6 +342,38 @@ impl LibraryPanel {
 
     fn connect_signals(&self) {
         let imp = self.imp();
+
+        imp.reach_banner.connect_button_clicked(clone!(
+            #[weak(rename_to = this)]
+            self,
+            move |_| {
+                let reach = this.imp().me.borrow().as_ref().map(|me| me.reachability);
+                let (title, body) = sharing_status(reach);
+                let dialog = adw::AlertDialog::builder()
+                    .heading(title)
+                    .body(body)
+                    .build();
+                let help = gtk::Label::builder()
+                    .label(connection_recommendations())
+                    .wrap(true)
+                    .wrap_mode(gtk::pango::WrapMode::WordChar)
+                    .xalign(0.0)
+                    .selectable(true)
+                    .build();
+                dialog.set_extra_child(Some(
+                    &gtk::ScrolledWindow::builder()
+                        .hscrollbar_policy(gtk::PolicyType::Never)
+                        .min_content_height(120)
+                        .max_content_height(240)
+                        .propagate_natural_height(true)
+                        .child(&help)
+                        .build(),
+                ));
+                dialog.add_response("close", &i18n("Close"));
+                dialog.set_close_response("close");
+                dialog.present(Some(&this));
+            }
+        ));
 
         imp.vpn_banner.connect_button_clicked(clone!(
             #[weak(rename_to = this)]
@@ -344,6 +412,9 @@ impl LibraryPanel {
                 move || {
                     if this.is_mapped() {
                         this.refresh_protection_notice();
+                        if this.imp().stack.visible_child_name().as_deref() == Some("library") {
+                            this.refresh_me();
+                        }
                     }
                     glib::ControlFlow::Continue
                 }
@@ -650,9 +721,7 @@ impl LibraryPanel {
             }
         };
         let imp = self.imp();
-        imp.reach_banner
-            .set_revealed(me.reachability == Reachability::Unreachable);
-        imp.me.replace(Some(me));
+        self.update_me(me);
 
         imp.upload_bar.set_visible(false);
         imp.menu_button.set_visible(true);
@@ -2954,4 +3023,100 @@ async fn precheck(file: &gio::File, name: &str, size: u64, max: u64) -> Result<(
             None => i18n("This is not an audio file"),
         }),
     }
+}
+
+/// Reachability is independent of having an internet connection or finding a song.
+fn sharing_status(reach: Option<Reachability>) -> (String, String) {
+    match reach {
+        Some(Reachability::Checking) => (i18n("Availability Unconfirmed"), i18n("Hopea is running, but other nodes have not confirmed that they can reach your shares yet. This can take time when few listeners are online.")),
+        Some(Reachability::Direct) => (i18n("Online · Direct Sharing"), i18n("Another node successfully reached this device over IPv4 during the last check. Your shares can be discovered directly. This does not guarantee a result for every search.")),
+        Some(Reachability::Ipv6) => (i18n("Online · IPv6 Sharing"), i18n("Another node successfully reached this device over IPv6 during the last check. Listeners without IPv6 may need a relay to reach your shares.")),
+        Some(Reachability::Relay) => (i18n("Online · Sharing Through a Relay"), i18n("Another Hopea node forwards searches and music for this device. Availability depends on that relay staying connected.")),
+        Some(Reachability::Unreachable) => (i18n("Your Shares Are Unreachable"), i18n("Other nodes could not reach this device, and no relay connection is active. You can still search reachable sources. A router, provider NAT, VPN or firewall may prevent incoming connections. Hopea has no permanently available public relay.")),
+        None => (i18n("Network Status Unavailable"), i18n("Hopea could not read the local node’s status. It will retry automatically while this panel is open.")),
+    }
+}
+
+#[cfg(test)]
+#[test]
+#[ignore = "requires an isolated GTK display and memory settings"]
+fn sharing_status_details_fit_mobile_panel() {
+    assert_eq!(std::env::var("GSETTINGS_BACKEND").as_deref(), Ok("memory"));
+    assert!(glib::user_data_dir().starts_with("/tmp"));
+    adw::init().unwrap();
+    gio::resources_register(
+        &gio::Resource::load(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("_builddir/src/hopea.gresource"),
+        )
+        .unwrap(),
+    );
+    utils::settings_manager()
+        .set_boolean("library-enabled", false)
+        .unwrap();
+    let context = glib::MainContext::default();
+    let _guard = context.acquire().unwrap();
+    let panel: LibraryPanel = glib::Object::new();
+    let window = adw::Window::builder()
+        .default_width(360)
+        .default_height(740)
+        .content(&panel)
+        .build();
+    panel.imp().stack.set_visible_child_name("library");
+    GtkWindowExt::present(&window);
+    for reach in [
+        Reachability::Checking,
+        Reachability::Direct,
+        Reachability::Ipv6,
+        Reachability::Relay,
+        Reachability::Unreachable,
+    ] {
+        panel.update_me(Me {
+            name: String::new(),
+            used_bytes: 0,
+            quota_bytes: 0,
+            max_upload_bytes: 0,
+            reachability: reach,
+        });
+        assert!(panel.imp().reach_banner.is_revealed());
+        assert!(!panel.imp().reach_summary.text().is_empty());
+        let search_page = panel.imp().view_stack.child_by_name("search").unwrap();
+        assert!(panel.imp().reach_banner.is_ancestor(&search_page));
+        assert!(panel.imp().reach_summary.is_ancestor(&search_page));
+        if matches!(reach, Reachability::Checking | Reachability::Unreachable) {
+            assert!(!panel.imp().reach_banner.title().starts_with("Online"));
+        }
+        panel
+            .imp()
+            .reach_banner
+            .emit_by_name::<()>("button-clicked", &[]);
+        let dialog = window
+            .visible_dialog()
+            .unwrap()
+            .downcast::<adw::AlertDialog>()
+            .unwrap();
+        assert_eq!(
+            dialog.heading().as_deref(),
+            Some(sharing_status(Some(reach)).0.as_str())
+        );
+        context.block_on(glib::timeout_future(std::time::Duration::from_millis(400)));
+        assert!(panel.measure(gtk::Orientation::Horizontal, -1).0 <= 360);
+        assert!(dialog.width() > 0 && dialog.width() <= window.width());
+        assert!(dialog.height() > 0 && dialog.height() <= window.height());
+        let help = dialog
+            .extra_child()
+            .unwrap()
+            .downcast::<gtk::ScrolledWindow>()
+            .unwrap();
+        assert!(
+            help.child().is_some(),
+            "connection recommendations stay visible and scrollable"
+        );
+        dialog.close();
+        context.block_on(glib::timeout_future(std::time::Duration::from_millis(250)));
+    }
+    window.close();
+}
+
+fn connection_recommendations() -> String {
+    i18n("To improve the connection:\n\n• Make sure both devices have joined Hopea and the owner is sharing the song. Keep Hopea open and allow time for discovery.\n\n• If you require a VPN, check that it is connected. For incoming connections, the VPN must support port forwarding; an ordinary VPN may not.\n\n• On a network you manage, allow Hopea through the firewall. If you have two routers, incoming connections must pass through both. Ask your provider whether you have a public IP address.\n\n• If incoming connections are unavailable, a reachable Hopea relay is needed. Hopea looks for one automatically, but does not include an always-on public relay. You can also try another network.\n\nDo not disable your firewall, put the device in a router’s DMZ, or expose the local player API. No change to your router settings is required just to search reachable sources.")
 }

@@ -287,6 +287,10 @@ async fn collect_dht_peers<S: futures_util::Stream<Item = SocketAddr> + Unpin>(
         }
         match tokio::time::timeout_at(deadline, peers.next()).await {
             Ok(Some(addr)) if retain.is_some() && (!ipv4_only || addr.is_ipv4()) => {
+                let addr = SocketAddr::new(addr.ip().to_canonical(), addr.port());
+                if !public_discovery_address(addr) {
+                    continue;
+                }
                 if seen.insert(addr) {
                     found.push(addr);
                 }
@@ -299,6 +303,40 @@ async fn collect_dht_peers<S: futures_util::Stream<Item = SocketAddr> + Unpin>(
         }
     }
     found
+}
+
+/// Public discovery must never turn an untrusted DHT answer into a request
+/// to loopback, the router, cloud metadata, or another private-network service.
+/// Explicit peers and LAN discovery have separate, local sources of authority.
+fn public_discovery_address(addr: SocketAddr) -> bool {
+    if addr.port() < 1024 {
+        return false;
+    }
+    match addr.ip().to_canonical() {
+        std::net::IpAddr::V4(ip) => {
+            let [a, b, c, _] = ip.octets();
+            !(ip.is_private()
+                || ip.is_loopback()
+                || ip.is_link_local()
+                || ip.is_documentation()
+                || a == 0
+                || a >= 224
+                || (a == 100 && (64..=127).contains(&b))
+                || (a == 198 && (18..=19).contains(&b))
+                || (a == 192 && b == 0 && c == 0)
+                || (a == 192 && b == 88 && c == 99))
+        }
+        std::net::IpAddr::V6(ip) => {
+            let segments = ip.segments();
+            // Native global unicast only. Exclude transition/translation
+            // mechanisms that could embed a private IPv4 destination.
+            segments[0] & 0xe000 == 0x2000
+                && !(segments[0] == 0x2001 && segments[1] < 0x0200)
+                && !(segments[0] == 0x2001 && segments[1] == 0x0db8)
+                && segments[0] != 0x2002
+                && segments[0] != 0x3fff
+        }
+    }
 }
 
 /// Searches the network for `query`, storing what is found, and tells how
@@ -320,16 +358,17 @@ pub async fn search(state: &AppState, query: &str) -> SearchReport {
         .ok()
         .and_then(Result::ok)
         .unwrap_or_default();
+    let mut seen = HashSet::new();
     let configured: Vec<SocketAddr> = state
         .config
-        .peers
+        .relays
         .iter()
         .copied()
+        .chain(state.reach.relay())
+        .chain(state.config.peers.iter().copied())
         .chain(state.lan.addresses().into_iter().take(MAX_NODES_PER_SEARCH))
         .chain(remembered)
-        .filter(|n| Some(*n) != own)
-        .collect::<HashSet<_>>()
-        .into_iter()
+        .filter(|n| Some(*n) != own && seen.insert(*n))
         .take(if state.config.dht {
             MAX_NODES_PER_SEARCH / 2
         } else {
@@ -892,7 +931,7 @@ mod scaling_tests {
 
     #[tokio::test]
     async fn dht_duplicates_floods_and_announcements_use_bounded_memory() {
-        let peer = "127.0.0.1:1".parse().unwrap();
+        let peer = "8.8.8.8:47391".parse().unwrap();
         let duplicate_flood = stream::repeat(peer);
         assert_eq!(
             collect_dht_peers(
@@ -904,7 +943,7 @@ mod scaling_tests {
             .await,
             vec![peer]
         );
-        let many = stream::iter((1..=5000).map(|port| SocketAddr::from(([127, 0, 0, 1], port))));
+        let many = stream::iter((1024..=6024).map(|port| SocketAddr::from(([8, 8, 8, 8], port))));
         assert_eq!(
             collect_dht_peers(many, Duration::from_secs(1), false, Some(usize::MAX))
                 .await
@@ -917,6 +956,48 @@ mod scaling_tests {
                 .is_empty()
         );
     }
+    #[tokio::test]
+    async fn public_discovery_rejects_internal_and_embedded_addresses() {
+        let blocked = [
+            "127.0.0.1:47391",
+            "10.0.0.1:47391",
+            "192.168.1.1:47391",
+            "172.16.0.1:47391",
+            "169.254.169.254:47391",
+            "100.64.0.1:47391",
+            "198.18.0.1:47391",
+            "0.0.0.0:47391",
+            "255.255.255.255:47391",
+            "224.0.0.1:47391",
+            "192.0.2.1:47391",
+            "8.8.8.8:80",
+            "[::1]:47391",
+            "[::ffff:192.168.1.1]:47391",
+            "[fc00::1]:47391",
+            "[fe80::1]:47391",
+            "[ff02::1]:47391",
+            "[64:ff9b::c0a8:101]:47391",
+            "[2002:c0a8:101::1]:47391",
+            "[2001::1]:47391",
+            "[2001:db8::1]:47391",
+        ];
+        let public = ["8.8.8.8:47391", "[2606:4700:4700::1111]:47391"];
+        let addresses = blocked.iter().chain(&public).map(|s| s.parse().unwrap());
+        assert_eq!(
+            collect_dht_peers(
+                stream::iter(addresses),
+                Duration::from_secs(1),
+                false,
+                Some(50)
+            )
+            .await,
+            public
+                .iter()
+                .map(|s| s.parse::<SocketAddr>().unwrap())
+                .collect::<Vec<_>>()
+        );
+    }
+
     #[test]
     fn importing_one_new_key_does_not_reannounce_the_old_keys() {
         let mut plan = AnnouncePlan::default();

@@ -165,6 +165,24 @@ Media lives in `<data>/media/<info hash>/track.<ext>` (`storage.rs`). Own duplic
 
 Product naming: use Hopea, `hopea`, `hopea-node` and `hopea-spotify`. `src/paths.rs` keeps existing libraries and caches in place. The GSettings storage path and protocol/hash identifiers retain legacy values for compatibility; do not rename those blindly. New installs use hopea data/cache directories.
 
+### Sharing status
+
+The network search page shows the node's last reachability result and a short
+explanation above the search field, with a Details dialog: unconfirmed, direct IPv4, IPv6, relayed, or unreachable. While
+visible, it refreshes the authenticated local `/me` response every two seconds,
+with at most one request in flight and stale replies from replaced nodes ignored.
+This does not trigger extra peer probes or change network admission limits.
+Reachability checks retain their existing schedule; a successful check is not a
+guarantee that every search will find a source.
+
+Bootstrap discovery still advertises a node optimistically when no peers are
+available to test it. The API reports that state as `checking`, never as confirmed
+direct reachability. No router settings or port mappings are changed by the UI. Its Details dialog
+includes connection recommendations without advising users to disable their
+firewall or expose the authenticated local API. See `node/README.md` for discovery
+retry and relay limits. Public DHT endpoints are filtered before Hopea HTTP
+connections; explicit peers and LAN discovery retain their separate trust paths.
+
 ### Personal albums and cache maintenance
 
 `src/library/collections.rs` stores UUID-named local collections atomically under

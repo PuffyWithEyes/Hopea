@@ -71,7 +71,7 @@ text = path.read_text()
 if 'useLegacyPackaging' not in text:
     text = text.replace('android {', 'android {\n    packaging { jniLibs { useLegacyPackaging = true } }', 1)
 text = re.sub(r'minSdk \d+', 'minSdk 28', text)
-# Audio preview also installs over the diagnostic build without clearing data.
-text = re.sub(r'versionCode \d+', 'versionCode 20261120', text)
-text = re.sub(r'versionName "[^"]*"', 'versionName "2026.3.1-audio.1"', text)
+# Keep upgrades installable over the previous audio and diagnostic previews.
+text = re.sub(r'versionCode \d+', 'versionCode 20261121', text)
+text = re.sub(r'versionName "[^"]*"', 'versionName "2026.3.2-android-preview"', text)
 path.write_text(text)

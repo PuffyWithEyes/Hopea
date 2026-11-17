@@ -1388,3 +1388,86 @@ async fn metadata_variants_share_one_audio_and_count_distinct_copies() {
         1
     );
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn configured_relay_is_searched_without_dht() {
+    let alice = TestNode::start("relay-source", vec![]).await;
+    let response = alice
+        .share("RelayDiscovery.flac", fixture("tone.flac"))
+        .await;
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let shared: UploadResponse = response.json().await.unwrap();
+    let bob = TestNode::start_with("searcher", |c| {
+        c.relays = vec![alice.node.p2p_addr, alice.node.p2p_addr];
+    })
+    .await;
+    let report = hopea_node::p2p::search(&bob.node.state, "RelayDiscovery").await;
+    assert_eq!(report.nodes_asked, 1, "do not duplicate relay requests");
+    assert_eq!(report.nodes_answered, 1);
+    let results = bob.search("RelayDiscovery", false).await;
+    assert!(results
+        .tracks
+        .iter()
+        .any(|t| t.sha256 == shared.track.sha256));
+    bob.node.shutdown().await;
+    alice.node.shutdown().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn inconclusive_dialback_still_tries_available_relay() {
+    use axum::{
+        routing::{get, post},
+        Router,
+    };
+    let alice = TestNode::start("relay", vec![]).await;
+    wait_for("relay bootstrap", || alice.node.state.reach.direct()).await;
+    // This endpoint supports relaying but cannot perform a dialback. The
+    // first three candidates don't answer at all: they must not hide it.
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let router = Router::new()
+        .route(
+            hopea_node::reach::HELLO_PATH,
+            get(hopea_node::reach::hello_handler),
+        )
+        .route(
+            hopea_node::reach::DIALBACK_PATH,
+            get(|| async { axum::http::StatusCode::SERVICE_UNAVAILABLE }),
+        )
+        .route(
+            hopea_node::relay::REGISTER_PATH,
+            post(hopea_node::relay::register_handler),
+        )
+        .route(
+            hopea_node::relay::POLL_PATH,
+            get(hopea_node::relay::poll_handler),
+        )
+        .with_state(alice.node.state.clone());
+    let server = tokio::spawn(async move {
+        axum::serve(listener, router).await.unwrap();
+    });
+    let mut silent = Vec::new();
+    for _ in 0..3 {
+        silent.push(tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap());
+    }
+    let carol = TestNode::start_with("behind-nat", |c| {
+        c.peers = silent
+            .iter()
+            .map(|l| l.local_addr().unwrap())
+            .chain([address])
+            .collect();
+    })
+    .await;
+    tokio::time::timeout(
+        Duration::from_secs(20),
+        wait_for("relay after unanswered dialbacks", || {
+            carol.node.state.reach.reported() == Reachability::Relay
+        }),
+    )
+    .await
+    .unwrap();
+    assert_eq!(carol.node.state.reach.relay(), Some(address));
+    carol.node.shutdown().await;
+    server.abort();
+    alice.node.shutdown().await;
+}

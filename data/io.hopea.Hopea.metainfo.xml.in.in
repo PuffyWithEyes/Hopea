@@ -34,6 +34,18 @@
     <control>touch</control>
   </recommends>
   <releases>
+    <release version="2026.3.2" date="2026-11-18" type="development">
+      <description>
+        <p>This alpha improves network discovery and Android playback controls.</p>
+        <ul>
+          <li>Show sharing availability and connection recommendations on the network search screen.</li>
+          <li>Try available relays after inconclusive reachability checks and rotate discovery candidates.</li>
+          <li>Reject internal addresses from public discovery and bound relay client work.</li>
+          <li>Handle Android media volume keys and move volume updates off the GTK thread.</li>
+          <li>Retry pending waveform requests after downloaded audio is verified.</li>
+        </ul>
+      </description>
+    </release>
     <release version="2026.3.1" date="2026-11-17" type="development">
       <description>
         <p>Android compatibility hotfix for input and document-picker calls.

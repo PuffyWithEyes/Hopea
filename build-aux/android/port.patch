@@ -21,7 +21,7 @@
  
 -project('hopea', 'rust',
 +project('hopea', 'c',
-   version: '2026.3.1',
+   version: '2026.3.2',
    license: ['GPL-3.0'],
    meson_version: '>= 0.59.0',
    default_options: [ 'warning_level=2', ],
@@ -76,7 +76,7 @@
 +pub extern "C" fn hopea_android_main() -> i32 { main().get() as i32 }
 --- a/src/meson.build
 +++ b/src/meson.build
-@@ -5,7 +5,7 @@
+@@ -5,8 +5,8 @@
  
  pkgdatadir = get_option('prefix') / get_option('datadir') / meson.project_name()
  
@@ -84,8 +84,9 @@
 +resources = gnome.compile_resources('hopea',
    'hopea.gresource.xml',
    gresource_bundle: true,
+   build_by_default: true,
    dependencies: blueprints,
-@@ -37,73 +37,17 @@
+@@ -38,73 +38,17 @@
    check: true,
  )
  
@@ -175,7 +176,7 @@
 + install: true)
 --- a/src/gtk/meson.build
 +++ b/src/gtk/meson.build
-@@ -1,24 +1,4 @@
+@@ -1,34 +1,4 @@
 -# SPDX-FileCopyrightText: 2025  Emmanuele Bassi
 -# SPDX-License-Identifier: GPL-3.0-or-later
 -
@@ -191,11 +192,21 @@
 -    'volume-control.blp',
 -    'window.blp',
 -  ),
--  output: '.',
+-  output: [
+-    'library-panel.ui',
+-    'playback-control.ui',
+-    'playlist-view.ui',
+-    'queue-row.ui',
+-    'shortcuts-dialog.ui',
+-    'song-cover.ui',
+-    'song-details.ui',
+-    'volume-control.ui',
+-    'window.ui',
+-  ],
 -  command: [
 -    find_program('blueprint-compiler'),
 -    'batch-compile',
--    '@OUTPUT@',
+-    '@OUTDIR@',
 -    '@CURRENT_SOURCE_DIR@',
 -    '@INPUT@',
 -  ],

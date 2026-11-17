@@ -214,7 +214,7 @@ async fn me(State(state): State<AppState>, _: Authorized) -> ApiResult<Json<Me>>
         used_bytes,
         quota_bytes: state.config.quota_bytes,
         max_upload_bytes: state.config.limits.max_upload_bytes,
-        reachability: state.reach.get(),
+        reachability: state.reach.reported(),
     }))
 }
 

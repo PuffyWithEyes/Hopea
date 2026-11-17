@@ -79,7 +79,7 @@ pub struct DialbackResponse {
 
 /// What this node knows about its own reachability.
 pub struct Status {
-    inner: Mutex<(Reachability, Option<SocketAddr>)>,
+    inner: Mutex<(Reachability, Option<SocketAddr>, bool)>,
     /// When each address last asked for a dial-back
     dialbacks: Mutex<HashMap<IpAddr, Instant>>,
     dialback_slots: Semaphore,
@@ -88,7 +88,7 @@ pub struct Status {
 impl Status {
     pub fn new() -> Self {
         Self {
-            inner: Mutex::new((Reachability::Checking, None)),
+            inner: Mutex::new((Reachability::Checking, None, false)),
             dialbacks: Mutex::default(),
             dialback_slots: Semaphore::new(4),
         }
@@ -104,7 +104,21 @@ impl Status {
     }
 
     pub fn set(&self, reachability: Reachability, relay: Option<SocketAddr>) {
-        *self.inner.lock().unwrap_or_else(|e| e.into_inner()) = (reachability, relay);
+        *self.inner.lock().unwrap_or_else(|e| e.into_inner()) = (reachability, relay, true);
+    }
+
+    /// Public status must not mistake bootstrap optimism for a successful check.
+    pub fn reported(&self) -> Reachability {
+        let status = self.inner.lock().unwrap_or_else(|e| e.into_inner());
+        if status.2 {
+            status.0
+        } else {
+            Reachability::Checking
+        }
+    }
+
+    pub(crate) fn bootstrap(&self) {
+        *self.inner.lock().unwrap_or_else(|e| e.into_inner()) = (Reachability::Direct, None, false);
     }
 
     /// Whether other nodes can connect to this one directly.
@@ -228,15 +242,20 @@ pub async fn other_nodes(state: &AppState) -> Vec<SocketAddr> {
             nodes.push(addr);
         }
     }
-    if let Some(own) = state.p2p_addr() {
-        nodes.retain(|a| *a != own);
-    }
+    let own = state.p2p_addr();
+    let mut seen = std::collections::HashSet::new();
+    nodes.retain(|a| Some(*a) != own && seen.insert(*a));
+    nodes.truncate(64);
     nodes
 }
 
 /// Checks whether others can reach this node over IPv4 and over IPv6.
 /// `None` for a family means no other node could be asked.
-async fn check(state: &AppState, nodes: &[SocketAddr]) -> (Option<bool>, Option<bool>) {
+async fn check(
+    state: &AppState,
+    nodes: &[SocketAddr],
+    round: usize,
+) -> (Option<bool>, Option<bool>) {
     let Some(port) = state.p2p_addr().map(|a| a.port()) else {
         return (None, None);
     };
@@ -244,12 +263,11 @@ async fn check(state: &AppState, nodes: &[SocketAddr]) -> (Option<bool>, Option<
         if v6 && state.config.ipv4_only {
             return None;
         }
-        let helpers = nodes
-            .iter()
-            .filter(|a| a.is_ipv6() == v6)
-            .take(HELPERS_PER_FAMILY);
+        let helpers = helpers_for_round(nodes, v6, round);
         let answers = futures_util::future::join_all(
-            helpers.map(|helper| async move { dialback(state, *helper, port).await }),
+            helpers
+                .into_iter()
+                .map(|helper| async move { dialback(state, helper, port).await }),
         )
         .await;
         let mut asked = false;
@@ -263,6 +281,25 @@ async fn check(state: &AppState, nodes: &[SocketAddr]) -> (Option<bool>, Option<
         asked.then_some(false)
     };
     tokio::join!(family(false), family(true))
+}
+
+fn helpers_for_round(nodes: &[SocketAddr], v6: bool, round: usize) -> Vec<SocketAddr> {
+    let family: Vec<_> = nodes
+        .iter()
+        .copied()
+        .filter(|a| a.is_ipv6() == v6)
+        .collect();
+    if family.is_empty() {
+        return Vec::new();
+    }
+    let start = round.wrapping_mul(HELPERS_PER_FAMILY) % family.len();
+    family
+        .iter()
+        .cycle()
+        .skip(start)
+        .take(HELPERS_PER_FAMILY.min(family.len()))
+        .copied()
+        .collect()
 }
 
 /// Forwards the search port with UPnP for as long as the node runs.
@@ -288,13 +325,15 @@ pub async fn run(state: AppState) {
     if state.config.dht {
         p2p::wait_for_dht(&state, Duration::from_secs(30)).await;
     }
+    let mut round = 0usize;
     loop {
         let nodes = other_nodes(&state).await;
         let (v4, v6) = if state.config.force_relay {
             (Some(false), Some(false))
         } else {
-            check(&state, &nodes).await
+            check(&state, &nodes, round).await
         };
+        round = round.wrapping_add(1);
         let before = state.reach.get();
         let next_check = match (v4, v6) {
             (Some(true), _) => {
@@ -309,14 +348,22 @@ pub async fn run(state: AppState) {
                 // Nobody to ask: most likely the very first nodes of a
                 // network. Behave as reachable, and ask again soon
                 tracing::debug!("No other nodes to check reachability with");
-                state.reach.set(Reachability::Direct, None);
+                state.reach.bootstrap();
+                if !nodes.is_empty() {
+                    // A helper may answer hello/register but not dialback.
+                    // An inconclusive check must not prevent trying a relay.
+                    state.announce.notify_one();
+                    relay::run_client(&state, &nodes, RECHECK_INTERVAL, round.wrapping_sub(1))
+                        .await;
+                    continue;
+                }
                 RETRY_INTERVAL
             }
             _ => {
                 tracing::info!("Other nodes can't reach this one; looking for a relay");
                 state.reach.set(Reachability::Unreachable, None);
                 state.announce.notify_one();
-                relay::run_client(&state, &nodes, RECHECK_INTERVAL).await;
+                relay::run_client(&state, &nodes, RECHECK_INTERVAL, round.wrapping_sub(1)).await;
                 continue;
             }
         };
@@ -326,5 +373,45 @@ pub async fn run(state: AppState) {
             state.announce.notify_one();
         }
         tokio::time::sleep(next_check).await;
+    }
+}
+
+#[cfg(test)]
+mod status_tests {
+    use super::*;
+
+    #[test]
+    fn retry_rounds_do_not_keep_asking_only_the_first_helpers() {
+        let nodes: Vec<SocketAddr> = (1..=7)
+            .map(|n| SocketAddr::from(([8, 8, 8, n], 47391)))
+            .collect();
+        assert_eq!(helpers_for_round(&nodes, false, 0), nodes[..3]);
+        assert_eq!(helpers_for_round(&nodes, false, 1), nodes[3..6]);
+        assert_eq!(
+            helpers_for_round(&nodes, false, 2),
+            vec![nodes[6], nodes[0], nodes[1]]
+        );
+        assert!(helpers_for_round(&nodes, true, 0).is_empty());
+        assert_eq!(helpers_for_round(&nodes[..1], false, 10), nodes[..1]);
+    }
+
+    #[test]
+    fn bootstrap_is_not_confirmed_reachability() {
+        let status = Status::new();
+        assert_eq!(status.reported(), Reachability::Checking);
+        status.bootstrap();
+        assert!(status.direct(), "bootstrap discovery must remain enabled");
+        assert_eq!(status.reported(), Reachability::Checking);
+        for reach in [
+            Reachability::Direct,
+            Reachability::Ipv6,
+            Reachability::Relay,
+            Reachability::Unreachable,
+        ] {
+            status.set(reach, None);
+            assert_eq!(status.reported(), reach);
+        }
+        status.bootstrap();
+        assert_eq!(status.reported(), Reachability::Checking);
     }
 }
