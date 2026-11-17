@@ -33,7 +33,7 @@ Python's SQLite module. These checks do not constitute full application builds.
 | GhostBSD / HardenedBSD and other derivatives | The corresponding base BSD recipe | ABI compatibility and package availability must be checked for each release |
 | Windows 10/11 x64 | MSYS2 UCRT64 → Setup EXE, ZIP and Scoop JSON | Per-user installation; includes GTK, GStreamer, FFmpeg and private Python. See [compatibility and build instructions](windows/README.md) |
 | macOS Apple Silicon / Intel | Homebrew formula and bottle | Native build with Homebrew dependencies; not a standalone `.app`, no Apple notarization |
-| Android ARM64 / ARMv7 / x86-64 | Preview APK | Android 9+ (API 28). ARM64 and ARMv7 APK builds verified; device validation pending. CI builds all three ABIs with a persistent preview key; x86-64 still needs a full APK build and launch test |
+| Android ARM64 / ARMv7 / x86-64 | Preview APK | Android 9+ (API 28). CI builds all three ABIs with a persistent preview key; device validation remains pending |
 | Flatpak | `build-aux/flatpak/` → `hopea.flatpak` | Shared Linux distribution format, GNOME 51 runtime |
 
 Native Linux packages require GTK **4.20+**, libadwaita **1.8+** and GStreamer
@@ -66,7 +66,8 @@ On November 17, 2026, both complete 32-bit Linux package builds passed locally.
 The Alpine package was installed with signature verification, and the Void
 package was installed through its generated XBPS repository. Both installed
 player and Spotify helper binaries were verified as ELF32 x86, and their
-`--help` commands completed. Alpine also passed its 41 service-import tests.
+`--help` commands completed. Alpine's service-import suite reported 38 tests
+passed and 3 skipped.
 These checks do not cover graphical playback or physical 32-bit hardware.
 Void packaging now resolves dependencies before publishing, since `xbps-create`
 alone accepts invalid dependency expressions.

@@ -127,7 +127,7 @@ default; ARMv7 (`armeabi-v7a`) and x86-64 build recipes are also available for
 compatible devices and emulators. ARMv7 targets 32-bit Android installations,
 including phones whose processor supports ARM64 but whose OS does not.
 The ARMv7 APK has been built and verified; Android 9 device testing is still
-pending. The x86-64 recipe still needs complete APK/runtime verification.
+pending. The x86-64 APK also builds in CI; runtime verification is still pending.
 There is no Google Play Services dependency or phone-brand restriction. The
 manifest allows small screens, tablets, foldables and devices without touch.
 All APK variants retain the 16 KiB alignment check.
