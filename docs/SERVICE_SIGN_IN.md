@@ -62,6 +62,9 @@ opens directly; several clients produce Android's app chooser. There is no
 hard-coded list of third-party clients: Kate Mobile, Sova variants and other
 clients are eligible only if their installed version registers a matching link
 handler. Installing an app alone does not establish link compatibility.
+The Android VK music entry uses `https://vk.com/audio` so clients that registered
+the older `vk.com` domain can participate in this selection. This does not
+guarantee that every Sova/Kate variant handles that path.
 
 If no client handles the link, Hopea opens the default browser, or a browser
 chooser if no default is available. It uses a plain external activity, without

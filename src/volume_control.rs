@@ -27,6 +27,7 @@ mod imp {
 
         pub toggle_mute: Cell<bool>,
         pub prev_volume: Cell<f64>,
+        pub syncing_volume: Cell<bool>,
     }
 
     #[glib::object_subclass]
@@ -83,7 +84,9 @@ mod imp {
             match pspec.name() {
                 "volume" => {
                     let v = value.get::<f64>().expect("Failed to get f64 value");
+                    let syncing = self.syncing_volume.replace(true);
                     self.volume_scale.set_value(v);
+                    self.syncing_volume.set(syncing);
                 }
                 "toggle-mute" => {
                     let v = value.get::<bool>().expect("Failed to get a boolean value");
@@ -128,6 +131,32 @@ impl Default for VolumeControl {
     }
 }
 
+#[test]
+#[ignore = "requires a GTK display and generated resources"]
+fn playback_feedback_does_not_send_another_volume_command() {
+    adw::init().unwrap();
+    let resources = gio::Resource::load(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("_builddir/src/hopea.gresource"),
+    )
+    .unwrap();
+    gio::resources_register(&resources);
+    let control = VolumeControl::default();
+    let commands = std::rc::Rc::new(Cell::new(0));
+    let received = commands.clone();
+    control.connect_local("volume-changed", false, move |_| {
+        received.set(received.get() + 1);
+        None
+    });
+    control.set_property("volume", 0.5_f64);
+    control.set_property("volume", 0.25_f64);
+    assert_eq!(control.volume(), 0.25);
+    assert_eq!(commands.get(), 0);
+    control.imp().volume_scale.set_value(0.75);
+    assert_eq!(commands.get(), 1);
+    control.set_property("volume", 0.5_f64);
+    assert_eq!(commands.get(), 1);
+}
+
 impl VolumeControl {
     pub fn new() -> Self {
         Self::default()
@@ -158,7 +187,9 @@ impl VolumeControl {
                             .set_icon_name("hopea-audio-volume-low-symbolic");
                     }
                     this.notify("volume");
-                    this.emit_by_name::<()>("volume-changed", &[&value]);
+                    if !this.imp().syncing_volume.get() {
+                        this.emit_by_name::<()>("volume-changed", &[&value]);
+                    }
                 }
             ),
         );

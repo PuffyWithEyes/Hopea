@@ -73,6 +73,8 @@ assert '->toplevel.launch_activity_for_result,' in toplevel
 cache = (gtk / 'gdk/android/gdkandroidinit.c').read_text()
 assert 'launch_activity_for_result, "launchActivityForResult", "(Landroid/content/Intent;I)V"' in cache
 result = method(activity, 'protected void onActivityResult(')
+keys = method(activity, 'private boolean keyEventProxy(')
+assert 'setVolumeControlStream(android.media.AudioManager.STREAM_MUSIC)' in activity
 java_source = r'''
 import java.util.ArrayDeque;
 import java.util.logging.Logger;
@@ -135,6 +137,16 @@ class ToplevelActivity extends Activity {
 }
 class RuntimeTest {
     public static void main(String[] args) {
+        Surface surface = new Surface();
+        for (int key : new int[] {4, 24, 25, 164}) {
+            assert !surface.send(key);
+            assert !surface.send(key);
+        }
+        assert GlibContext.pending.isEmpty();
+        assert surface.send(29);
+        assert surface.forwarded == 0;
+        GlibContext.drain();
+        assert surface.forwarded == 1;
         View view = new View();
         ImContext.exercise(view);
         assert view.context.imm.resets == 0;
@@ -180,6 +192,21 @@ class RuntimeTest {
     }
 }
 '''.replace('RESET', reset).replace('LAUNCH', launch).replace('RESULT\n', result + '\n')
+java_source += r'''
+class KeyEvent {
+    static final int KEYCODE_BACK = 4, KEYCODE_VOLUME_UP = 24,
+        KEYCODE_VOLUME_DOWN = 25, KEYCODE_VOLUME_MUTE = 164;
+    int code;
+    KeyEvent(int code) { this.code = code; }
+    int getKeyCode() { return code; }
+}
+class Surface {
+    int forwarded;
+    KEYS
+    void notifyKeyEvent(KeyEvent event) { forwarded++; }
+    boolean send(int code) { return keyEventProxy(new KeyEvent(code)); }
+}
+'''.replace('KEYS', keys)
 
 with tempfile.TemporaryDirectory(prefix='hopea-android-runtime-') as directory:
     root = Path(directory)
@@ -196,4 +223,4 @@ with tempfile.TemporaryDirectory(prefix='hopea-android-runtime-') as directory:
     exception.write_text('package android.content; public class ActivityNotFoundException extends RuntimeException {}\n')
     subprocess.run(['javac', '-d', str(root), str(exception), str(root / 'RuntimeTest.java')], check=True)
     subprocess.run(['java', '-ea', '-cp', str(root), 'RuntimeTest'], check=True)
-print('Android JNI pointer widths, IME UI dispatch and activity-result dispatch: passed')
+print('Android JNI widths, IME/activity dispatch and system volume-key routing: passed')

@@ -64,6 +64,9 @@ public final class PlaybackService extends Service {
         getSystemService(NotificationManager.class).createNotificationChannel(
             new NotificationChannel(CHANNEL, "Music playback", NotificationManager.IMPORTANCE_LOW));
         session = new MediaSession(this, "Hopea");
+        session.setPlaybackToLocal(new AudioAttributes.Builder()
+            .setUsage(AudioAttributes.USAGE_MEDIA)
+            .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).build());
         session.setCallback(new MediaSession.Callback() {
             @Override public void onPlay() { resume(); }
             @Override public void onPause() { action(0); }

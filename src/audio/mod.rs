@@ -63,6 +63,8 @@ pub use inhibit_controller::InhibitController;
 pub use mpris_controller::MprisController;
 
 mod gst_backend;
+#[cfg(any(target_os = "android", test))]
+mod volume_dispatch;
 pub use gst_backend::GstBackend;
 
 mod player;

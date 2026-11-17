@@ -54,6 +54,9 @@ if ! grep -q 'Hopea: GTK document-picker bridge' subprojects/gtk/gdk/android/glu
   patch --batch --fuzz=0 -d subprojects/gtk -p1 < build-aux/android/gtk-runtime-compat.patch
 fi
 runtime_target=$arch-linux-android
+if ! grep -q 'Hopea: let Android adjust media volume' subprojects/gtk/gdk/android/glue/java/org/gtk/android/ToplevelActivity.java; then
+  patch --batch --fuzz=0 -d subprojects/gtk -p1 < build-aux/android/gtk-media-keys.patch
+fi
 if [[ $arch == armv7 ]]; then runtime_target=armv7a-linux-androideabi; fi
 ANDROID_RUNTIME_CC="/opt/android/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/${runtime_target}28-clang" \
   python3 tests/test_android_runtime.py subprojects/gtk

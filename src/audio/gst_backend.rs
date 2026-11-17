@@ -14,6 +14,8 @@ pub struct GstBackend {
     sender: Sender<PlaybackAction>,
     gst_player: gst_play::Play,
     replaygain: Option<GstReplayGain>,
+    #[cfg(target_os = "android")]
+    volume_dispatch: super::volume_dispatch::VolumeDispatch,
 }
 
 #[derive(Debug)]
@@ -109,10 +111,17 @@ impl GstBackend {
         config.set_position_update_interval(50);
         gst_player.set_config(config).unwrap();
 
+        #[cfg(target_os = "android")]
+        let volume_dispatch = {
+            let player = gst_player.clone();
+            super::volume_dispatch::VolumeDispatch::new(move |volume| player.set_volume(volume))
+        };
         let res = Self {
             sender,
             gst_player,
             replaygain: GstReplayGain::new().ok(),
+            #[cfg(target_os = "android")]
+            volume_dispatch,
         };
 
         res.setup_signals();
@@ -230,6 +239,9 @@ impl GstBackend {
             volume,
         );
         debug!("Setting volume to: {}", &linear_volume);
+        #[cfg(target_os = "android")]
+        self.volume_dispatch.set(linear_volume);
+        #[cfg(not(target_os = "android"))]
         self.gst_player.set_volume(linear_volume);
     }
 

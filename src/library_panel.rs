@@ -846,7 +846,8 @@ impl LibraryPanel {
         service: &str,
     ) -> Result<Option<(String, String)>, String> {
         let url = match service {
-            "vk" => "https://vk.ru/audio",
+            // Older Android clients commonly register vk.com, not vk.ru.
+            "vk" => "https://vk.com/audio",
             "yandex" => "https://music.yandex.ru/",
             "spotify" => "https://open.spotify.com/",
             _ => "https://music.youtube.com/library",

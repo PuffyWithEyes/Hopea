@@ -15,6 +15,18 @@ active; a persistent View Result toast opens the completed job's result.
 
 ### Ownership and message passing
 
+On Android, hardware volume keys remain with the OS and target the media stream.
+The in-app volume slider dispatches synchronous GStreamer volume changes to one
+worker with a single pending wake-up and the latest requested value. Slow audio
+driver calls therefore do not run on GTK's main thread. Playback volume feedback
+updates the slider without emitting another user volume command.
+
+Remote waveforms may become available only after download verification finishes.
+After playback starts, a missing waveform permits at most six delayed requests
+to the configured library API (1, 2, 4, 8, 16 and 32 seconds). These requests do
+not search peers or download audio again. Success stops retries, changing tracks
+cancels the timer, and stale replies cannot update the new track's waveform.
+
 All audible playback must go through the application's shared `AudioPlayer`,
 including search, album previews, imports and duplicate comparisons. Never create
 a separate `gst_play::Play` for a dialog: it bypasses tray/MPRIS controls and the

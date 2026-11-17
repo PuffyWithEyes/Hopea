@@ -27,7 +27,8 @@ mod imp {
         pub generation: Cell<u64>,
         pub remote_pending: Cell<bool>,
         pub remote_missing: Cell<bool>,
-        pub remote_retried: Cell<bool>,
+        pub remote_retries: Cell<u8>,
+        pub remote_retry: RefCell<Option<glib::SourceId>>,
         pub audio_started: Cell<bool>,
     }
 
@@ -39,6 +40,9 @@ mod imp {
 
     impl ObjectImpl for WaveformGenerator {
         fn dispose(&self) {
+            if let Some(retry) = self.remote_retry.take() {
+                retry.remove();
+            }
             if let Some((pipeline, _bus_watch)) = self.pipeline.take() {
                 pipeline.send_event(gst::event::Eos::new());
                 match pipeline.set_state(gst::State::Null) {
@@ -70,7 +74,7 @@ mod tests {
 
     #[test]
     #[ignore = "requires temporary XDG directories and the generated GSettings schema"]
-    fn remote_waveform_retries_once_after_audio_starts() {
+    fn remote_waveform_waits_for_verification_after_audio_starts() {
         use std::{
             io::{BufRead, Write},
             sync::{
@@ -115,7 +119,7 @@ mod tests {
                     continue;
                 }
                 // The initial request precedes verification of the download.
-                let (status, body) = if count.fetch_add(1, Ordering::SeqCst) == 0 {
+                let (status, body) = if count.fetch_add(1, Ordering::SeqCst) < 2 {
                     ("404 Not Found", "{}")
                 } else {
                     ("200 OK", "[[0.25,0.5]]")
@@ -149,7 +153,7 @@ mod tests {
             assert!(generator.peaks().is_none());
             assert_eq!(requests.load(Ordering::SeqCst), 1);
             generator.set_position(1, false);
-            for _ in 0..100 {
+            for _ in 0..500 {
                 if generator.peaks().is_some() {
                     break;
                 }
@@ -160,7 +164,7 @@ mod tests {
                 generator.set_position(position, false);
             }
             glib::timeout_future(Duration::from_millis(50)).await;
-            assert_eq!(requests.load(Ordering::SeqCst), 2);
+            assert_eq!(requests.load(Ordering::SeqCst), 3);
             // A late cache read from the previous selection cannot replace it.
             generator
                 .load_peaks_cache("/nonexistent/old-waveform", u64::MAX)
@@ -191,7 +195,10 @@ impl Controller for WaveformGenerator {
         imp.generation.set(imp.generation.get().wrapping_add(1));
         imp.remote_pending.set(false);
         imp.remote_missing.set(false);
-        imp.remote_retried.set(false);
+        imp.remote_retries.set(0);
+        if let Some(retry) = imp.remote_retry.take() {
+            retry.remove();
+        }
         imp.audio_started.set(false);
         imp.peaks.replace(None);
         if let Some((pipeline, _watch)) = imp.pipeline.take() {
@@ -307,16 +314,34 @@ impl WaveformGenerator {
         if !imp.audio_started.get()
             || !imp.remote_missing.get()
             || imp.remote_pending.get()
-            || imp.remote_retried.get()
+            || imp.remote_retries.get() >= 6
+            || imp.remote_retry.borrow().is_some()
         {
             return;
         }
         let id = imp.song.borrow().as_ref().and_then(Song::remote_id);
         if let Some(id) = id {
-            // One local API retry after audio actually starts. Do not poll peers
-            // or repeatedly retry on every position update/pause/resume.
-            imp.remote_retried.set(true);
-            self.fetch_remote_peaks(id);
+            // Playback can start before download verification stores peaks.
+            // At most six local API retries (1/2/4/8/16/32 seconds), never
+            // a peer search, another audio download, or unbounded polling.
+            let delay = std::time::Duration::from_secs(1 << imp.remote_retries.get());
+            imp.remote_retries.set(imp.remote_retries.get() + 1);
+            let generation = imp.generation.get();
+            let retry = glib::timeout_add_local_once(
+                delay,
+                clone!(
+                    #[weak(rename_to = this)]
+                    self,
+                    move || {
+                        if this.imp().generation.get() != generation {
+                            return;
+                        }
+                        this.imp().remote_retry.take();
+                        this.fetch_remote_peaks(id);
+                    }
+                ),
+            );
+            imp.remote_retry.replace(Some(retry));
         }
     }
 
@@ -350,6 +375,7 @@ impl WaveformGenerator {
 
                 match peaks {
                     Ok(peaks) => {
+                        this.imp().remote_missing.set(false);
                         let peaks = peaks
                             .into_iter()
                             .map(|(l, r)| (f64::from(l), f64::from(r)))
