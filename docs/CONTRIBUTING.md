@@ -54,6 +54,45 @@ working caches or the user's music library to run tests.
 
 ## Further information
 
+### Updating Rust dependencies
+
+Check the latest non-yanked stable release of each actual package before proposing
+an upstream fix. In particular, Hopea's `gtk` dependency is an alias for `gtk4`:
+the `gtk` crate targets GTK 3 and is not an upgrade of the GTK 4 bindings.
+Update related bindings together and preserve their selected features.
+
+Refresh the root and standalone lockfiles using the compiler from the pinned Nix
+shell. Select versions compatible with that compiler:
+
+```sh
+cargo --config 'resolver.incompatible-rust-versions="fallback"' update
+cargo --config 'resolver.incompatible-rust-versions="fallback"' update --manifest-path node/Cargo.toml
+cargo --config 'resolver.incompatible-rust-versions="fallback"' update --manifest-path common/Cargo.toml
+# librespot 0.8 uses vergen-gitcl 1.x, which is incompatible with vergen 9.1.
+cargo update -p vergen --precise 9.0.6
+```
+
+New incompatible releases require an explicit `Cargo.toml` change and migration;
+these commands alone do not select them. Keep the resulting lockfiles in Git.
+For example, the stable Nix shell currently supplies Rust 1.95, so the lockfile
+retains `kstring` 2.0.2 instead of 2.0.5, which requires Rust 1.96.
+Keep `vergen` at 9.0.6 until librespot updates its build dependencies: 9.1 uses
+a different `vergen-lib` API from the one used by `vergen-gitcl` 1.x.
+
+Cargo updates do not refresh `[patch.crates-io]` path dependencies. Compare each
+vendored crate with its published release, preserve author/license notices and
+carry forward only fixes still needed. The librqbit 9.1.0 refresh still needs our
+HTTP interface-binding guard on BSD. Other vendored crates remain at their latest
+published stable versions as checked on November 17, 2026; their local fixes have
+not become removable merely by updating the lockfile.
+
+Run the player, Spotify, common and node checks separately as described above.
+Network and ingest regression tests must continue to enforce authentication,
+resource limits and file validation. A successful Linux build does not establish
+Android, Windows, macOS or BSD runtime compatibility.
+
+### Project references
+
 - [Architecture and component interactions](ARCHITECTURE.md).
 - [Node security and protocol](../node/README.md).
 - [Nix, NixOS and Home Manager](../nix/README.md).

@@ -17,20 +17,20 @@ hopea-common = { path = "../common" }
 anyhow = "1.0.104"
 axum = "0.8.9"
 base64 = "0.23.1"
-clap = { version = "4.6.7", features = ["derive", "env"] }
+clap = { version = "4.6.8", features = ["derive", "env"] }
 ed25519-dalek = "3.0.0"
 futures-util = "0.3.34"
 getrandom = "0.4.3"
 hex = "0.4.3"
 image = { version = "0.25.10", default-features = false, features = ["png", "jpeg"] }
-librqbit = { version = "9.0.1", default-features = false, features = ["rust-tls"] }
-librqbit-upnp = "9.0.1"
+librqbit = { version = "9.1.0", default-features = false, features = ["rust-tls"] }
+librqbit-upnp = "9.1.0"
 # Do not decompress untrusted ID3 payloads in the node process.
 lofty = { version = "0.25.5", default-features = false }
-mdns-sd = "0.21.7"
+mdns-sd = "0.22.0"
 percent-encoding = "2.3.2"
 reqwest = { version = "0.13.5", default-features = false, features = ["json"] }
-rusqlite = { version = "0.41.1", features = ["bundled"] }
+rusqlite = { version = "0.43.0", features = ["bundled"] }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
 sha1 = "0.11.0"

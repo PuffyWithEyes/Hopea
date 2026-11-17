@@ -52,7 +52,7 @@ pub fn default_browser() -> Result<String, String> {
     let identity = format!(
         "{} {} {}",
         app.id().unwrap_or_default(),
-        app.executable().display(),
+        app.executable().unwrap_or_default().display(),
         app.display_name()
     )
     .to_lowercase();
