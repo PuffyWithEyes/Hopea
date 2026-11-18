@@ -20,7 +20,11 @@ pub fn initialize() {
         .map(|(code, _, _)| code)
         .collect();
     let language = detection::choose(&preference(), &detection::system_languages(), &available);
-    std::env::set_var("LANGUAGE", &language);
+    // On Windows GLib updates both the Win32 and C-runtime environment;
+    // gettext reads the latter, which std::env alone need not synchronize.
+    if let Err(error) = unsafe { glib::setenv("LANGUAGE", &language, true) } {
+        eprintln!("Hopea: unable to set the translation language: {error}");
+    }
     #[cfg(target_os = "android")]
     {
         // Bionic only implements C/C.UTF-8. GNU gettext on Android therefore
@@ -30,19 +34,32 @@ pub fn initialize() {
     }
     // GNU gettext ignores LANGUAGE in the plain C locale. Native GUI launches
     // on Android/macOS/Windows often have no POSIX locale environment at all.
-    unsafe {
-        gettextrs::setlocale(gettextrs::LocaleCategory::LcAll, "");
-        let current = gettextrs::setlocale(gettextrs::LocaleCategory::LcMessages, "");
-        if current
-            .as_deref()
-            .is_none_or(|value| value == b"C" || value == b"POSIX" || value.starts_with(b"C."))
-        {
-            for locale in ["en_US.UTF-8", "en_US.utf8", ".UTF-8", "C.UTF-8"] {
-                if gettextrs::setlocale(gettextrs::LocaleCategory::LcMessages, locale).is_some() {
-                    break;
-                }
+    // gettext-rs' LocaleCategory enum uses glibc's numeric values, which
+    // differ on Windows and BSD/macOS. Use each target's libc constants.
+    #[cfg(windows)]
+    let messages_category = libc::LC_ALL;
+    #[cfg(not(windows))]
+    let messages_category = libc::LC_MESSAGES;
+    set_locale(libc::LC_ALL, "");
+    let current = set_locale(messages_category, "");
+    if current
+        .as_deref()
+        .is_none_or(|value| value == b"C" || value == b"POSIX" || value.starts_with(b"C."))
+    {
+        for locale in ["en_US.UTF-8", "en_US.utf8", ".UTF-8", "C.UTF-8"] {
+            if set_locale(messages_category, locale).is_some() {
+                break;
             }
         }
+    }
+}
+
+// Only called by initialize(), before GTK and application workers start.
+fn set_locale(category: libc::c_int, locale: &str) -> Option<Vec<u8>> {
+    let locale = std::ffi::CString::new(locale).ok()?;
+    unsafe {
+        let result = libc::setlocale(category, locale.as_ptr());
+        (!result.is_null()).then(|| std::ffi::CStr::from_ptr(result).to_bytes().to_vec())
     }
 }
 

@@ -2234,6 +2234,7 @@ dependencies = [
  "itertools",
  "ksni",
  "libadwaita",
+ "libc",
  "lofty",
  "log",
  "mpris-server",
