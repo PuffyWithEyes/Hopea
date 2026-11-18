@@ -200,20 +200,42 @@ template $HopeaLibraryPanel: Adw.Bin {
                       child: Box {
                         orientation: vertical;
 
-                        Adw.Banner reach_banner {
-                          title: _("Availability Unconfirmed");
-                          button-label: _("Details");
-                          revealed: true;
-                        }
-                        Label reach_summary {
-                          xalign: 0;
-                          wrap: true;
-                          wrap-mode: word_char;
-                          margin-start: 12;
-                          margin-end: 12;
-                          margin-top: 6;
-                          margin-bottom: 6;
-                          styles [ "dim-label" ]
+                        Adw.Clamp {
+                          maximum-size: 560;
+                          child: Box reach_status {
+                            orientation: vertical;
+                            spacing: 4;
+                            margin-start: 12;
+                            margin-end: 12;
+                            margin-top: 8;
+                            margin-bottom: 4;
+
+                            Box {
+                              spacing: 8;
+                              Box reach_indicator {
+                                spacing: 6;
+                                hexpand: true;
+                                Label { label: "●"; }
+                                Label reach_title {
+                                  label: _("Checking Connection…");
+                                  xalign: 0;
+                                  wrap: true;
+                                  styles [ "heading" ]
+                                }
+                              }
+                              Button reach_details {
+                                label: _("Connection Help");
+                                valign: center;
+                                styles [ "flat", "caption" ]
+                              }
+                            }
+                            Label reach_summary {
+                              xalign: 0;
+                              wrap: true;
+                              wrap-mode: word_char;
+                              styles [ "dim-label", "caption" ]
+                            }
+                          };
                         }
 
                         Adw.Clamp {

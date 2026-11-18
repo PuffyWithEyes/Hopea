@@ -21,6 +21,9 @@ cp data/io.hopea.Hopea.gschema.xml .pixiewood/root/share/glib-2.0/schemas/
 sdk_tools=/opt/android/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64
 native_libs=/work/.pixiewood/root/lib/$abi
 assets=/work/.pixiewood/android/app/src/main/assets
+# Pixiewood collects the application's dependency closure, which does not
+# include Meson's independent gettext targets. Ship every discovered catalog.
+python3 build-aux/android/package-translations.py ".pixiewood/bin-$arch/po" "$assets/share/locale"
 # Do not depend on OEM font substitutions/metrics for spaces in UI labels.
 mkdir -p "$assets/share/fonts" "$assets/etc/fonts" "$assets/share/licenses/fonts-dejavu"
 cp /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf /usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf \

@@ -74,6 +74,7 @@ cache = (gtk / 'gdk/android/gdkandroidinit.c').read_text()
 assert 'launch_activity_for_result, "launchActivityForResult", "(Landroid/content/Intent;I)V"' in cache
 result = method(activity, 'protected void onActivityResult(')
 keys = method(activity, 'private boolean keyEventProxy(')
+motion = method(activity, 'private boolean motionEventProxy(')
 assert 'setVolumeControlStream(android.media.AudioManager.STREAM_MUSIC)' in activity
 java_source = r'''
 import java.util.ArrayDeque;
@@ -137,6 +138,7 @@ class ToplevelActivity extends Activity {
 }
 class RuntimeTest {
     public static void main(String[] args) {
+        MotionTest.exercise();
         Surface surface = new Surface();
         for (int key : new int[] {4, 24, 25, 164}) {
             assert !surface.send(key);
@@ -208,6 +210,73 @@ class Surface {
 }
 '''.replace('KEYS', keys)
 
+java_source += r'''
+class RectF { boolean contains(float x, float y) { return x >= 0 && y >= 0; } }
+class MotionEvent {
+    static int copies, recycled;
+    final int device, action;
+    boolean released;
+    MotionEvent(int device, int action) { this.device = device; this.action = action; }
+    int getDeviceId() { return device; }
+    float getX() { return 12; }
+    float getY() { return 12; }
+    static MotionEvent obtainNoHistory(MotionEvent event) {
+        copies++; return new MotionEvent(event.device, event.action);
+    }
+    void recycle() { assert !released; released = true; recycled++; }
+}
+class ToplevelView {
+    Surface grabbed;
+    class Surface {
+        RectF[] inputRegion;
+        int forwarded, sequenceDevice, lastAction;
+        boolean fail;
+        MOTION
+        void notifyMotionEvent(int identity, MotionEvent copy) {
+            assert !copy.released : "motion copy released before GTK consumed it";
+            if (forwarded > 0 && copy.action != 0)
+                assert sequenceDevice == identity : "one drag changed sequence identity";
+            sequenceDevice = identity;
+            lastAction = copy.action;
+            forwarded++;
+            if (fail) throw new IllegalStateException("test callback failure");
+        }
+        boolean send(MotionEvent event) { return motionEventProxy(event); }
+    }
+}
+class MotionTest {
+    static void exercise() {
+        ToplevelView view = new ToplevelView();
+        ToplevelView.Surface surface = view.new Surface();
+        assert !surface.send(null);
+        // Android may reuse event objects OR allocate different ones during a
+        // gesture. Both must deliver DOWN, MOVE and UP to the same GTK sequence.
+        java.util.ArrayList<MotionEvent> originals = new java.util.ArrayList<>();
+        for (int i = 0; i < 1002; i++) {
+            MotionEvent event = new MotionEvent(7, i == 0 ? 0 : i == 1001 ? 1 : 2);
+            originals.add(event);
+            assert surface.send(event);
+        }
+        assert surface.forwarded == 0 && MotionEvent.recycled == 0;
+        GlibContext.drain();
+        assert surface.forwarded == 1002 && surface.lastAction == 1;
+        assert MotionEvent.recycled == MotionEvent.copies;
+        for (MotionEvent event : originals) assert !event.released;
+        int previousDevice = surface.sequenceDevice;
+        assert surface.send(new MotionEvent(9, 0));
+        assert surface.send(new MotionEvent(9, 3)); // cancellation also reaches GTK
+        GlibContext.drain();
+        assert surface.sequenceDevice != previousDevice && surface.lastAction == 3;
+        surface.fail = true;
+        surface.send(new MotionEvent(9, 0));
+        boolean threw = false;
+        try { GlibContext.drain(); } catch (IllegalStateException expected) { threw = true; }
+        assert threw && MotionEvent.recycled == MotionEvent.copies;
+    }
+}
+'''.replace('MOTION', motion)
+java_source = 'import java.util.Arrays;\n' + java_source
+
 with tempfile.TemporaryDirectory(prefix='hopea-android-runtime-') as directory:
     root = Path(directory)
     source = root / 'jni.c'
@@ -223,4 +292,4 @@ with tempfile.TemporaryDirectory(prefix='hopea-android-runtime-') as directory:
     exception.write_text('package android.content; public class ActivityNotFoundException extends RuntimeException {}\n')
     subprocess.run(['javac', '-d', str(root), str(exception), str(root / 'RuntimeTest.java')], check=True)
     subprocess.run(['java', '-ea', '-cp', str(root), 'RuntimeTest'], check=True)
-print('Android JNI widths, IME/activity dispatch and system volume-key routing: passed')
+print('Android JNI widths, IME/activity dispatch, touch sequences and system volume-key routing: passed')

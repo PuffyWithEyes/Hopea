@@ -23,5 +23,14 @@ export "CC_${target_env}=$tools/${compiler}"
 export "AR_${target_env}=$tools/llvm-ar"
 export CARGO_HOME=/work/.android-cargo
 export HOPEA_ANDROID_RESOURCE="$build_dir/src/hopea.gresource"
+# Bionic iconv on API 34 loops over the terminating NUL of UTF-8 messages,
+# making GNU gettext grow its conversion buffer indefinitely. All shipped MO
+# catalogs are UTF-8, so use gettext's native no-conversion configuration.
+export am_cv_func_iconv=no
+if [ -d "$build_dir/cargo-target" ] && [ ! -f "$build_dir/cargo-target/.gettext-utf8-only" ]; then
+  # gettext-sys does not track Autoconf cache variables as Cargo inputs.
+  cargo clean --package gettext-sys --target "$target" --target-dir "$build_dir/cargo-target" --manifest-path /work/Cargo.toml
+fi
 cargo build --locked --lib --target "$target" --target-dir "$build_dir/cargo-target" --manifest-path /work/Cargo.toml
+touch "$build_dir/cargo-target/.gettext-utf8-only"
 cp "$build_dir/cargo-target/$target/debug/libhopea.a" "$2"

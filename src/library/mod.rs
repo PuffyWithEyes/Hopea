@@ -40,6 +40,7 @@ use log::debug;
 
 pub use client::{ClientError, LibraryClient, UploadCover};
 pub(crate) use node::set_gaming;
+pub(crate) use node::{catalog_changes, notify_catalog_changed};
 
 thread_local! {
     /// Whether the listener wants to be on the network in this session
@@ -206,6 +207,7 @@ pub fn set_client(client: Option<LibraryClient>) {
     });
     *AUTH.lock().unwrap_or_else(|e| e.into_inner()) = auth;
     CLIENT.with(|c| c.replace(client));
+    notify_catalog_changed();
     if let Some(client) = self::client() {
         gtk::glib::spawn_future_local(crate::lyrics::publish_saved(client));
     }

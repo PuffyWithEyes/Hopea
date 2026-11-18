@@ -51,6 +51,10 @@ impl LibraryPanel {
         factory.connect_setup(|_, object| {
             let item = object.downcast_ref::<gtk::ListItem>().unwrap();
             item.set_activatable(false);
+            // The nested ActionRow handles activation on release. Letting the
+            // outer item select on press steals the search field's focus,
+            // hiding the Android IME and moving the row under the finger.
+            item.set_selectable(false);
             item.set_child(Some(&gtk::Box::new(gtk::Orientation::Vertical, 0)));
         });
         factory.connect_bind(clone!(
@@ -512,6 +516,70 @@ fn result_box(row: &adw::ActionRow) -> gtk::Widget {
         .build();
     list.append(row);
     list.upcast()
+}
+
+#[cfg(test)]
+#[test]
+#[ignore = "requires an isolated GTK display and generated resources"]
+fn result_press_keeps_search_focus_until_activation() {
+    use gtk::prelude::*;
+    adw::init().unwrap();
+    gio::resources_register(
+        &gio::Resource::load(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("_builddir/src/hopea.gresource"),
+        )
+        .unwrap(),
+    );
+    let panel: LibraryPanel = glib::Object::new();
+    let window = adw::Window::builder()
+        .default_width(360)
+        .default_height(740)
+        .content(&panel)
+        .build();
+    panel.imp().stack.set_visible_child_name("library");
+    panel.imp().view_stack.set_visible_child_name("search");
+    let track: Track = serde_json::from_value(serde_json::json!({
+        "id":42,"title":"Focus regression","duration_ms":1000,"format":"wav",
+        "codec":"pcm","sample_rate":44100,"channels":2,"size":1024,
+        "sha256":"test","has_cover":false,"uploader":"Test","uploaded_at":0,
+        "mine":false,"local":false,"favorite":false,"sources":1
+    }))
+    .unwrap();
+    panel.imp().page_loading.set(true);
+    panel.show_page("test", 0, &[track], 1);
+    GtkWindowExt::present(&window);
+    let context = glib::MainContext::default();
+    context.block_on(glib::timeout_future(std::time::Duration::from_millis(300)));
+    panel.imp().search_entry.grab_focus();
+    let focus = GtkWindowExt::focus(&window).unwrap();
+    fn wrapper(widget: &gtk::Widget) -> Option<gtk::Widget> {
+        if widget.type_().name() == "GtkListItemWidget" {
+            return Some(widget.clone());
+        }
+        let mut child = widget.first_child();
+        while let Some(current) = child {
+            if let Some(found) = wrapper(&current) {
+                return Some(found);
+            }
+            child = current.next_sibling();
+        }
+        None
+    }
+    let item = wrapper(panel.imp().results_list.upcast_ref()).unwrap();
+    let mut tested = false;
+    for controller in item.observe_controllers().iter::<glib::Object>().flatten() {
+        if let Ok(click) = controller.downcast::<gtk::GestureClick>() {
+            click.emit_by_name::<()>("pressed", &[&1_i32, &12.0_f64, &12.0_f64]);
+            tested = true;
+        }
+    }
+    assert!(tested, "exercise the real GTK list-item press handler");
+    assert_eq!(
+        GtkWindowExt::focus(&window),
+        Some(focus),
+        "the outer list item must not dismiss the IME before the inner row receives release"
+    );
+    window.close();
 }
 
 #[cfg(test)]

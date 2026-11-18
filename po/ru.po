@@ -6,8 +6,8 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: hopea main\n"
-"Report-Msgid-Bugs-To: https://gitlab.gnome.org/World/amberol/-/issues/\n"
-"POT-Creation-Date: 2026-03-29 14:16+0000\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-11-18 15:33+0300\n"
 "PO-Revision-Date: 2026-03-30 19:02+0300\n"
 "Last-Translator: Artur S0 <arturios2005@mail.ru>\n"
 "Language-Team: Русский <gnome-cyr@gnome.org>\n"
@@ -19,8 +19,8 @@ msgstr ""
 "n%10<=4 && (n%100<12 || n%100>14) ? 1 : 2);\n"
 "X-Generator: Poedit 3.9\n"
 
-#: data/io.hopea.Hopea.desktop.in.in:2
-#: data/io.hopea.Hopea.metainfo.xml.in.in:6
+#: data/io.hopea.Hopea.desktop.in.in:2 data/io.hopea.Hopea.metainfo.xml.in.in:6
+#: src/tray.rs:84
 msgid "Hopea"
 msgstr "Hopea"
 
@@ -35,48 +35,1129 @@ msgstr ""
 "music;player;media;audio;playlist;музыка;проигрыватель;медиа;аудио;список "
 "воспроизведения;"
 
-#: data/io.hopea.Hopea.metainfo.xml.in.in:7
-msgid "Plays music, and nothing else"
-msgstr "Воспроизводит музыку и ничего больше"
+#: data/io.hopea.Hopea.gschema.xml:27
+msgid "Take part in sharing music"
+msgstr "Участвовать в обмене музыкой"
 
-#: data/io.hopea.Hopea.metainfo.xml.in.in:9
+#: data/io.hopea.Hopea.gschema.xml:28
+msgid "Start the built-in peer-to-peer node with the app"
+msgstr "Запускать встроенный P2P-узел вместе с приложением"
+
+#: data/io.hopea.Hopea.gschema.xml:32
+msgid "Name shown next to shared songs"
+msgstr "Имя, показываемое рядом с общими песнями"
+
+#: data/io.hopea.Hopea.gschema.xml:36
+msgid "Nodes always searched"
+msgstr "Узлы, которые всегда ищутся"
+
+#: data/io.hopea.Hopea.gschema.xml:37
 msgid ""
-"Hopea is a music player with no delusions of grandeur. If you just want to "
-"play music available on your local system then Hopea is the music player "
-"you are looking for."
+"Addresses (host:port) of nodes to search in addition to those found in the "
+"DHT, for example friends on the same network"
 msgstr ""
-"Hopea - это музыкальный проигрыватель без мании величия. Если вы просто "
-"хотите воспроизводить музыку, доступную в вашей локальной системе, то "
-"Hopea - это тот музыкальный проигрыватель, который вы ищете."
+"Адреса (host:port) узлов, которые нужно искать дополнительно к найденным в "
+"DHT, например друзья в той же сети"
+
+#: data/io.hopea.Hopea.gschema.xml:41
+msgid "Download speed limit, in KiB/s"
+msgstr "Ограничение скорости загрузки, КиБ/с"
+
+#: data/io.hopea.Hopea.gschema.xml:42
+msgid "0 means no limit"
+msgstr "0 означает отсутствие ограничения"
+
+#: data/io.hopea.Hopea.gschema.xml:46
+msgid "Reduce background activity while gaming"
+msgstr "Снижать фоновую активность во время игр"
+
+#: data/io.hopea.Hopea.gschema.xml:47
+msgid ""
+"Temporarily reduce P2P traffic and speculative work when a game is detected. "
+"Restore the user's limits after the game exits."
+msgstr ""
+"Временно снижать P2P-трафик и фоновую работу при обнаружении игры. "
+"Восстанавливать пользовательские лимиты после выхода из игры."
+
+#: data/io.hopea.Hopea.gschema.xml:51
+msgid "Retired manual game mode setting"
+msgstr "Устаревшая настройка ручного игрового режима"
+
+#: data/io.hopea.Hopea.gschema.xml:52
+msgid ""
+"Kept for settings compatibility only. This value is ignored; Game Mode uses "
+"automatic detection."
+msgstr ""
+"Сохранена только для совместимости настроек. Значение игнорируется; игровой "
+"режим использует автоматическое обнаружение."
+
+#: data/io.hopea.Hopea.gschema.xml:56
+msgid "Sharing speed limit, in KiB/s"
+msgstr "Ограничение скорости раздачи, КиБ/с"
+
+#: data/io.hopea.Hopea.gschema.xml:57
+msgid ""
+"0 means no limit. Only applies with a download limit, and is raised to at "
+"least a seventh of it"
+msgstr ""
+"0 означает отсутствие ограничения. Применяется только вместе с ограничением "
+"загрузки и повышается минимум до одной седьмой от него"
+
+#: data/io.hopea.Hopea.gschema.xml:66
+msgid "Whether to join the network when the app starts"
+msgstr "Подключаться ли к сети при запуске приложения"
+
+#: data/io.hopea.Hopea.gschema.xml:67
+msgid ""
+"\"auto\" joins on computers and not on phones and tablets, where it costs "
+"battery and mobile data"
+msgstr ""
+"«auto» подключается на компьютерах и не подключается на телефонах и "
+"планшетах, где это расходует батарею и мобильный трафик"
+
+#: data/io.hopea.Hopea.gschema.xml:71
+msgid "Whether the rules of sharing music were shown"
+msgstr "Показывались ли правила обмена музыкой"
+
+#: data/io.hopea.Hopea.gschema.xml:72
+msgid "They are shown once, the first time the app starts"
+msgstr "Они показываются один раз при первом запуске приложения"
+
+#: data/io.hopea.Hopea.gschema.xml:76
+msgid "Join the network only through a VPN"
+msgstr "Подключаться к сети только через VPN"
+
+#: data/io.hopea.Hopea.gschema.xml:77
+msgid ""
+"Leaves the network as soon as the connection stops going through a VPN, and "
+"joins again when it does"
+msgstr ""
+"Покидать сеть, как только соединение перестаёт идти через VPN, и снова "
+"подключаться, когда оно снова через него идёт"
+
+#: data/io.hopea.Hopea.gschema.xml:85
+msgid "What happens to a song taken out of the library"
+msgstr "Что происходит с песней, удалённой из медиатеки"
+
+#: data/io.hopea.Hopea.gschema.xml:86
+msgid ""
+"\"move\" saves it to the unliked songs folder, \"delete\" removes it from "
+"this computer (own files go to the trash)"
+msgstr ""
+"«move» сохраняет её в папку нелюбимых песен, «delete» удаляет её с этого "
+"компьютера (собственные файлы отправляются в корзину)"
+
+#: data/io.hopea.Hopea.gschema.xml:90
+msgid "Where songs taken out of the library are moved"
+msgstr "Куда перемещаются песни, удалённые из медиатеки"
+
+#: data/io.hopea.Hopea.gschema.xml:91
+msgid "Empty means \"Unliked\" in the music folder"
+msgstr "Пусто означает «Unliked» в папке музыки"
+
+#: data/io.hopea.Hopea.gschema.xml:96
+msgid "Standard or custom accent color"
+msgstr "Стандартный или свой акцентный цвет"
+
+#: data/io.hopea.Hopea.gschema.xml:100
+msgid "Custom accent color in hexadecimal RGB"
+msgstr "Свой акцентный цвет в шестнадцатеричном RGB"
+
+#: data/io.hopea.Hopea.gschema.xml:104
+msgid "Automatically choose covers and lyrics shared by the most peers"
+msgstr ""
+"Автоматически выбирать обложки и тексты, которыми делятся большинство пиров"
+
+#: data/io.hopea.Hopea.gschema.xml:109
+msgid "Image shown for songs without cover art"
+msgstr "Изображение, показываемое для песен без обложки"
+
+#: data/io.hopea.Hopea.gschema.xml:113
+msgid "Saved custom image for songs without cover art"
+msgstr "Сохранённое своё изображение для песен без обложки"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:7
+msgid "Play, import and share your music"
+msgstr "Воспроизводите, импортируйте и делитесь своей музыкой"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:12
+msgid ""
+"Hopea plays local music and shares songs through a built-in peer-to-peer "
+"network."
+msgstr ""
+"Hopea воспроизводит локальную музыку и делится песнями через встроенную "
+"одноранговую сеть."
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:13
+msgid ""
+"Import personal music collections in the background, select whole albums or "
+"individual songs, and optionally download their cover art."
+msgstr ""
+"Импортируйте личные музыкальные коллекции в фоне, выбирайте целые альбомы "
+"или отдельные песни и при желании скачивайте обложки."
 
 #: data/io.hopea.Hopea.metainfo.xml.in.in:14
-msgid "Current features:"
-msgstr "Текущие функции:"
-
-#: data/io.hopea.Hopea.metainfo.xml.in.in:16
-msgid "adaptive UI"
-msgstr "адаптивный пользовательский интерфейс"
-
-#: data/io.hopea.Hopea.metainfo.xml.in.in:17
-msgid "UI recoloring using the album art"
+msgid ""
+"Features include favorites, recommendations, lyrics, adaptive colors, MPRIS "
+"integration and a system tray icon."
 msgstr ""
-"перекрашивание пользовательского интерфейса с использованием обложки альбома"
+"Возможности: избранное, рекомендации, тексты песен, адаптивные цвета, "
+"интеграция с MPRIS и значок в системном лотке."
 
-#: data/io.hopea.Hopea.metainfo.xml.in.in:18
-msgid "drag and drop support to queue songs"
-msgstr "поддержка перетаскивания для создания очереди песен"
+#: data/io.hopea.Hopea.metainfo.xml.in.in:22
+msgid "Daniil Klimov"
+msgstr "Daniil Klimov"
 
-#: data/io.hopea.Hopea.metainfo.xml.in.in:19
-msgid "shuffle and repeat"
-msgstr "перемешивание и повторение"
+#: data/io.hopea.Hopea.metainfo.xml.in.in:39
+msgid "This alpha improves network discovery and Android playback controls."
+msgstr ""
+"Эта альфа-версия улучшает обнаружение сети и элементы управления "
+"воспроизведением на Android."
 
-#: data/io.hopea.Hopea.metainfo.xml.in.in:20
-msgid "MPRIS integration"
-msgstr "интеграция с MPRIS"
+#: data/io.hopea.Hopea.metainfo.xml.in.in:41
+msgid ""
+"Show sharing availability and connection recommendations on the network "
+"search screen."
+msgstr ""
+"Показывать доступность обмена и рекомендации по подключению на экране поиска "
+"по сети."
 
-#: data/io.hopea.Hopea.metainfo.xml.in.in:48
-msgid "Emmanuele Bassi"
-msgstr "Emmanuele Bassi"
+#: data/io.hopea.Hopea.metainfo.xml.in.in:42
+msgid ""
+"Try available relays after inconclusive reachability checks and rotate "
+"discovery candidates."
+msgstr ""
+"Пробовать доступные реле после неубедительных проверок доступности и менять "
+"кандидатов обнаружения."
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:43
+msgid ""
+"Reject internal addresses from public discovery and bound relay client work."
+msgstr ""
+"Отклонять внутренние адреса из публичного обнаружения и ограничивать работу "
+"клиента реле."
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:44
+msgid ""
+"Handle Android media volume keys and move volume updates off the GTK thread."
+msgstr ""
+"Обрабатывать клавиши громкости медиа Android и вынести обновления громкости "
+"из потока GTK."
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:45
+msgid "Retry pending waveform requests after downloaded audio is verified."
+msgstr ""
+"Повторять ожидающие запросы формы волны после проверки загруженного аудио."
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:51
+msgid ""
+"Android compatibility hotfix for input and document-picker calls. Non-"
+"Android packages are reused from the 2026.3 alpha."
+msgstr ""
+"Экстренное исправление совместимости Android для вызовов ввода и выбора "
+"документов. Пакеты не для Android повторно используются из альфа-версии "
+"2026.3."
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:57
+msgid ""
+"Alpha release with Android ARMv7, Alpine x86 and Void i686 package builds."
+msgstr ""
+"Альфа-выпуск со сборками пакетов для Android ARMv7, Alpine x86 и Void i686."
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:58
+msgid ""
+"Improved package dependency checks and recovery from temporary Windows "
+"mirror failures."
+msgstr ""
+"Улучшены проверки зависимостей пакетов и восстановление после временных "
+"сбоев зеркал Windows."
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:64
+msgid "Allow opening the containing folder of the current song"
+msgstr "Разрешить открывать папку, содержащую текущую песню"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:65
+msgid "Fix various crashes"
+msgstr "Исправлены различные падения"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:66
+msgid "Handle playlist visibility better when loading or searching"
+msgstr ""
+"Улучшена обработка видимости списка воспроизведения при загрузке и поиске"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:67
+msgid "Small quality of life improvements to the interface"
+msgstr "Небольшие улучшения удобства интерфейса"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:68
+#: data/io.hopea.Hopea.metainfo.xml.in.in:77
+#: data/io.hopea.Hopea.metainfo.xml.in.in:88
+#: data/io.hopea.Hopea.metainfo.xml.in.in:100
+#: data/io.hopea.Hopea.metainfo.xml.in.in:110
+#: data/io.hopea.Hopea.metainfo.xml.in.in:120
+#: data/io.hopea.Hopea.metainfo.xml.in.in:156
+#: data/io.hopea.Hopea.metainfo.xml.in.in:169
+#: data/io.hopea.Hopea.metainfo.xml.in.in:214
+msgid "Translation updates"
+msgstr "Обновления переводов"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:75
+msgid "Update the metadata parsing library"
+msgstr "Обновить библиотеку разбора метаданных"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:76
+msgid "Release more resources when clearing the playlist"
+msgstr "Освобождать больше ресурсов при очистке списка воспроизведения"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:84
+msgid "Check for more file names for external album covers"
+msgstr "Проверять больше имён файлов для внешних обложек альбомов"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:85
+msgid "Update the MPRIS implementation for better conformance"
+msgstr "Обновить реализацию MPRIS для лучшего соответствия"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:86
+msgid "Set the Music folder as the initial location when adding songs"
+msgstr ""
+"Устанавливать папку «Музыка» как начальное расположение при добавлении песен"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:87
+msgid "Various style improvements"
+msgstr "Различные улучшения стиля"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:94
+msgid "New versioning scheme! Hopea has switched to a year/release version."
+msgstr "Новая схема версий! Hopea перешла на версии вида год/выпуск."
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:95
+msgid ""
+"With the new GNOME release, we are now taking advantage of the new "
+"libadwaita UI elements and features."
+msgstr ""
+"С новым выпуском GNOME мы теперь используем новые элементы интерфейса и "
+"возможности libadwaita."
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:96
+msgid ""
+"If the song title, author, or album is too long, we now scroll their "
+"contents."
+msgstr ""
+"Если название песни, исполнитель или альбом слишком длинные, их содержимое "
+"теперь прокручивается."
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:98
+msgid "Dependency updates for GTK, libadwaita, GStreamer, and lofty"
+msgstr "Обновления зависимостей для GTK, libadwaita, GStreamer и lofty"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:99
+msgid "Bug fixes"
+msgstr "Исправления ошибок"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:106
+msgid "Bug fixes and small UI improvements"
+msgstr "Исправления ошибок и небольшие улучшения интерфейса"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:108
+msgid "Ensure that the waveform display is always centered for short songs"
+msgstr "Обеспечить, чтобы форма волны всегда была по центру для коротких песен"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:109
+msgid "Fix display of non-square cover art"
+msgstr "Исправить отображение неквадратных обложек"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:116
+msgid "The bug fixing comes in waves"
+msgstr "Волна исправлений ошибок"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:118
+msgid "More crash fixes related to the background playback"
+msgstr "Больше исправлений падений, связанных с фоновым воспроизведением"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:119
+msgid "Minor UI tweaks"
+msgstr "Небольшие правки интерфейса"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:126
+#: data/io.hopea.Hopea.metainfo.xml.in.in:220
+msgid "Brown paper bag release!"
+msgstr "Экстренный выпуск с исправлением!"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:128
+msgid "Fix a crash when playing in the background"
+msgstr "Исправить падение при воспроизведении в фоне"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:134
+msgid "New release, lots of small changes."
+msgstr "Новый выпуск, много небольших изменений."
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:136
+msgid "Allow restoring the last playlist when starting a new session"
+msgstr ""
+"Разрешить восстанавливать последний список воспроизведения при запуске "
+"нового сеанса"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:137
+msgid "Allow toggling the background playback"
+msgstr "Разрешить переключение фонового воспроизведения"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:138
+msgid "Add a quick mute/unmute button"
+msgstr "Добавить быструю кнопку выключения/включения звука"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:139
+msgid "Restructure the main UI to improve legibility of the controls"
+msgstr ""
+"Перестроить основной интерфейс для лучшей читаемости элементов управления"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:140
+msgid "Do not add duplicate songs to the playlist"
+msgstr "Не добавлять повторяющиеся песни в список воспроизведения"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:141
+msgid "Ensure that the playlist fits on mobile form factors"
+msgstr ""
+"Обеспечить, чтобы список воспроизведения помещался на мобильных экранах"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:142
+msgid "And lots of bug fixes and UI improvements"
+msgstr "И множество исправлений ошибок и улучшений интерфейса"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:148
+msgid "It's been a while!"
+msgstr "Давно не виделись!"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:150
+msgid "Allow dragging on the waveform to seek inside a song"
+msgstr "Разрешить перетаскивание по форме волны для перемотки внутри песни"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:151
+msgid "Use the latest libadwaita about dialog"
+msgstr "Использовать новейший диалог «О программе» libadwaita"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:152
+msgid "Use the latest lofty for improved song metadata detection"
+msgstr ""
+"Использовать новейший lofty для улучшенного определения метаданных песен"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:153
+msgid "Detect more external cover file names"
+msgstr "Определять больше имён файлов внешних обложек"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:154
+msgid "Small improvements in the waveform animation"
+msgstr "Небольшие улучшения анимации формы волны"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:155
+msgid "Remove the unnecessary notification for the background portal"
+msgstr "Удалить ненужное уведомление для портала фоновой работы"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:162
+msgid "Small paper cuts, and ReplayGain"
+msgstr "Мелкие недочёты и ReplayGain"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:164
+msgid "Add support ReplayGain metadata in the audio files"
+msgstr "Добавить поддержку метаданных ReplayGain в аудиофайлах"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:165
+msgid "Add support external cover art files for albums"
+msgstr "Добавить поддержку внешних файлов обложек для альбомов"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:166
+msgid "Improve the reliability of the playlist shuffle"
+msgstr "Повысить надёжность перемешивания списка воспроизведения"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:167
+msgid "Tweak the playlist side bar to better fit on mobile form factors"
+msgstr ""
+"Настроить боковую панель списка воспроизведения для лучшего размещения на "
+"мобильных экранах"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:168
+msgid "New translation: Serbian"
+msgstr "Новый перевод: сербский"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:170
+#: data/io.hopea.Hopea.metainfo.xml.in.in:182
+msgid "Bug fixes and performance improvements"
+msgstr "Исправления ошибок и улучшения производительности"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:176
+msgid "Searchings deserves to be fuzzy"
+msgstr "Поиск заслуживает нечёткого совпадения"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:178
+msgid "Support fuzzy matching when searching inside the playlist"
+msgstr ""
+"Поддерживать нечёткое сопоставление при поиске по списку воспроизведения"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:179
+msgid "Add a key shortcut for toggling shuffle"
+msgstr "Добавить сочетание клавиш для переключения перемешивания"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:180
+msgid "Allow opening folders with Hopea"
+msgstr "Разрешить открывать папки с помощью Hopea"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:181
+#: data/io.hopea.Hopea.metainfo.xml.in.in:201
+msgid "Lots of translation updates"
+msgstr "Множество обновлений переводов"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:188
+msgid "Bug fixes and UI improvements"
+msgstr "Исправления ошибок и улучшения интерфейса"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:193
+msgid "More features for less memory!"
+msgstr "Больше возможностей при меньшем объёме памяти!"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:195
+msgid ""
+"You can now search for songs in the playlist: just start typing and Hopea "
+"will display the matching songs. Search also works when selecting songs"
+msgstr ""
+"Теперь можно искать песни в списке воспроизведения: просто начните вводить "
+"текст, и Hopea покажет совпадающие песни. Поиск также работает при выборе "
+"песен."
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:196
+msgid "Album art is shared across songs from the same album, saving memory"
+msgstr ""
+"Обложки альбомов совместно используются для песен из одного альбома, экономя "
+"память"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:197
+msgid ""
+"Hopea can now run in the background using the appropriate sandbox portal"
+msgstr ""
+"Теперь Hopea может работать в фоне с помощью соответствующего портала "
+"песочницы"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:198
+msgid "The window size is restored across sessions"
+msgstr "Размер окна восстанавливается между сеансами"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:199
+msgid "You can now build and run Hopea on macOS"
+msgstr "Теперь можно собирать и запускать Hopea на macOS"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:200
+msgid "Lots of bug fixes and UI improvements"
+msgstr "Множество исправлений ошибок и улучшений интерфейса"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:207
+msgid "Lots of small UI fixes and stability improvements"
+msgstr "Множество небольших исправлений интерфейса и улучшений стабильности"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:209
+msgid "Improve the consistency of the cover art display"
+msgstr "Улучшить единообразие отображения обложек"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:210
+msgid "Make the behaviour of the playlist shuffle more predictable"
+msgstr ""
+"Сделать поведение перемешивания списка воспроизведения более предсказуемым"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:211
+msgid "Fix state transitions when opening a song from the file manager"
+msgstr "Исправить переходы состояний при открытии песни из файлового менеджера"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:212
+msgid "Indicate the currently playing song in the playlist"
+msgstr "Отмечать текущую воспроизводимую песню в списке воспроизведения"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:213
+msgid "Improve the styling of the waveform scrubber"
+msgstr "Улучшить оформление ползунка формы волны"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:222
+msgid "Fix drag and drop on the initial landing page"
+msgstr "Исправить перетаскивание на начальной странице"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:228
+msgid "Another round of small, papercut issue fixes"
+msgstr "Ещё один раунд исправлений мелких недочётов"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:230
+msgid "Accessibility fixes all across the board"
+msgstr "Исправления доступности повсюду"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:231
+msgid "Better key navigation and shortcuts"
+msgstr "Улучшенная навигация с клавиатуры и сочетания клавиш"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:232
+msgid "Improve the consistency of the UI"
+msgstr "Улучшить единообразие интерфейса"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:233
+msgid "Speed up the song loading"
+msgstr "Ускорить загрузку песен"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:239
+msgid "Papercut fixes for the initial landing page and the playlist"
+msgstr ""
+"Исправления мелких недочётов на начальной странице и в списке воспроизведения"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:241
+msgid "Fix styling of the folded playlist"
+msgstr "Исправить оформление свёрнутого списка воспроизведения"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:242
+msgid "Improve the cover art detection"
+msgstr "Улучшить определение обложек"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:243
+#: data/io.hopea.Hopea.metainfo.xml.in.in:252
+msgid "Add localization for various languages"
+msgstr "Добавить локализацию для различных языков"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:249
+msgid "New round of UI touch-ups, to make Hopea more readable."
+msgstr "Новый раунд правок интерфейса, чтобы Hopea стала удобнее для чтения."
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:251
+msgid "Improve the playlist management through a selection mode switch"
+msgstr ""
+"Улучшить управление списком воспроизведения с помощью переключателя режима "
+"выбора"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:253
+msgid "Make the text and controls more legible"
+msgstr "Сделать текст и элементы управления более читаемыми"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:254
+msgid "Improve the MPRIS integration"
+msgstr "Улучшить интеграцию с MPRIS"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:255
+msgid "Better support for right-to-left text locales"
+msgstr "Лучшая поддержка языков с письмом справа налево"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:256
+msgid "Allow disabling UI recoloring"
+msgstr "Разрешить отключать перекрашивание интерфейса"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:262
+msgid "Last UI change for a while, I promise."
+msgstr "Последнее изменение интерфейса на некоторое время, обещаю."
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:264
+msgid "Move the playlist panel to the left"
+msgstr "Переместить панель списка воспроизведения влево"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:265
+msgid "Drop the seek buttons"
+msgstr "Убрать кнопки перемотки"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:266
+msgid "Improve the rendering of the waveform"
+msgstr "Улучшить отрисовку формы волны"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:267
+msgid "Improve extraction of the song metadata"
+msgstr "Улучшить извлечение метаданных песен"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:269
+msgid "Thanks to everyone who tried Hopea and filed issues!"
+msgstr "Спасибо всем, кто попробовал Hopea и сообщил о проблемах!"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:274
+msgid "Bugs never end, and so does bug squashing."
+msgstr "Ошибки никогда не заканчиваются, и их исправление тоже."
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:276
+msgid "Fix a crash when manually advancing through the playlist"
+msgstr "Исправить падение при ручном переходе по списку воспроизведения"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:277
+msgid "Make the waveform scrubber more legible"
+msgstr "Сделать ползунок формы волны более читаемым"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:278
+msgid "Keep the UI state more consistent when toggling the playlist"
+msgstr ""
+"Сохранять состояние интерфейса более согласованным при переключении списка "
+"воспроизведения"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:280
+msgid ""
+"Many, many thanks to all of those who opened an issue after the 0.4.0 "
+"release!"
+msgstr "Огромное спасибо всем, кто открыл issue после выпуска 0.4.0!"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:285
+msgid "Fix a slight visual artefact in the playlist"
+msgstr "Исправить небольшой визуальный артефакт в списке воспроизведения"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:290
+msgid "A brown paper bag release fixing an embarrassing bug."
+msgstr "Экстренный выпуск, исправляющий неловкую ошибку."
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:295
+msgid "The first beta release for Hopea! Isn't this exciting?"
+msgstr "Первый бета-выпуск Hopea! Разве это не захватывающе?"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:297
+msgid "Show an initial page when launching Hopea"
+msgstr "Показывать начальную страницу при запуске Hopea"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:298
+msgid "Make the layout more mobile friendly without impacting desktop users"
+msgstr ""
+"Сделать компоновку более удобной для мобильных устройств, не затрагивая "
+"пользователей настольных компьютеров"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:299
+msgid "Allow removing songs from the playlist"
+msgstr "Разрешить удалять песни из списка воспроизведения"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:300
+msgid ""
+"Add initial (experimental) support for recursive loading of music folders"
+msgstr ""
+"Добавить начальную (экспериментальную) поддержку рекурсивной загрузки "
+"музыкальных папок"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:301
+msgid "Show the cover art for music tracks in the playlist"
+msgstr "Показывать обложки музыкальных треков в списке воспроизведения"
+
+#: data/io.hopea.Hopea.metainfo.xml.in.in:302
+msgid "Show the current position inside the song"
+msgstr "Показывать текущую позицию внутри песни"
+
+#: src/accent.rs:106
+msgid "Standard Accent Color"
+msgstr "Стандартный акцентный цвет"
+
+#: src/accent.rs:106
+msgid "Custom Accent Color"
+msgstr "Свой акцентный цвет"
+
+#: src/accent.rs:108 src/accent.rs:124
+msgid "Accent Color"
+msgstr "Акцентный цвет"
+
+#: src/accent.rs:116
+msgid "Color Code (#RGB or #RRGGBB)"
+msgstr "Код цвета (#RGB или #RRGGBB)"
+
+#: src/accent.rs:121
+msgid "Choose from Palette…"
+msgstr "Выбрать на палитре…"
+
+#: src/accent.rs:126
+msgid "Preview changes here. Save applies the color; Cancel restores it."
+msgstr "Цвет виден сразу. «Сохранить» применит его, «Отмена» вернёт прежний."
+
+#: src/accent.rs:195
+msgid "Enter a color such as #3584E4"
+msgstr "Введите код цвета, например #3584E4"
+
+#: src/accent.rs:201 src/accent.rs:205
+msgid "Unable to save accent color"
+msgstr "Не удалось сохранить акцентный цвет"
+
+#: src/accent.rs:242
+msgid "Choose Accent Color"
+msgstr "Выберите акцентный цвет"
+
+#: src/accent.rs:300
+msgid "Hue"
+msgstr "Цветовой тон"
+
+#: src/accent.rs:367
+msgid "Use Color"
+msgstr "Выбрать цвет"
+
+#: src/application.rs:426
+msgid "Reconnecting with the updated connection settings…"
+msgstr "Переподключение с обновлёнными настройками подключения…"
+
+#: src/application.rs:428
+msgid "The VPN is off. Sharing will resume when it reconnects."
+msgstr "VPN выключен. Обмен возобновится после повторного подключения."
+
+#: src/application.rs:451
+msgid "The VPN is on: joined the network"
+msgstr "VPN включён: сеть подключена"
+
+#: src/application.rs:453
+msgid "Joined the network"
+msgstr "Сеть подключена"
+
+#. Translators: Replace "translator-credits" with your names, one name per line
+#: src/application.rs:555
+msgid "translator-credits"
+msgstr "Aleksandr Melman <alexmelman88@gmail.com>, 2022-2023"
+
+#: src/application.rs:568
+msgid "Hopea needs to run in the background to play music"
+msgstr "Hopea должен работать в фоновом режиме для воспроизведения музыки"
+
+#: src/artwork.rs:127
+msgid "PNG and JPEG images"
+msgstr "Изображения PNG и JPEG"
+
+#: src/artwork.rs:131
+msgid "Choose Cover Image"
+msgstr "Выбрать изображение обложки"
+
+#: src/artwork.rs:137
+msgid "Unable to open the image chooser"
+msgstr "Не удалось открыть выбор изображения"
+
+#: src/artwork.rs:141
+msgid "Choose an image on this computer"
+msgstr "Выбрать изображение на этом компьютере"
+
+#: src/artwork.rs:157 src/window/collections.rs:912
+msgid "Choose a valid PNG or JPEG smaller than 8 MB"
+msgstr "Выберите допустимое изображение PNG или JPEG размером меньше 8 МБ"
+
+#: src/artwork.rs:170
+msgid "Music Note"
+msgstr "Музыкальная нота"
+
+#: src/artwork.rs:170
+msgid "Hopea Logo"
+msgstr "Логотип Hopea"
+
+#: src/artwork.rs:170
+msgid "Custom Image"
+msgstr "Своё изображение"
+
+#: src/artwork.rs:172
+msgid "Songs Without Cover Art"
+msgstr "Песни без обложки"
+
+#: src/artwork.rs:186
+msgid "Choose Custom Image…"
+msgstr "Выбрать своё изображение…"
+
+#: src/artwork.rs:245 src/library_panel.rs:1591
+msgid "Appearance"
+msgstr "Внешний вид"
+
+#: src/artwork.rs:250
+msgid "Choose the Most Shared Covers and Lyrics"
+msgstr "Выбирать самые популярные обложки и тексты"
+
+#: src/artwork.rs:251
+msgid ""
+"Use the variants shared by the most peers. When disabled, Hopea offers a "
+"choice after adding a song."
+msgstr ""
+"Выбирать варианты с наибольшим числом раздающих пиров. Если выключено, Hopea "
+"предложит выбор после добавления песни."
+
+#: src/artwork.rs:270
+msgid "Choose a custom image first"
+msgstr "Сначала выберите своё изображение"
+
+#: src/artwork.rs:275 src/artwork.rs:278 src/artwork.rs:281
+msgid "Unable to save image preference"
+msgstr "Не удалось сохранить настройку изображения"
+
+#: src/audio/inhibit_controller.rs:40
+msgid "Playback in progress"
+msgstr "Идёт воспроизведение"
+
+#: src/audio/song.rs:523 src/audio/song.rs:543 src/audio/song.rs:587
+#: src/window.rs:3300
+msgid "On this computer"
+msgstr "На этом компьютере"
+
+#: src/audio/song.rs:589
+msgid "Available on the network"
+msgstr "Доступно в сети"
+
+#: src/audio/song.rs:653
+msgid "Unknown artist"
+msgstr "Неизвестный исполнитель"
+
+#: src/audio/song.rs:660
+msgid "Unknown title"
+msgstr "Неизвестное название"
+
+#: src/audio/song.rs:667
+msgid "Unknown album"
+msgstr "Неизвестный альбом"
+
+#: src/cache_cleanup.rs:91
+msgid "Clear Cache"
+msgstr "Очистить кэш"
+
+#: src/cache_cleanup.rs:93
+msgid "Choose what to clear. These files are recreated when needed."
+msgstr "Выберите, что очистить. Эти файлы создаются заново при необходимости."
+
+#: src/cache_cleanup.rs:97 src/library_panel.rs:410
+#: src/window/collections.rs:19
+msgid "Close"
+msgstr "Закрыть"
+
+#: src/cache_cleanup.rs:107
+msgid "Calculating size…"
+msgstr "Вычисление размера…"
+
+#: src/cache_cleanup.rs:117
+msgid "Clear Selected"
+msgstr "Очистить выбранное"
+
+#: src/cache_cleanup.rs:141
+#, rust-format
+msgid "{} · {} files"
+msgstr "{} · файлов: {}"
+
+#: src/cache_cleanup.rs:145
+msgid "Unable to read this cache"
+msgstr "Не удалось прочитать этот кэш"
+
+#: src/cover_picture.rs:75
+msgid "Cover image"
+msgstr "Изображение обложки"
+
+#: src/dialogs.rs:120 src/library_panel/import_picker.rs:346
+#: src/window/collections.rs:490 src/window/collections.rs:615
+#: src/window/song_editor.rs:31
+msgid "Cancel"
+msgstr "Отмена"
+
+#: src/dialogs.rs:123 src/window/collections.rs:486
+#: src/window/song_editor.rs:32
+msgid "Save"
+msgstr "Сохранить"
+
+#: src/gaming.rs:108
+msgid ""
+"Active: P2P downloads up to 512 KiB/s, sharing up to 128 KiB/s. Lower limits "
+"are preserved."
+msgstr ""
+"Активен: загрузка P2P до 512 КиБ/с, раздача до 128 КиБ/с. Более низкие "
+"ограничения сохраняются."
+
+#: src/gaming.rs:110
+msgid ""
+"Automatically detect Steam games, Feral GameMode and installed desktop games."
+msgstr ""
+"Автоматически распознавать игры Steam, Feral GameMode и установленные игры с "
+"ярлыками приложений."
+
+#: src/gaming.rs:112
+msgid ""
+"Automatically reduce P2P traffic and background work for detected full-"
+"screen games and apps."
+msgstr ""
+"Автоматически снижать трафик P2P и фоновую нагрузку при обнаружении "
+"полноэкранных игр и приложений."
+
+#: src/gaming.rs:114
+msgid ""
+"Automatically reduce traffic and background work while the active app is "
+"categorized as a game by macOS."
+msgstr ""
+"Автоматически снижать трафик и фоновую нагрузку, если активное приложение "
+"относится к игровой категории macOS."
+
+#: src/gaming.rs:121
+msgid "Automatically detect running games from installed desktop entries."
+msgstr ""
+"Автоматически обнаруживать запущенные игры по установленным ярлыкам "
+"приложений."
+
+#: src/gaming.rs:125
+msgid "Automatic detection is unavailable on this platform."
+msgstr "Автоматическое обнаружение недоступно на этой платформе."
+
+#: src/gaming.rs:132
+msgid ""
+"Allow Usage Access below to detect games. Recent app activity is processed "
+"only on this device and is not saved or shared."
+msgstr ""
+"Для обнаружения игр разрешите доступ к истории использования ниже. Данные "
+"обрабатываются только на устройстве, не сохраняются и не передаются."
+
+#: src/gaming.rs:133
+msgid "Game detection is temporarily unavailable."
+msgstr "Обнаружение игр временно недоступно."
+
+#: src/gaming.rs:136
+msgid ""
+"Automatically reduce traffic and background work while the foreground "
+"Android app is categorized as a game."
+msgstr ""
+"Автоматически снижать трафик и фоновую нагрузку, когда открыто Android-"
+"приложение игровой категории."
+
+#: src/gtk/library-panel.blp:14
+msgid ""
+"VPN is not active. Turn on your VPN or turn off “Share Only Through a VPN” "
+"in Settings."
+msgstr ""
+"VPN не активен. Включите VPN или отключите «Обмениваться только через VPN» в "
+"настройках."
+
+#: src/gtk/library-panel.blp:15 src/gtk/window.blp:79 src/gtk/window.blp:200
+msgid "Settings"
+msgstr "Настройки"
+
+#: src/gtk/library-panel.blp:24 src/gtk/library-panel.blp:36
+#: src/gtk/window.blp:37 src/gtk/window.blp:85 src/gtk/window.blp:90
+#: src/gtk/window.blp:143 src/gtk/window.blp:223 src/gtk/window.blp:228
+msgid "Shared Music"
+msgstr "Общая музыка"
+
+#: src/gtk/library-panel.blp:53
+msgid "Hide Shared Music"
+msgstr "Скрыть общую музыку"
+
+#: src/gtk/library-panel.blp:60
+msgid "Library Menu"
+msgstr "Меню медиатеки"
+
+#: src/gtk/library-panel.blp:92
+msgid "Your Music, Shared"
+msgstr "Ваша музыка, общий доступ"
+
+#: src/gtk/library-panel.blp:99
+msgid "Discover songs from other listeners and share your favorites."
+msgstr "Находите песни других слушателей и делитесь избранным."
+
+#: src/gtk/library-panel.blp:113 src/library_panel.rs:542
+msgid "Ready to Connect"
+msgstr "Готово к подключению"
+
+#: src/gtk/library-panel.blp:127
+msgid "Connection Settings"
+msgstr "Настройки подключения"
+
+#: src/gtk/library-panel.blp:134
+msgid "Your Name (Optional)"
+msgstr "Ваше имя (необязательно)"
+
+#: src/gtk/library-panel.blp:138
+msgid "Shown next to the music you share."
+msgstr "Показывается рядом с музыкой, которой вы делитесь."
+
+#: src/gtk/library-panel.blp:144
+msgid "_Join the Network"
+msgstr "_Подключиться к сети"
+
+#: src/gtk/library-panel.blp:155 src/window.rs:753
+msgid "_Import Music…"
+msgstr "_Импорт музыки…"
+
+#: src/gtk/library-panel.blp:164
+msgid "Share only music you have permission to share."
+msgstr "Делитесь только музыкой, на которую у вас есть разрешение."
+
+#: src/gtk/library-panel.blp:197
+msgid "Search"
+msgstr "Поиск"
+
+#: src/gtk/library-panel.blp:220 src/library_panel.rs:353
+#: src/library_panel.rs:3187
+msgid "Checking Connection…"
+msgstr "Проверка подключения…"
+
+#: src/gtk/library-panel.blp:227 src/library_panel.rs:370
+msgid "Connection Help"
+msgstr "Помощь с подключением"
+
+#: src/gtk/library-panel.blp:252
+msgid "Search songs, artists and albums"
+msgstr "Искать песни, исполнителей и альбомы"
+
+#: src/gtk/library-panel.blp:258
+msgid "Order of the Songs Found"
+msgstr "Порядок найденных песен"
+
+#: src/gtk/library-panel.blp:261
+msgid "Best Match"
+msgstr "Лучшее совпадение"
+
+#: src/gtk/library-panel.blp:262
+msgid "Most Shared"
+msgstr "Наиболее общие"
+
+#: src/gtk/library-panel.blp:283
+msgid "Albums"
+msgstr "Альбомы"
+
+#: src/gtk/library-panel.blp:301 src/window/collections.rs:524
+msgid "Songs"
+msgstr "Песни"
+
+#: src/gtk/library-panel.blp:320
+msgid "Searching other people’s music…"
+msgstr "Поиск музыки других людей…"
+
+#: src/gtk/library-panel.blp:332
+msgid "Retry"
+msgstr "Повторить"
+
+#: src/gtk/library-panel.blp:345 src/gtk/library-panel.blp:531
+#: src/library_panel.rs:1841
+msgid "No Songs Found"
+msgstr "Песни не найдены"
+
+#: src/gtk/library-panel.blp:369
+msgid "Choose music files on this computer to share with everyone"
+msgstr ""
+"Выберите музыкальные файлы на этом компьютере, чтобы поделиться со всеми"
+
+#: src/gtk/library-panel.blp:373
+msgid "_Share Songs…"
+msgstr "_Поделиться песнями…"
+
+#: src/gtk/library-panel.blp:386
+msgid "Choose a folder, such as an album, and share every song in it"
+msgstr "Выберите папку, например альбом, и поделитесь каждой песней в ней"
+
+#: src/gtk/library-panel.blp:390
+msgid "Share _Album…"
+msgstr "Поделиться _альбомом…"
+
+#: src/gtk/library-panel.blp:406 src/library_panel.rs:2453
+#: src/library_panel/import_picker.rs:963
+msgid "Album"
+msgstr "Альбом"
+
+#: src/gtk/library-panel.blp:433
+msgid "Looking for the album’s songs…"
+msgstr "Поиск песен альбома…"
+
+#: src/gtk/library-panel.blp:488
+msgid "_Play Album"
+msgstr "_Воспроизвести альбом"
+
+#: src/gtk/library-panel.blp:500
+msgid "Download every song, check it, and save it to a folder of your choice"
+msgstr "Скачать каждую песню, проверить её и сохранить в выбранную папку"
+
+#: src/gtk/library-panel.blp:504
+msgid "_Download…"
+msgstr "_Скачать…"
+
+#: src/gtk/library-panel.blp:532
+msgid "Nobody who has this album is online right now"
+msgstr "Сейчас никто из имеющих этот альбом не в сети"
+
+#: src/gtk/library-panel.blp:566 src/gtk/playback-control.blp:221
+msgid "_Bring Your Music Over…"
+msgstr "_Перенесите свою музыку…"
+
+#: src/gtk/library-panel.blp:571
+msgid "_Settings…"
+msgstr "_Настройки…"
+
+#: src/gtk/library-panel.blp:578
+msgid "_Leave the Network"
+msgstr "_Покинуть сеть"
 
 #: src/gtk/playback-control.blp:21
 msgid "Play the Previous Song"
@@ -89,12 +1170,12 @@ msgstr "Перейти назад"
 
 #: src/gtk/playback-control.blp:36
 msgid "Toggle Play"
-msgstr "Включить/Остановить воспроизведение"
+msgstr "Включить/остановить воспроизведение"
 
 #: src/gtk/playback-control.blp:44
 msgctxt "a11y"
 msgid "Toggle play"
-msgstr "Включить/Остановить воспроизведение"
+msgstr "Включить/остановить воспроизведение"
 
 #: src/gtk/playback-control.blp:52
 msgid "Play the Next Song"
@@ -103,16 +1184,16 @@ msgstr "Воспроизвести следующую песню"
 #: src/gtk/playback-control.blp:59
 msgctxt "a11y"
 msgid "Skip forward"
-msgstr "Перейти вперед"
+msgstr "Перейти вперёд"
 
 #: src/gtk/playback-control.blp:79
 msgid "Toggle Playlist"
-msgstr "Показать/Убрать список воспроизведения"
+msgstr "Показать/убрать список воспроизведения"
 
 #: src/gtk/playback-control.blp:86
 msgctxt "a11y"
 msgid "Toggle playlist"
-msgstr "Показать/Убрать список воспроизведения"
+msgstr "Показать/убрать список воспроизведения"
 
 #: src/gtk/playback-control.blp:94
 msgid "Shuffle the Playlist"
@@ -121,120 +1202,172 @@ msgstr "Перемешать список воспроизведения"
 #: src/gtk/playback-control.blp:97
 msgctxt "a11y"
 msgid "Shuffle"
-msgstr "В случайном порядке"
+msgstr "Перемешать"
 
-#: src/gtk/playback-control.blp:116
-msgid "Enable Repeat"
-msgstr "Включить повтор"
+#: src/gtk/playback-control.blp:116 src/window/metadata.rs:235
+#: src/window/song_editor.rs:102
+msgid "Lyrics"
+msgstr "Текст песни"
 
 #: src/gtk/playback-control.blp:123
 msgctxt "a11y"
-msgid "Repeat"
-msgstr "Повторять"
+msgid "Lyrics"
+msgstr "Текст песни"
 
-#: src/gtk/playback-control.blp:133
+#: src/gtk/playback-control.blp:133 src/playback_control.rs:126
+msgid "Keep and Share"
+msgstr "Сохранить и поделиться"
+
+#: src/gtk/playback-control.blp:140
+msgctxt "a11y"
+msgid "Favorite"
+msgstr "Избранное"
+
+#: src/gtk/playback-control.blp:148
+msgid "Enable Repeat"
+msgstr "Включить повтор"
+
+#: src/gtk/playback-control.blp:155
+msgctxt "a11y"
+msgid "Repeat"
+msgstr "Повтор"
+
+#: src/gtk/playback-control.blp:165
 msgid "Main Menu"
 msgstr "Главное меню"
 
-#: src/gtk/playback-control.blp:141
+#: src/gtk/playback-control.blp:173
 msgctxt "a11y"
 msgid "Primary menu"
 msgstr "Главное меню"
 
-#: src/gtk/playback-control.blp:152
+#: src/gtk/playback-control.blp:183 src/window/collections.rs:509
+msgid "Change Cover…"
+msgstr "Изменить обложку…"
+
+#: src/gtk/playback-control.blp:184
+msgid "Edit Lyrics…"
+msgstr "Изменить текст…"
+
+#: src/gtk/playback-control.blp:185
+msgid "Choose Cover and Lyrics…"
+msgstr "Выбрать обложку и текст…"
+
+#: src/gtk/playback-control.blp:189
 msgid "Copy"
 msgstr "Копировать"
 
-#: src/gtk/playback-control.blp:157
+#: src/gtk/playback-control.blp:194
 msgid "Open Directory"
 msgstr "Открыть каталог"
 
-#: src/gtk/playback-control.blp:164
+#: src/gtk/playback-control.blp:201
 msgid "Add _Song"
 msgstr "Добавить _песню"
 
-#: src/gtk/playback-control.blp:169
+#: src/gtk/playback-control.blp:206
 msgid "Add _Folder"
 msgstr "Добавить _папку"
 
-#: src/gtk/playback-control.blp:174
+#: src/gtk/playback-control.blp:211
+msgid "Shared _Music"
+msgstr "Общая _музыка"
+
+#: src/gtk/playback-control.blp:216
+msgid "Shared Music _Settings…"
+msgstr "Настройки общей _музыки…"
+
+#: src/gtk/playback-control.blp:226
+msgid "My Albums…"
+msgstr "Мои альбомы…"
+
+#: src/gtk/playback-control.blp:231
 msgid "Clear"
 msgstr "Очистить"
 
-#: src/gtk/playback-control.blp:181
+#: src/gtk/playback-control.blp:238
 msgid "_Match Cover Art"
-msgstr "_Соответствовать обложке"
+msgstr "_Подобрать обложку"
 
-#: src/gtk/playback-control.blp:186
+#: src/gtk/playback-control.blp:243
 msgid "_Background Playback"
 msgstr "_Фоновое воспроизведение"
 
-#: src/gtk/playback-control.blp:193
+#: src/gtk/playback-control.blp:250
 msgid "_ReplayGain"
 msgstr "_Выравнивание громкости"
 
-#: src/gtk/playback-control.blp:196
+#: src/gtk/playback-control.blp:253
 msgctxt "replaygain-menu"
 msgid "_Album"
 msgstr "_Альбом"
 
-#: src/gtk/playback-control.blp:202
+#: src/gtk/playback-control.blp:259
 msgctxt "replaygain-menu"
 msgid "_Song"
 msgstr "_Песня"
 
-#: src/gtk/playback-control.blp:208
+#: src/gtk/playback-control.blp:265
 msgctxt "replaygain-menu"
 msgid "_Disabled"
 msgstr "_Отключено"
 
-#: src/gtk/playback-control.blp:217
+#: src/gtk/playback-control.blp:274
 msgid "_Keyboard Shortcuts"
-msgstr "_Комбинации клавиш"
+msgstr "_Сочетания клавиш"
 
-#: src/gtk/playback-control.blp:222
+#: src/gtk/playback-control.blp:279
 msgid "_About Hopea"
-msgstr "_О приложении"
+msgstr "_О приложении Hopea"
 
-#: src/gtk/playback-control.blp:227
+#: src/gtk/playback-control.blp:284 src/tray/linux.rs:111
 msgid "_Quit"
-msgstr "_Закрыть"
+msgstr "_Выйти"
 
-#: src/gtk/playlist-view.blp:16
-msgid "Search Songs in the Playlist"
-msgstr "Поиск песен в списке воспроизведения"
-
-#: src/gtk/playlist-view.blp:25
+#: src/gtk/playlist-view.blp:11 src/gtk/playlist-view.blp:29
+#: src/library_panel/import_picker.rs:965
 msgid "Playlist"
 msgstr "Список воспроизведения"
 
-#: src/gtk/playlist-view.blp:47
+#: src/gtk/playlist-view.blp:20
+msgid "Search Songs in the Playlist"
+msgstr "Поиск песен в списке воспроизведения"
+
+#: src/gtk/playlist-view.blp:51
 msgid "Close the Playlist"
 msgstr "Закрыть список воспроизведения"
 
-#: src/gtk/playlist-view.blp:55
+#: src/gtk/playlist-view.blp:59
 msgid "Select Songs in the Playlist"
 msgstr "Выбрать песни в списке воспроизведения"
 
-#: src/gtk/playlist-view.blp:62
+#: src/gtk/playlist-view.blp:72
+msgid "Create, edit and share albums"
+msgstr "Создавайте, редактируйте и делитесь альбомами"
+
+#: src/gtk/playlist-view.blp:75 src/window/collections.rs:157
+msgid "My Albums"
+msgstr "Мои альбомы"
+
+#: src/gtk/playlist-view.blp:83
 msgid "Search songs"
 msgstr "Поиск песен"
 
-#: src/gtk/playlist-view.blp:66
+#: src/gtk/playlist-view.blp:87
 msgctxt "a11y"
 msgid "Search"
 msgstr "Поиск"
 
-#: src/gtk/playlist-view.blp:67
+#: src/gtk/playlist-view.blp:88
 msgctxt "a11y"
 msgid "Type to search songs"
 msgstr "Введите текст для поиска песен"
 
-#: src/gtk/playlist-view.blp:110
+#: src/gtk/playlist-view.blp:131
 msgid "Select All Songs"
 msgstr "Выбрать все песни"
 
-#: src/gtk/playlist-view.blp:123
+#: src/gtk/playlist-view.blp:144
 msgid "Remove Selected Songs"
 msgstr "Удалить выбранные песни"
 
@@ -243,106 +1376,115 @@ msgctxt "a11y"
 msgid "No cover available"
 msgstr "Обложка недоступна"
 
-#: src/gtk/queue-row.blp:81
+#: src/gtk/queue-row.blp:102
 msgctxt "a11y"
 msgid "Currently playing"
-msgstr "Текущее воспроизведение"
+msgstr "Сейчас воспроизводится"
 
-#: src/gtk/shortcuts-dialog.blp:10
+#: src/gtk/shortcuts-dialog.blp:8
 msgctxt "shortcut window"
 msgid "General"
 msgstr "Общие"
 
-#: src/gtk/shortcuts-dialog.blp:13
+#: src/gtk/shortcuts-dialog.blp:11
 msgctxt "shortcut window"
 msgid "Toggle primary menu"
-msgstr "Показать/Убрать главное меню"
+msgstr "Показать/убрать главное меню"
 
-#: src/gtk/shortcuts-dialog.blp:18
+#: src/gtk/shortcuts-dialog.blp:16
 msgctxt "shortcut window"
 msgid "Copy song details to the clipboard"
 msgstr "Копировать сведения о песне в буфер обмена"
 
-#: src/gtk/shortcuts-dialog.blp:23
+#: src/gtk/shortcuts-dialog.blp:21
 msgctxt "shortcut window"
 msgid "Show shortcuts"
-msgstr "Показать комбинации клавиш"
+msgstr "Показать сочетания клавиш"
 
-#: src/gtk/shortcuts-dialog.blp:28
+#: src/gtk/shortcuts-dialog.blp:26
 msgctxt "shortcut window"
 msgid "Quit"
-msgstr "Закрыть"
+msgstr "Выйти"
 
-#: src/gtk/shortcuts-dialog.blp:34
+#: src/gtk/shortcuts-dialog.blp:32
 msgctxt "shortcut window"
 msgid "Playlist"
 msgstr "Список воспроизведения"
 
-#: src/gtk/shortcuts-dialog.blp:37
+#: src/gtk/shortcuts-dialog.blp:35
 msgctxt "shortcut window"
 msgid "Add a song to the playlist"
 msgstr "Добавить песню в список воспроизведения"
 
-#: src/gtk/shortcuts-dialog.blp:42
+#: src/gtk/shortcuts-dialog.blp:40
 msgctxt "shortcut window"
 msgid "Add a folder to the playlist"
 msgstr "Добавить папку в список воспроизведения"
 
-#: src/gtk/shortcuts-dialog.blp:47
+#: src/gtk/shortcuts-dialog.blp:45
+msgctxt "shortcut window"
+msgid "Show or hide shared music"
+msgstr "Показать или скрыть общую музыку"
+
+#: src/gtk/shortcuts-dialog.blp:50
 msgctxt "shortcut window"
 msgid "Clear the playlist"
 msgstr "Очистить список воспроизведения"
 
-#: src/gtk/shortcuts-dialog.blp:52
+#: src/gtk/shortcuts-dialog.blp:55
 msgctxt "shortcut window"
 msgid "Toggle the playlist pane"
-msgstr "Показать/Убрать панель списка воспроизведения"
+msgstr "Показать/убрать панель списка воспроизведения"
 
-#: src/gtk/shortcuts-dialog.blp:57
+#: src/gtk/shortcuts-dialog.blp:60
 msgctxt "shortcut window"
 msgid "Search the playlist"
 msgstr "Поиск по списку воспроизведения"
 
-#: src/gtk/shortcuts-dialog.blp:62
+#: src/gtk/shortcuts-dialog.blp:65
 msgctxt "shortcut window"
 msgid "Toggle shuffling songs"
-msgstr "Переключение перемешивания песен"
+msgstr "Переключить перемешивание песен"
 
-#: src/gtk/shortcuts-dialog.blp:68
+#: src/gtk/shortcuts-dialog.blp:71
 msgctxt "shortcut window"
 msgid "Playback"
 msgstr "Воспроизведение"
 
-#: src/gtk/shortcuts-dialog.blp:71
+#: src/gtk/shortcuts-dialog.blp:74
 msgctxt "shortcut window"
 msgid "Toggle play/pause"
-msgstr "Переключение воспроизведения/паузы"
+msgstr "Переключить воспроизведение/паузу"
 
-#: src/gtk/shortcuts-dialog.blp:76
+#: src/gtk/shortcuts-dialog.blp:79
 msgctxt "shortcut window"
 msgid "Previous song"
 msgstr "Предыдущая песня"
 
-#: src/gtk/shortcuts-dialog.blp:81
+#: src/gtk/shortcuts-dialog.blp:84
 msgctxt "shortcut window"
 msgid "Next song"
 msgstr "Следующая песня"
 
-#: src/gtk/shortcuts-dialog.blp:86
+#: src/gtk/shortcuts-dialog.blp:89
 msgctxt "shortcut window"
 msgid "Seek backwards in the current song"
 msgstr "Перемотка назад в текущей песне"
 
-#: src/gtk/shortcuts-dialog.blp:91
+#: src/gtk/shortcuts-dialog.blp:94
 msgctxt "shortcut window"
 msgid "Seek forward in the current song"
-msgstr "Перемотка вперед в текущей песне"
+msgstr "Перемотка вперёд в текущей песне"
 
 #: src/gtk/window.blp:15
 msgid "Drop a song to add it to the playlist"
-msgstr "Перетащите песню, чтобы добавить ее в список воспроизведения"
+msgstr "Перетащите песню, чтобы добавить её в список воспроизведения"
 
-#: src/gtk/window.blp:39
+#: src/gtk/window.blp:72 src/gtk/window.blp:194
+msgid "Import Progress"
+msgstr "Ход импорта"
+
+#: src/gtk/window.blp:105
 msgid ""
 "Select a file or a folder, or drag files from your file manager to the "
 "application window to add songs to the playlist"
@@ -350,125 +1492,1217 @@ msgstr ""
 "Выберите файл или папку, или перетащите файлы из файлового менеджера в окно "
 "приложения, чтобы добавить песни в список воспроизведения"
 
-#: src/gtk/window.blp:48
+#: src/gtk/window.blp:115
 msgid "Restore Playlist"
 msgstr "Восстановить список воспроизведения"
 
-#: src/gtk/window.blp:58
+#: src/gtk/window.blp:125
 msgid "Add Folder"
 msgstr "Добавить папку"
 
-#: src/gtk/window.blp:67
+#: src/gtk/window.blp:134
 msgid "Add Song"
 msgstr "Добавить песню"
 
-#: src/gtk/window.blp:128
+#: src/gtk/window.blp:177
+msgid "Back to Import"
+msgstr "Назад к импорту"
+
+#: src/gtk/window.blp:181
+msgid "Listening before import"
+msgstr "Прослушивание перед импортом"
+
+#: src/gtk/window.blp:211
+msgid "My Music"
+msgstr "Моя музыка"
+
+#: src/gtk/window.blp:216
+msgid "For You"
+msgstr "Для вас"
+
+#: src/gtk/window.blp:322 src/window.rs:2632 src/window.rs:2654
+msgid "No Lyrics for This Song"
+msgstr "Нет текста для этой песни"
+
+#: src/gtk/window.blp:336
+msgid "_Search Online"
+msgstr "_Искать в интернете"
+
+#: src/gtk/window.blp:346
+msgid "Asks lrclib.net, which then learns the song’s title and artist"
+msgstr ""
+"Запрашивает lrclib.net, который затем узнаёт название и исполнителя песни"
+
+#: src/gtk/window.blp:386
 msgctxt "a11y"
 msgid "Elapsed time"
 msgstr "Прошедшее время"
 
-#: src/gtk/window.blp:142
+#: src/gtk/window.blp:400
 msgctxt "a11y"
 msgid "Remaining time"
 msgstr "Оставшееся время"
 
-#. Translators: Replace "translator-credits" with your names, one name per line
-#: src/application.rs:243
-msgid "translator-credits"
-msgstr "Aleksandr Melman <alexmelman88@gmail.com>, 2022-2023"
+#: src/gtk/window.blp:426 src/window.rs:2244
+msgid "Music for You"
+msgstr "Музыка для вас"
 
-#: src/application.rs:255
-msgid "Hopea needs to run in the background to play music"
-msgstr "Hopea должен работать в фоновом режиме для воспроизведения музыки"
+#: src/gtk/window.blp:427
+msgid ""
+"Songs picked from the genres and artists you star and listen to, from people "
+"sharing them right now. Star the ones you like to keep them; what you listen "
+"to here shapes what comes next."
+msgstr ""
+"Песни, подобранные по жанрам и исполнителям, которые вы отмечаете и "
+"слушаете, от людей, делящихся ими прямо сейчас. Отмечайте понравившиеся, "
+"чтобы сохранить их; то, что вы слушаете здесь, влияет на следующие "
+"рекомендации."
 
-#: src/audio/inhibit_controller.rs:40
-msgid "Playback in progress"
-msgstr "Идет воспроизведение"
+#: src/gtk/window.blp:431 src/window.rs:2247
+msgid "Play Music for You"
+msgstr "Воспроизвести музыку для вас"
 
-#: src/audio/song.rs:339
-msgid "Unknown artist"
-msgstr "Неизвестный исполнитель"
+#: src/gtk/window.blp:435
+msgid "_Play"
+msgstr "_Воспроизвести"
 
-#: src/audio/song.rs:346
-msgid "Unknown title"
-msgstr "Неизвестное название"
+#: src/language.rs:115
+msgid ""
+"Language changes apply after restarting Hopea. Some translations are "
+"incomplete."
+msgstr "Язык изменится после перезапуска Hopea. Некоторые переводы неполные."
 
-#: src/audio/song.rs:353
-msgid "Unknown album"
-msgstr "Неизвестный альбом"
+#: src/language.rs:150
+msgid "System language"
+msgstr "Язык системы"
 
-#: src/cover_picture.rs:75
-msgid "Cover image"
-msgstr "Изображение обложки"
+#: src/language.rs:157
+msgid "Language"
+msgstr "Язык"
 
-#: src/playback_control.rs:115
-msgid "Do Not Repeat"
-msgstr "Не повторять"
+#: src/language.rs:187 src/language.rs:197
+msgid "Unable to save language"
+msgstr "Не удалось сохранить язык"
 
-#: src/playback_control.rs:119
-msgid "Repeat All Songs"
-msgstr "Повторить все песни"
+#: src/library/browser_import.rs:44
+msgid ""
+"Your desktop does not provide the browser-opening portal needed by Flatpak. "
+"Install or enable an OpenURI backend such as xdg-desktop-portal-gtk or your "
+"desktop’s portal package, then sign out and back in. You can also open the "
+"music service yourself and paste its session data here."
+msgstr ""
+"Ваша среда рабочего стола не предоставляет портал открытия браузера, "
+"необходимый Flatpak. Установите или включите серверную часть OpenURI, "
+"например xdg-desktop-portal-gtk или пакет портала вашей среды, затем выйдите "
+"и войдите снова. Вы также можете открыть музыкальный сервис самостоятельно и "
+"вставить его данные сеанса здесь."
 
-#: src/playback_control.rs:123
-msgid "Repeat the Current Song"
-msgstr "Повторить текущую песню"
+#: src/library/browser_import.rs:51
+msgid "No default web browser is configured"
+msgstr "Браузер по умолчанию не настроен"
 
-#: src/window.rs:149
-msgid "Audio files"
-msgstr "Аудиофайлы"
+#: src/library/browser_import.rs:59
+msgid ""
+"The default browser’s saved sessions are not supported. Choose a supported "
+"default browser or paste session data."
+msgstr ""
+"Сохранённые сеансы браузера по умолчанию не поддерживаются. Выберите "
+"поддерживаемый браузер по умолчанию или вставьте данные сеанса."
 
-#: src/window.rs:159
-msgid "_Add Song"
-msgstr "_Добавить песню"
+#: src/library/browser_import.rs:113
+msgid ""
+"Zen’s profile was not found. Open Zen in a normal window, sign in and try "
+"Continue again."
+msgstr ""
+"Профиль Zen не найден. Откройте Zen в обычном окне, войдите и снова нажмите "
+"«Продолжить»."
 
-#: src/window.rs:163
-msgid "Open File"
-msgstr "Открыть файл"
+#: src/library/browser_import.rs:120
+msgid "Unable to read Zen’s profile list"
+msgstr "Не удалось прочитать список профилей Zen"
 
-#: src/window.rs:168 src/window.rs:190 src/window.rs:1487
-msgid "Unable to access files"
-msgstr "Невозможно получить доступ к файлам"
+#: src/library/browser_import.rs:152
+msgid ""
+"Zen has not saved a browser session yet. Sign in in a normal window and try "
+"Continue again."
+msgstr ""
+"Zen ещё не сохранил сеанс браузера. Войдите в обычном окне и снова нажмите "
+"«Продолжить»."
 
-#: src/window.rs:182
-msgid "_Add Folder"
-msgstr "_Добавить папку"
+#: src/library/browser_import.rs:153
+msgid ""
+"Several default Zen profiles were found. Set a single default profile in Zen "
+"and sign in there."
+msgstr ""
+"Найдено несколько профилей Zen по умолчанию. Установите единственный профиль "
+"по умолчанию в Zen и войдите в нём."
 
-#: src/window.rs:185
-msgid "Open Folder"
-msgstr "Открыть папку"
+#: src/library/client.rs:58
+msgid "The access token was not accepted"
+msgstr "Токен доступа не принят"
 
-#: src/window.rs:512
-msgid "No available song found"
-msgstr "Доступных песен не найдено"
+#: src/library/client.rs:61
+msgid "The track no longer exists in the library"
+msgstr "Трек больше не существует в медиатеке"
 
-#: src/window.rs:574
-msgid "No songs found"
-msgstr "Песни не найдены"
+#: src/library/client.rs:66
+msgid "This song has no available sources right now"
+msgstr "Сейчас у этого трека нет доступных источников"
 
-#: src/window.rs:607
-msgid "Added a new song"
-msgstr "Добавлена новая песня"
-
-#: src/window.rs:608
-msgid "Play"
-msgstr "Воспроизвести"
-
-#. Translators: the `{}` must be left unmodified;
-#. it will be expanded to the number of songs added
-#. to the playlist
-#: src/window.rs:617
+#: src/library/client.rs:73
 #, rust-format
-msgid "Added one song"
-msgid_plural "Added {} songs"
-msgstr[0] "Добавлена {} песня"
-msgstr[1] "Добавлено {} песни"
-msgstr[2] "Добавлено {} песен"
+msgid "Unable to reach the server: {}"
+msgstr "Не удалось связаться с сервером: {}"
 
-#: src/window.rs:1247
-msgid "Unable to access dropped files"
-msgstr "Невозможно получить доступ к сброшенным файлам"
+#: src/library/client.rs:78
+msgid "The server sent an invalid response"
+msgstr "Сервер отправил неверный ответ"
 
-#: src/window.rs:1341
+#: src/library/client.rs:118
+msgid "Enter the server address"
+msgstr "Введите адрес сервера"
+
+#: src/library/client.rs:126
+msgid "The server address is not valid"
+msgstr "Адрес сервера недействителен"
+
+#: src/library/client.rs:139
+msgid "The server must use a secure (https://) connection"
+msgstr "Сервер должен использовать защищённое соединение (https://)"
+
+#: src/library/client.rs:203
+msgid "The access token is not valid"
+msgstr "Токен доступа недействителен"
+
+#: src/library/import.rs:346
+msgid "This isn’t a link"
+msgstr "Это не ссылка"
+
+#: src/library/import.rs:349
+msgid "This isn’t a Yandex Music link"
+msgstr "Это не ссылка Яндекс Музыки"
+
+#: src/library/import.rs:370
+msgid ""
+"Use the link to a playlist (…/users/…/playlists/…) or an album (…/album/…)"
+msgstr ""
+"Используйте ссылку на плейлист (…/users/…/playlists/…) или альбом (…/album/…)"
+
+#: src/library/import.rs:378
+msgid ""
+"No songs came from this link. The playlist may be private: make it public in "
+"Yandex Music, or the site asked to prove you aren’t a robot; try again later."
+msgstr ""
+"По этой ссылке не пришло ни одной песни. Плейлист может быть приватным: "
+"сделайте его публичным в Яндекс Музыке, или сайт попросил подтвердить, что "
+"вы не робот; попробуйте позже."
+
+#: src/library/import.rs:394
+msgid "The music service didn’t answer properly"
+msgstr "Музыкальный сервис ответил неправильно"
+
+#: src/library/import.rs:406
+msgid "The music service sent too much"
+msgstr "Музыкальный сервис отправил слишком много данных"
+
+#: src/library/import.rs:512
+msgid "The file is too large"
+msgstr "Файл слишком большой"
+
+#: src/library/import_history.rs:55
+msgid "Import history is damaged; refusing to import duplicates."
+msgstr "История импорта повреждена; импорт дубликатов отклонён."
+
+#: src/library/import_history.rs:57
+msgid "Unable to read import history"
+msgstr "Не удалось прочитать историю импорта"
+
+#: src/library/import_history.rs:64
+msgid "Unable to save import history"
+msgstr "Не удалось сохранить историю импорта"
+
+#: src/library/import_history.rs:76
+msgid "Unable to save import history; import stopped to avoid duplicates."
+msgstr ""
+"Не удалось сохранить историю импорта; импорт остановлен, чтобы избежать "
+"дубликатов."
+
+#: src/library/import_history.rs:83
+msgid ""
+"HTTPS support is missing. Install the GIO TLS module (glib-networking) and "
+"restart Hopea from the updated environment."
+msgstr ""
+"Поддержка HTTPS отсутствует. Установите TLS-модуль GIO (glib-networking) и "
+"перезапустите Hopea из обновлённого окружения."
+
+#: src/library/import_history.rs:91 src/library/import_history.rs:115
+msgid "Invalid cover address"
+msgstr "Неверный адрес обложки"
+
+#: src/library/import_history.rs:111
+msgid "The service returned an unsupported cover address"
+msgstr "Сервис вернул неподдерживаемый адрес обложки"
+
+#: src/library/import_history.rs:120 src/library/import_history.rs:129
+msgid "Unable to download cover art"
+msgstr "Не удалось скачать обложку"
+
+#: src/library/import_history.rs:122
+msgid "Cover art is unavailable"
+msgstr "Обложка недоступна"
+
+#: src/library/import_history.rs:134
+msgid "Cover art is too large"
+msgstr "Обложка слишком большая"
+
+#: src/library/import_history.rs:143
+msgid "Invalid or unsupported cover image"
+msgstr "Неверное или неподдерживаемое изображение обложки"
+
+#: src/library/import_history.rs:146 src/library_panel/import_preview.rs:526
+msgid "Unable to prepare cover image"
+msgstr "Не удалось подготовить изображение обложки"
+
+#: src/library/import_history.rs:161 src/library/import_history.rs:164
+msgid "Unable to save cover art"
+msgstr "Не удалось сохранить обложку"
+
+#: src/library/import_history.rs:265
+msgid "Unable to create the temporary cover cache"
+msgstr "Не удалось создать временный кэш обложек"
+
+#: src/library/import_history.rs:277
+msgid "Unable to save the temporary cover cache"
+msgstr "Не удалось сохранить временный кэш обложек"
+
+#. / Sends a picture for the uploads that follow (see [`UploadCover`]).
+#: src/library/import_history.rs:341 src/library_panel.rs:2268
+#: src/library_panel.rs:2626 src/library_panel/import_review.rs:58
+#: src/window/collections.rs:1211 src/window/collections.rs:1247
+msgid "Not connected"
+msgstr "Не подключено"
+
+#: src/library/import_history.rs:359
+msgid "The existing track is unavailable"
+msgstr "Существующий трек недоступен"
+
+#: src/library/import_history.rs:366
+msgid "The new version has not finished importing"
+msgstr "Новая версия ещё не завершила импорт"
+
+#: src/library/import_history.rs:370
+msgid "The existing track has changed since comparison"
+msgstr "Существующий трек изменился с момента сравнения"
+
+#: src/library/import_history.rs:373
+msgid "The existing file cannot be preserved yet"
+msgstr "Существующий файл пока нельзя сохранить"
+
+#: src/library/import_history.rs:378 src/library/import_history.rs:379
+msgid "Unable to create the backup folder"
+msgstr "Не удалось создать папку резервной копии"
+
+#: src/library/import_history.rs:418
+msgid "Backup verification was interrupted"
+msgstr "Проверка резервной копии прервана"
+
+#: src/library/import_history.rs:426
+msgid "The existing track changed during import"
+msgstr "Существующий трек изменился во время импорта"
+
+#: src/library/mod.rs:79
+msgid "Connect to your VPN before sharing music"
+msgstr "Подключитесь к VPN перед обменом музыкой"
+
+#: src/library/mod.rs:109
+msgid "The connection changed. Please try joining again."
+msgstr "Подключение изменилось. Попробуйте подключиться снова."
+
+#: src/library/service_import.rs:76
+msgid "Invalid import request"
+msgstr "Неверный запрос импорта"
+
+#: src/library/service_import.rs:121
+msgid ""
+"Unable to start the service importer. Install its dependencies as described "
+"in IMPORTING.md."
+msgstr ""
+"Не удалось запустить импортёр сервиса. Установите его зависимости, как "
+"описано в IMPORTING.md."
+
+#: src/library/service_import.rs:126
+msgid "The sign-in data is too large"
+msgstr "Данные входа слишком большие"
+
+#: src/library/service_import.rs:160
+msgid "Invalid import command"
+msgstr "Неверная команда импорта"
+
+#: src/library/service_import.rs:168 src/library/service_import.rs:170
+#: src/library_panel/account_jobs.rs:834
+msgid "The importer stopped unexpectedly"
+msgstr "Импортёр неожиданно остановился"
+
+#: src/library/service_import.rs:178
+msgid "The service importer sent too much data"
+msgstr "Импортёр сервиса отправил слишком много данных"
+
+#: src/library/service_import.rs:184
+msgid "The service importer returned an invalid result"
+msgstr "Импортёр сервиса вернул неверный результат"
+
+#: src/library/service_import.rs:282
+msgid ""
+"Unable to read the browser session. Sign in using the default browser "
+"profile and try again."
+msgstr ""
+"Не удалось прочитать сеанс браузера. Войдите, используя профиль браузера по "
+"умолчанию, и повторите попытку."
+
+#: src/library/service_import.rs:289
+msgid "The browser session reader stopped unexpectedly"
+msgstr "Чтение сеанса браузера неожиданно остановилось"
+
+#: src/library/spotify_audio.rs:28 src/library/spotify_audio.rs:31
+msgid "Unable to find the Spotify importer"
+msgstr "Не удалось найти импортёр Spotify"
+
+#: src/library/spotify_audio.rs:39
+msgid "Unable to start the Spotify importer"
+msgstr "Не удалось запустить импортёр Spotify"
+
+#: src/library/spotify_audio.rs:56
+msgid "Invalid Spotify import request"
+msgstr "Неверный запрос импорта Spotify"
+
+#: src/library/spotify_audio.rs:59
+msgid "Spotify import request is too large"
+msgstr "Запрос импорта Spotify слишком большой"
+
+#: src/library/spotify_audio.rs:67 src/library/spotify_audio.rs:69
+#: src/library/spotify_audio.rs:79 src/library/spotify_audio.rs:96
+#: src/library/spotify_audio.rs:100
+msgid "The Spotify importer stopped"
+msgstr "Импортёр Spotify остановился"
+
+#: src/library/spotify_audio.rs:78
+msgid "Unable to read the Spotify import result"
+msgstr "Не удалось прочитать результат импорта Spotify"
+
+#: src/library/spotify_audio.rs:81 src/library/spotify_audio.rs:86
+msgid "Invalid Spotify import result"
+msgstr "Неверный результат импорта Spotify"
+
+#: src/library_panel.rs:43
+msgid ""
+"Service imports require an active subscription to that service. Importing "
+"without one violates Hopea’s import rules."
+msgstr ""
+"Импорт из сервисов требует активной подписки на этот сервис. Импорт без неё "
+"нарушает правила импорта Hopea."
+
+#: src/library_panel.rs:61
+msgid "Finish signing in before starting the import."
+msgstr "Завершите вход перед началом импорта."
+
+#: src/library_panel.rs:65
+msgid ""
+"Sign in with your browser or enter your service’s session data or access "
+"token."
+msgstr ""
+"Войдите через браузер или введите данные сеанса или токен доступа сервиса."
+
+#: src/library_panel.rs:74
+msgid "Enter the numeric VK profile ID to import, for example 123456789."
+msgstr "Введите числовой ID профиля VK для импорта, например 123456789."
+
+#: src/library_panel.rs:299
+msgid "Join the network to discover and share music."
+msgstr "Подключитесь к сети, чтобы находить музыку и делиться ею."
+
+#: src/library_panel.rs:350
+msgid "Online"
+msgstr "В сети"
+
+#: src/library_panel.rs:351 src/library_panel.rs:3181
+msgid "Connection Unconfirmed"
+msgstr "Подключение не подтверждено"
+
+#: src/library_panel.rs:352
+msgid ""
+"No other listener has confirmed your connection yet. There may be no "
+"reachable listeners, or your network may block communication. Try searching, "
+"keep Hopea open on both devices, or see Connection Help."
+msgstr ""
+"Ни один другой слушатель ещё не подтвердил ваше подключение. Возможно, нет "
+"доступных слушателей или ваша сеть блокирует связь. Попробуйте поиск, "
+"держите Hopea открытой на обоих устройствах или откройте помощь с "
+"подключением."
+
+#: src/library_panel.rs:354
+msgid ""
+"Waiting for another listener to confirm your connection. You can already try "
+"searching."
+msgstr ""
+"Ожидание подтверждения подключения другим слушателем. Вы уже можете "
+"попробовать поиск."
+
+#: src/library_panel.rs:355
+msgid "Limited Connection"
+msgstr "Ограниченное подключение"
+
+#: src/library_panel.rs:356
+msgid ""
+"Other listeners cannot reach your music. Your router, provider or VPN may "
+"block incoming connections. Searching can still work."
+msgstr ""
+"Другие слушатели не могут достучаться до вашей музыки. Ваш роутер, провайдер "
+"или VPN могут блокировать входящие подключения. Поиск всё ещё может работать."
+
+#: src/library_panel.rs:357
+msgid "Offline"
+msgstr "Не в сети"
+
+#: src/library_panel.rs:358
+msgid "The sharing service is not responding. Hopea will retry automatically."
+msgstr "Служба обмена не отвечает. Hopea повторит попытку автоматически."
+
+#: src/library_panel.rs:368
+msgid "Details"
+msgstr "Подробности"
+
+#: src/library_panel.rs:537
+msgid "You’re Offline"
+msgstr "Вы не в сети"
+
+#: src/library_panel.rs:537
+msgid "Connect to the internet to discover and share music."
+msgstr "Подключитесь к интернету, чтобы находить музыку и делиться ею."
+
+#: src/library_panel.rs:538 src/library_panel.rs:539
+msgid "VPN Connected"
+msgstr "VPN подключён"
+
+#: src/library_panel.rs:538
+msgid "Ready to share over IPv4. Hopea won’t use IPv6 for sharing."
+msgstr "Готово к обмену по IPv4. Hopea не будет использовать IPv6 для обмена."
+
+#: src/library_panel.rs:539
+msgid "Your connection is ready. Join the network to start sharing."
+msgstr "Ваше подключение готово. Подключитесь к сети, чтобы начать обмен."
+
+#: src/library_panel.rs:540
+msgid "Check Your VPN"
+msgstr "Проверьте VPN"
+
+#: src/library_panel.rs:540
+msgid ""
+"Enable IPv4 protection in your VPN, or change the VPN requirement in "
+"Settings."
+msgstr ""
+"Включите защиту IPv4 в вашем VPN или измените требование VPN в настройках."
+
+#: src/library_panel.rs:541
+msgid "Waiting for Your VPN"
+msgstr "Ожидание VPN"
+
+#: src/library_panel.rs:541
+msgid ""
+"Turn on your VPN to start sharing, or change the VPN requirement in Settings."
+msgstr ""
+"Включите VPN, чтобы начать обмен, или измените требование VPN в настройках."
+
+#: src/library_panel.rs:542
+msgid "Connect directly with other listeners to find and share songs."
+msgstr ""
+"Подключайтесь напрямую к другим слушателям, чтобы находить песни и делиться "
+"ими."
+
+#: src/library_panel.rs:746
+#, rust-format
+msgid "Unable to start sharing: {}"
+msgstr "Не удалось начать обмен: {}"
+
+#: src/library_panel.rs:795
+msgid ""
+"Choose your music service, audio files or an exported song list. Imported "
+"audio is added to your library and shared; songs from lists are searched for "
+"on the network."
+msgstr ""
+"Выберите музыкальный сервис, аудиофайлы или экспортированный список песен. "
+"Импортированное аудио добавляется в вашу медиатеку и становится общим; песни "
+"из списков ищутся в сети."
+
+#: src/library_panel.rs:797
+msgid ""
+"A subscription does not grant permission to share music. Share only what you "
+"have permission to share."
+msgstr ""
+"Подписка не даёт разрешения делиться музыкой. Делитесь только тем, на что у "
+"вас есть разрешение."
+
+#: src/library_panel.rs:801
+msgid "Bring Your Music Over"
+msgstr "Перенесите свою музыку"
+
+#: src/library_panel.rs:805 src/library_panel.rs:1028 src/library_panel.rs:1107
+#: src/library_panel/account_jobs.rs:178
+msgid "_Close"
+msgstr "_Закрыть"
+
+#: src/library_panel.rs:818
+msgid "Your Online Library"
+msgstr "Ваша онлайн-медиатека"
+
+#: src/library_panel.rs:819
+msgid ""
+"Read your saved songs, playlists and albums from VK, Yandex Music, Spotify "
+"or YouTube Music. Download available audio, or look for the songs on the "
+"sharing network."
+msgstr ""
+"Читайте сохранённые песни, плейлисты и альбомы из VK, Яндекс Музыки, Spotify "
+"или YouTube Music. Скачивайте доступное аудио или ищите песни в сети обмена."
+
+#: src/library_panel.rs:820 src/window/tests.rs:704
+msgid "Import Account…"
+msgstr "Импортировать аккаунт…"
+
+#: src/library_panel.rs:823
+msgid "Downloaded Music, Including VK"
+msgstr "Скачанная музыка, включая VK"
+
+#: src/library_panel.rs:824
+msgid ""
+"If you downloaded songs with a browser extension or from a music service, "
+"choose the audio files or their folder. Subfolders are included. Extract ZIP "
+"archives first. These songs will be shared with other listeners."
+msgstr ""
+"Если вы скачали песни с помощью расширения браузера или из музыкального "
+"сервиса, выберите аудиофайлы или их папку. Подпапки включаются. Сначала "
+"распакуйте ZIP-архивы. Эти песни будут доступны другим слушателям."
+
+#: src/library_panel.rs:825
+msgid "Choose Songs…"
+msgstr "Выбрать песни…"
+
+#: src/library_panel.rs:825
+msgid "Choose Folder…"
+msgstr "Выбрать папку…"
+
+#: src/library_panel.rs:829
+msgid ""
+"In Spotify: Account → Privacy settings → Download your data. When the email "
+"comes, choose YourLibrary.json or a Playlist file from it. A CSV from "
+"Exportify works too."
+msgstr ""
+"В Spotify: Аккаунт → Настройки конфиденциальности → Скачать ваши данные. "
+"Когда придёт письмо, выберите из него YourLibrary.json или файл плейлиста. "
+"CSV из Exportify тоже подойдёт."
+
+#: src/library_panel.rs:830 src/library_panel.rs:835 src/library_panel.rs:845
+msgid "Choose File…"
+msgstr "Выбрать файл…"
+
+#: src/library_panel.rs:834
+msgid ""
+"On takeout.google.com, export “YouTube and YouTube Music”, then choose "
+"“music library songs.csv”, or a playlist file, from it."
+msgstr ""
+"На takeout.google.com экспортируйте «YouTube и YouTube Music», затем "
+"выберите из этого «music library songs.csv» или файл плейлиста."
+
+#: src/library_panel.rs:838
+msgid "Yandex Music"
+msgstr "Яндекс Музыка"
+
+#: src/library_panel.rs:839
+msgid ""
+"Paste the link to a playlist or an album. A playlist has to be public, also "
+"“My favorites”: make it so in its settings."
+msgstr ""
+"Вставьте ссылку на плейлист или альбом. Плейлист должен быть публичным, в "
+"том числе «Мне нравится»: сделайте его таким в настройках."
+
+#: src/library_panel.rs:840
+msgid "Paste Link…"
+msgstr "Вставить ссылку…"
+
+#: src/library_panel.rs:843
+msgid "VK Music, Apple Music, Deezer and Others"
+msgstr "VK Музыка, Apple Music, Deezer и другие"
+
+#: src/library_panel.rs:844
+msgid ""
+"Export your library to a file with TuneMyMusic or Soundiiz (choose CSV), or "
+"Apple’s privacy export, or paste lines of “Artist - Title”."
+msgstr ""
+"Экспортируйте медиатеку в файл с помощью TuneMyMusic или Soundiiz (выберите "
+"CSV), или экспорта конфиденциальности Apple, или вставьте строки "
+"«Исполнитель - Название»."
+
+#: src/library_panel.rs:845
+msgid "Paste List…"
+msgstr "Вставить список…"
+
+#: src/library_panel.rs:898 src/library_panel.rs:1201 src/library_panel.rs:1295
+msgid "_Import"
+msgstr "_Импорт"
+
+#: src/library_panel.rs:900
+msgid "Choose an Exported File"
+msgstr "Выбрать экспортированный файл"
+
+#: src/library_panel.rs:909
+msgid "Yandex Music Link"
+msgstr "Ссылка Яндекс Музыки"
+
+#: src/library_panel.rs:915
+msgid "Songs, One per Line"
+msgstr "Песни, по одной в строке"
+
+#: src/library_panel.rs:924
+msgid "No songs were found in it"
+msgstr "В нём не найдено песен"
+
+#: src/library_panel.rs:935
+msgid "All of these songs are already being looked for"
+msgstr "Все эти песни уже ищутся"
+
+#: src/library_panel.rs:938
+#, rust-format
+msgid ""
+"Looking for {} song on the network; when someone shares it, it gets a star"
+msgid_plural ""
+"Looking for {} songs on the network; the ones someone shares get a star"
+msgstr[0] "Ищем {} песню в сети; когда кто-то поделится ею, она получит звезду"
+msgstr[1] "Ищем {} песни в сети; те, которыми кто-то поделится, получат звезду"
+msgstr[2] "Ищем {} песен в сети; те, которыми кто-то поделится, получат звезду"
+
+#: src/library_panel.rs:967
+msgid "Unable to open the music service"
+msgstr "Не удалось открыть музыкальный сервис"
+
+#: src/library_panel.rs:988 src/library_panel/service_sign_in.rs:75
+msgid "Unable to open the default browser"
+msgstr "Не удалось открыть браузер по умолчанию"
+
+#: src/library_panel.rs:993
+msgid "Continue in Your Browser"
+msgstr "Продолжите в браузере"
+
+#: src/library_panel.rs:994
+msgid ""
+"Your default browser has been opened. After signing in, paste the service’s "
+"session data into the import window. This Flatpak cannot read the browser’s "
+"saved sessions automatically."
+msgstr ""
+"Ваш браузер по умолчанию открыт. После входа вставьте данные сеанса сервиса "
+"в окно импорта. Этот Flatpak не может автоматически читать сохранённые "
+"сеансы браузера."
+
+#: src/library_panel.rs:997
+msgid "_Back to Import"
+msgstr "_Назад к импорту"
+
+#: src/library_panel.rs:998 src/library_panel.rs:1108 src/library_panel.rs:1168
+msgid "Manual Sign-In Instructions"
+msgstr "Инструкции для ручного входа"
+
+#: src/library_panel.rs:1007
+msgid "Sign In in Your Browser"
+msgstr "Войдите в браузере"
+
+#: src/library_panel.rs:1008
+msgid ""
+"Sign in in a normal browser window and open your music library. When you "
+"press Continue, the importer reads the browser’s saved cookies locally and "
+"uses only this music service’s session. Private windows are not supported. "
+"If you use several browser profiles, the saved session may come from a "
+"different profile; sign in using the browser’s default profile."
+msgstr ""
+"Войдите в обычном окне браузера и откройте музыкальную медиатеку. Когда вы "
+"нажмёте «Продолжить», импортёр локально прочитает сохранённые cookie "
+"браузера и использует только сеанс этого музыкального сервиса. Приватные "
+"окна не поддерживаются. Если вы используете несколько профилей браузера, "
+"сохранённый сеанс может быть из другого профиля; войдите, используя профиль "
+"браузера по умолчанию."
+
+#: src/library_panel.rs:1010 src/library_panel.rs:1200
+#: src/library_panel.rs:1294 src/library_panel.rs:1676
+#: src/library_panel.rs:2200 src/library_panel/account_jobs.rs:68
+#: src/library_panel/service_sign_in.rs:20
+#: src/library_panel/service_sign_in.rs:55
+msgid "_Cancel"
+msgstr "_Отмена"
+
+#: src/library_panel.rs:1011
+msgid "_Continue"
+msgstr "_Продолжить"
+
+#: src/library_panel.rs:1023
+msgid "Import Could Not Start"
+msgstr "Импорт не удалось начать"
+
+#: src/library_panel.rs:1035 src/library_panel.rs:2055
+#: src/library_panel.rs:2078 src/library_panel.rs:2172
+#: src/library_panel.rs:2480
+msgid "Wait for the current transfer to finish"
+msgstr "Дождитесь завершения текущей передачи"
+
+#: src/library_panel.rs:1042
+msgid "Music Service"
+msgstr "Музыкальный сервис"
+
+#: src/library_panel.rs:1046
+msgid "Session Cookie or Access Token"
+msgstr "Cookie сеанса или токен доступа"
+
+#: src/library_panel.rs:1049 src/window/tests.rs:742
+msgid "VK Profile ID to Import"
+msgstr "ID профиля VK для импорта"
+
+#: src/library_panel.rs:1053
+msgid "Open Service App…"
+msgstr "Открыть приложение сервиса…"
+
+#: src/library_panel.rs:1055 src/window/tests.rs:720
+msgid "Sign In with Default Browser…"
+msgstr "Войти через браузер по умолчанию…"
+
+#: src/library_panel.rs:1060
+msgid ""
+"Opens the installed service app, or your browser if it is unavailable. This "
+"does not grant Hopea access to the account."
+msgstr ""
+"Открывает установленное приложение сервиса или ваш браузер, если оно "
+"недоступно. Это не даёт Hopea доступ к аккаунту."
+
+#: src/library_panel.rs:1103
+msgid "Browser Sign-In Unavailable"
+msgstr "Вход через браузер недоступен"
+
+#: src/library_panel.rs:1120
+msgid "Download and Share Available Audio"
+msgstr "Скачивать и делиться доступным аудио"
+
+#: src/library_panel.rs:1121
+msgid ""
+"Files are checked before sharing. Songs without audio are looked for on the "
+"network."
+msgstr "Файлы проверяются перед обменом. Песни без аудио ищутся в сети."
+
+#: src/library_panel.rs:1125 src/window/tests.rs:726
+msgid "Import Cover Art"
+msgstr "Импортировать обложки"
+
+#: src/library_panel.rs:1127
+msgid "Turn off to import audio without downloading or updating cover images."
+msgstr ""
+"Отключите, чтобы импортировать аудио без скачивания или обновления "
+"изображений обложек."
+
+#: src/library_panel.rs:1154
+msgid ""
+"Sign in with your browser, then enter the profile ID whose music you want to "
+"import. This can be your own profile or another profile whose audio you can "
+"access. Signing in keeps the ID you entered."
+msgstr ""
+"Войдите через браузер, затем введите ID профиля, музыку которого хотите "
+"импортировать. Это может быть ваш профиль или другой профиль, к аудио "
+"которого у вас есть доступ. Вход сохраняет введённый ID."
+
+#: src/library_panel.rs:1155
+msgid ""
+"Sign in with your browser and confirm the displayed device code, or enter a "
+"Yandex Music OAuth token. The importer reads liked songs, playlists and "
+"saved albums. Audio availability depends on your account."
+msgstr ""
+"Войдите через браузер и подтвердите отображаемый код устройства или введите "
+"OAuth-токен Яндекс Музыки. Импортёр читает понравившиеся песни, плейлисты и "
+"сохранённые альбомы. Доступность аудио зависит от вашего аккаунта."
+
+#: src/library_panel.rs:1156
+msgid ""
+"Sign in with your browser using your Spotify application’s public Client ID, "
+"or enter an OAuth access token with user-library-read, playlist-read-"
+"private, playlist-read-collaborative and streaming permissions. Direct audio "
+"import uses librespot and requires Premium; some accounts are incompatible "
+"with Spotify's current audio access. Turn off audio download to import song "
+"names only."
+msgstr ""
+"Войдите через браузер, используя публичный Client ID вашего приложения "
+"Spotify, или введите OAuth-токен доступа с разрешениями user-library-read, "
+"playlist-read-private, playlist-read-collaborative и streaming. Прямой "
+"импорт аудио использует librespot и требует Premium; некоторые аккаунты "
+"несовместимы с текущим доступом к аудио Spotify. Отключите скачивание аудио, "
+"чтобы импортировать только названия песен."
+
+#: src/library_panel.rs:1157
+msgid ""
+"Sign in with your browser, or paste the JSON session headers used by "
+"ytmusicapi. The importer reads library songs, likes, playlists and albums."
+msgstr ""
+"Войдите через браузер или вставьте JSON-заголовки сеанса, используемые "
+"ytmusicapi. Импортёр читает песни медиатеки, отметки «Нравится», плейлисты и "
+"альбомы."
+
+#: src/library_panel.rs:1193
+msgid "Import Your Online Library"
+msgstr "Импортируйте свою онлайн-медиатеку"
+
+#: src/library_panel.rs:1194
+msgid ""
+"Sign-in data is used for this import only and is not saved. Already imported "
+"files are reused when you run it again."
+msgstr ""
+"Данные входа используются только для этого импорта и не сохраняются. Уже "
+"импортированные файлы повторно используются при повторном запуске."
+
+#: src/library_panel.rs:1199
+msgid ""
+"Account import is not available in this experimental Android build. You can "
+"open the service app here, or add audio files using Share Songs."
+msgstr ""
+"Импорт аккаунта недоступен в этой экспериментальной сборке для Android. Вы "
+"можете открыть приложение сервиса здесь или добавить аудиофайлы с помощью "
+"«Поделиться песнями»."
+
+#: src/library_panel.rs:1361
+msgid "Join the Network at Startup"
+msgstr "Подключаться к сети при запуске"
+
+#: src/library_panel.rs:1363
+msgid "Off at first on phones and tablets, to save battery and mobile data"
+msgstr ""
+"Изначально выключено на телефонах и планшетах для экономии батареи и "
+"мобильного трафика"
+
+#: src/library_panel.rs:1371
+msgid "Share Only Through a VPN"
+msgstr "Обмениваться только через VPN"
+
+#: src/library_panel.rs:1373
+msgid ""
+"Join the network only while a VPN is on, and leave it as soon as the VPN "
+"goes off"
+msgstr ""
+"Подключаться к сети только пока включён VPN и покидать её, как только VPN "
+"выключается"
+
+#: src/library_panel.rs:1382
+msgid "Your Connection"
+msgstr "Ваше подключение"
+
+#: src/library_panel.rs:1402
+msgid "Through a VPN"
+msgstr "Через VPN"
+
+#: src/library_panel.rs:1404
+msgid "Connection Is Not Fully Protected"
+msgstr "Подключение не полностью защищено"
+
+#: src/library_panel.rs:1414
+msgid "Privacy"
+msgstr "Конфиденциальность"
+
+#: src/library_panel.rs:1416
+msgid ""
+"Others on the network see the address you share from. A VPN shows them its "
+"address instead."
+msgstr ""
+"Другие в сети видят адрес, с которого вы делитесь. VPN показывает вместо "
+"него свой адрес."
+
+#: src/library_panel.rs:1423
+msgid "Bring Your Music Over…"
+msgstr "Перенесите свою музыку…"
+
+#: src/library_panel.rs:1434
+msgid "Your Music Elsewhere"
+msgstr "Ваша музыка в других сервисах"
+
+#: src/library_panel.rs:1436
+msgid "From Spotify, YouTube Music, Yandex Music, VK Music and other services"
+msgstr "Из Spotify, YouTube Music, Яндекс Музыки, VK Музыки и других сервисов"
+
+#: src/library_panel.rs:1441
+msgid "Clear Cache…"
+msgstr "Очистить кэш…"
+
+#: src/library_panel.rs:1463
+msgid "Storage"
+msgstr "Хранилище"
+
+#: src/library_panel.rs:1475
+msgid "Limit Downloading"
+msgstr "Ограничить скачивание"
+
+#: src/library_panel.rs:1478
+msgid "Downloading, KiB/s"
+msgstr "Скачивание, КиБ/с"
+
+#: src/library_panel.rs:1480
+msgid "Limit Sharing"
+msgstr "Ограничить раздачу"
+
+#: src/library_panel.rs:1483
+msgid "Sharing, KiB/s"
+msgstr "Раздача, КиБ/с"
+
+#: src/library_panel.rs:1533
+msgid "Speed Limits"
+msgstr "Ограничения скорости"
+
+#. Translators: `{times}` is replaced by a number
+#: src/library_panel.rs:1536
+#, rust-format
+msgid ""
+"Sharing can be limited to at most {times} times slower than downloading, so "
+"that everyone gets music about as fast as they share it."
+msgstr ""
+"Раздачу можно ограничить не более чем в {times} раз медленнее скачивания, "
+"чтобы все получали музыку примерно так же быстро, как делятся ею."
+
+#: src/library_panel.rs:1545
+msgid "Game Mode"
+msgstr "Игровой режим"
+
+#: src/library_panel.rs:1554
+msgid "Allow Game Detection…"
+msgstr "Разрешить обнаружение игр…"
+
+#: src/library_panel.rs:1555
+msgid ""
+"Open Android Usage Access settings. App activity stays on this device and is "
+"not saved or shared."
+msgstr ""
+"Открыть настройки доступа к истории использования Android. Данные остаются "
+"на устройстве, не сохраняются и не передаются."
+
+#: src/library_panel.rs:1563
+msgid "Unable to open Usage Access settings"
+msgstr "Не удалось открыть настройки доступа к истории использования"
+
+#: src/library_panel.rs:1608
+msgid "Shared Music Settings"
+msgstr "Настройки общей музыки"
+
+#: src/library_panel.rs:1661
+msgid "Settings saved"
+msgstr "Настройки сохранены"
+
+#: src/library_panel.rs:1669
+msgid "Leave the Network?"
+msgstr "Покинуть сеть?"
+
+#: src/library_panel.rs:1671
+msgid ""
+"The songs you share will no longer be available to others, and you won’t be "
+"able to search theirs. Everything stays on this computer for when you join "
+"again."
+msgstr ""
+"Песни, которыми вы делитесь, больше не будут доступны другим, и вы не "
+"сможете искать их. Всё останется на этом компьютере на случай повторного "
+"подключения."
+
+#: src/library_panel.rs:1677
+msgid "_Leave"
+msgstr "_Покинуть"
+
+#: src/library_panel.rs:1733
+msgid "Start Searching"
+msgstr "Начать поиск"
+
+#: src/library_panel.rs:1735
+msgid "Start a search to discover songs, albums and artists."
+msgstr "Начните поиск, чтобы находить песни, альбомы и исполнителей."
+
+#: src/library_panel.rs:1796
+msgid "The Network Couldn’t Be Searched"
+msgstr "Не удалось выполнить поиск по сети"
+
+#: src/library_panel.rs:1836
+msgid "Search Everyone’s Music"
+msgstr "Искать музыку всех"
+
+#: src/library_panel.rs:1838
+msgid ""
+"Find new songs and albums. Music already on this computer is hidden from "
+"search."
+msgstr ""
+"Находите новые песни и альбомы. Музыка, уже имеющаяся на этом компьютере, "
+"скрыта из поиска."
+
+#: src/library_panel.rs:1843
+msgid "Nobody who is online right now has songs matching all of these words"
+msgstr "Сейчас ни у кого в сети нет песен, совпадающих со всеми этими словами"
+
+#: src/library_panel.rs:1879
+msgid "shared by you"
+msgstr "опубликовано вами"
+
+#. Translators: `{name}` is replaced by the name a person chose
+#. followed by a short code identifying them
+#: src/library_panel.rs:1884
+#, rust-format
+msgid "shared by {name}"
+msgstr "опубликовано {name}"
+
+#: src/library_panel.rs:1892
+#, rust-format
+msgid "on {} computer"
+msgid_plural "on {} computers"
+msgstr[0] "на {} компьютере"
+msgstr[1] "на {} компьютерах"
+msgstr[2] "на {} компьютерах"
+
+#: src/library_panel.rs:1916
+msgid "Listen without adding to your playlist"
+msgstr "Слушать, не добавляя в список воспроизведения"
+
+#. Translators: `{title}` is replaced by the title of a song
+#: src/library_panel.rs:1989
+#, rust-format
+msgid "Added “{title}” to your library and the playlist"
+msgstr "«{title}» добавлена в вашу медиатеку и список воспроизведения"
+
+#: src/library_panel.rs:1999
+msgid "Supported audio files"
+msgstr "Поддерживаемые аудиофайлы"
+
+#: src/library_panel.rs:2007 src/library_panel.rs:2026
+msgid "_Share"
+msgstr "_Поделиться"
+
+#: src/library_panel.rs:2011
+msgid "Share Songs"
+msgstr "Поделиться песнями"
+
+#: src/library_panel.rs:2028
+msgid "Share a Music Folder"
+msgstr "Поделиться музыкальной папкой"
+
+#: src/library_panel.rs:2037
+#, rust-format
+msgid "Unable to read the folder: {}"
+msgstr "Не удалось прочитать папку: {}"
+
+#: src/library_panel.rs:2042
+msgid "There are no supported songs in this folder"
+msgstr "В этой папке нет поддерживаемых песен"
+
+#. Translators: `{title}` is replaced by the title of a song
+#: src/library_panel.rs:2099
+#, rust-format
+msgid "Sharing “{title}”"
+msgstr "Общий доступ к «{title}»"
+
+#. Translators: `{title}` is replaced by the title of a song
+#: src/library_panel.rs:2104
+#, rust-format
+msgid "You already share “{title}”"
+msgstr "Вы уже делитесь «{title}»"
+
+#: src/library_panel.rs:2118
+#, rust-format
+msgid "Sharing {} song"
+msgid_plural "Sharing {} songs"
+msgstr[0] "Общий доступ к {} песне"
+msgstr[1] "Общий доступ к {} песням"
+msgstr[2] "Общий доступ к {} песням"
+
+#: src/library_panel.rs:2125
+#, rust-format
+msgid "; {} was already shared"
+msgid_plural "; {} were already shared"
+msgstr[0] "; {} уже был в общем доступе"
+msgstr[1] "; {} уже были в общем доступе"
+msgstr[2] "; {} уже были в общем доступе"
+
+#: src/library_panel.rs:2133
+#, rust-format
+msgid "; {} was refused"
+msgid_plural "; {} were refused"
+msgstr[0] "; {} был отклонён"
+msgstr[1] "; {} были отклонены"
+msgstr[2] "; {} были отклонены"
+
+#: src/library_panel.rs:2154
+msgid "Connect to the VPN required by your sharing settings"
+msgstr "Подключитесь к VPN, требуемому настройками обмена"
+
+#: src/library_panel.rs:2165
+msgid "Unable to join Shared Music"
+msgstr "Не удалось подключиться к общей музыке"
+
+#: src/library_panel.rs:2190
+msgid "Add Cover Art?"
+msgstr "Добавить обложку?"
+
+#: src/library_panel.rs:2192
+#, fuzzy, rust-format
+msgid ""
+"Choose a picture for this song. Without one, it keeps its own picture, or "
+"the one in its folder."
+msgid_plural ""
+"Choose a picture for these {} songs. Without one, each keeps its own "
+"picture, or the one in its folder."
+msgstr[0] ""
+"Выберите изображение для этой песни. Без него она сохранит своё изображение "
+"или изображение из своей папки."
+msgstr[1] ""
+"Выберите изображение для этих {} песен. Без него каждая сохранит своё "
+"изображение или изображение из своей папки."
+msgstr[2] ""
+"Выберите изображение для этих {} песен. Без него каждая сохранит своё "
+"изображение или изображение из своей папки."
+
+#: src/library_panel.rs:2201
+msgid "Share _Without"
+msgstr "Поделиться _без обложки"
+
+#: src/library_panel.rs:2202
+msgid "_Choose Picture…"
+msgstr "_Выбрать изображение…"
+
+#: src/library_panel.rs:2211
+msgid "Pictures"
+msgstr "Изображения"
+
+#: src/library_panel.rs:2218
+msgid "_Use Picture"
+msgstr "_Использовать изображение"
+
+#: src/library_panel.rs:2222 src/library_panel/import_review.rs:36
+msgid "Choose Cover Art"
+msgstr "Выбрать обложку"
+
+#: src/library_panel.rs:2281
+#, rust-format
+msgid "Unable to read the file: {}"
+msgstr "Не удалось прочитать файл: {}"
+
+#. Translators: `{n}` and `{total}` are numbers, `{name}` a file name
+#: src/library_panel.rs:2295
+#, rust-format
+msgid "Sharing {n} of {total}: “{name}”…"
+msgstr "Общий доступ {n} из {total}: «{name}»…"
+
+#. Translators: `{name}` is replaced by a file name
+#: src/library_panel.rs:2304
+#, rust-format
+msgid "Checking and sharing “{name}”…"
+msgstr "Проверка и общий доступ к «{name}»…"
+
+#: src/library_panel.rs:2412
+#, rust-format
+msgid "{} song"
+msgid_plural "{} songs"
+msgstr[0] "{} песня"
+msgstr[1] "{} песни"
+msgstr[2] "{} песен"
+
+#: src/library_panel.rs:2418 src/window.rs:2854
 #, rust-format
 msgid "{} minute"
 msgid_plural "{} minutes"
@@ -476,7 +2710,1359 @@ msgstr[0] "{} минута"
 msgstr[1] "{} минуты"
 msgstr[2] "{} минут"
 
-#: src/window.rs:1352
+#: src/library_panel.rs:2485
+msgid "_Save Here"
+msgstr "_Сохранить здесь"
+
+#: src/library_panel.rs:2487
+msgid "Download the Album To"
+msgstr "Скачать альбом в"
+
+#: src/library_panel.rs:2503
+#, rust-format
+msgid "Unable to create the folder: {}"
+msgstr "Не удалось создать папку: {}"
+
+#. Translators: `{album}` is replaced by the title of an album
+#: src/library_panel.rs:2514
+#, rust-format
+msgid "Downloading “{album}”…"
+msgstr "Скачивание «{album}»…"
+
+#. Translators: `{n}` and `{total}` are numbers, `{title}` a song
+#: src/library_panel.rs:2533
+#, rust-format
+msgid "Downloading {n} of {total}: “{title}”…"
+msgstr "Скачивание {n} из {total}: «{title}»…"
+
+#: src/library_panel.rs:2613
+#, rust-format
+msgid "Saved {} song to the album folder"
+msgid_plural "Saved {} songs to the album folder"
+msgstr[0] "Сохранена {} песня в папку альбома"
+msgstr[1] "Сохранено {} песни в папку альбома"
+msgstr[2] "Сохранено {} песен в папку альбома"
+
+#: src/library_panel.rs:2631
+msgid "The picture is too large"
+msgstr "Изображение слишком большое"
+
+#: src/library_panel.rs:2715
+#, rust-format
+msgid "VPN connected through {names}. Hopea uses IPv4 for sharing."
+msgstr "VPN подключён через {names}. Hopea использует IPv4 для обмена."
+
+#: src/library_panel.rs:2719
+#, rust-format
+msgid ""
+"VPN connected through {names}. With VPN-only sharing enabled, Hopea uses "
+"IPv4 and disables IPv6 for sharing."
+msgstr ""
+"VPN подключён через {names}. При включённом обмене только через VPN Hopea "
+"использует IPv4 и отключает IPv6 для обмена."
+
+#. Translators: `{names}` is replaced by network interfaces or tools, such as "wg0"
+#: src/library_panel.rs:2726
+#, rust-format
+msgid "Through {names}: others see the VPN’s address, not yours"
+msgstr "Через {names}: другие видят адрес VPN, а не ваш"
+
+#: src/library_panel.rs:2730
+msgid "Not connected to the internet"
+msgstr "Нет подключения к интернету"
+
+#: src/library_panel.rs:2734
+#, rust-format
+msgid ""
+"VPN is active through {names}, but {families} bypasses it. Enable protection "
+"for {families} in your VPN’s TUN settings. Sharing stays paused while “Share "
+"Only Through a VPN” is enabled."
+msgstr ""
+"VPN активен через {names}, но {families} обходит его. Включите защиту для "
+"{families} в настройках TUN вашего VPN. Обмен приостановлен, пока включено "
+"«Обмениваться только через VPN»."
+
+#: src/library_panel.rs:2741
+msgid ""
+"Tor is on, but this app’s traffic doesn’t go through it, and can’t: "
+"BitTorrent needs UDP, which Tor doesn’t carry, and the Tor Project asks "
+"people not to share files over Tor. Use a VPN instead."
+msgstr ""
+"Tor включён, но трафик этого приложения не идёт через него и не может: "
+"BitTorrent требует UDP, который Tor не передаёт, а проект Tor просит не "
+"делиться файлами через Tor. Используйте VPN."
+
+#. Translators: `{tools}` is replaced by program names, such as "Clash"
+#: src/library_panel.rs:2748
+#, rust-format
+msgid ""
+"{tools} is on, but this app’s traffic doesn’t go through it: others see your "
+"address. Turn on its TUN mode (in Clash, “TUN Mode”; in v2rayN, sing-box, "
+"NekoBox or Hiddify, “TUN” or “VPN mode”) so that it carries all traffic, or "
+"use a VPN."
+msgstr ""
+"{tools} включён, но трафик этого приложения не идёт через него: другие видят "
+"ваш адрес. Включите его режим TUN (в Clash — «TUN Mode»; в v2rayN, sing-box, "
+"NekoBox или Hiddify — «TUN» или «VPN mode»), чтобы он пропускал весь трафик, "
+"или используйте VPN."
+
+#: src/library_panel.rs:2755
+msgid ""
+"A proxy is set, but this app’s traffic doesn’t go through proxies: others "
+"see your address. Use a VPN, or a proxy app’s TUN mode."
+msgstr ""
+"Прокси настроен, но трафик этого приложения не идёт через прокси: другие "
+"видят ваш адрес. Используйте VPN или режим TUN прокси-приложения."
+
+#: src/library_panel.rs:2758
+msgid "No VPN is on: others see your address"
+msgstr "VPN не включён: другие видят ваш адрес"
+
+#: src/library_panel.rs:2772
+msgid ""
+"This computer can’t reach the BitTorrent network (DHT), which is how it "
+"finds others. Something blocks UDP traffic: a firewall, a VPN, or the "
+"network itself (as in some offices, schools and hotels). Try another "
+"network, or allow UDP for the app. Right after the app starts this can also "
+"take a minute."
+msgstr ""
+"Этот компьютер не может связаться с сетью BitTorrent (DHT), через которую "
+"находит других. Что-то блокирует UDP-трафик: брандмауэр, VPN или сама сеть "
+"(как в некоторых офисах, школах и отелях). Попробуйте другую сеть или "
+"разрешите UDP для приложения. Сразу после запуска приложения это также может "
+"занять минуту."
+
+#: src/library_panel.rs:2779
+#, rust-format
+msgid ""
+"{} potential source was found but didn’t answer in time. Its connection may "
+"be slow or busy: try again in a moment."
+msgid_plural ""
+"{} potential sources were found but none answered in time. Their connections "
+"may be slow or busy: try again in a moment."
+msgstr[0] ""
+"Найден {} потенциальный источник, но он не ответил вовремя. Его соединение "
+"может быть медленным или занятым: повторите попытку через мгновение."
+msgstr[1] ""
+"Найдено {} потенциальных источника, но ни один не ответил вовремя. Их "
+"соединения могут быть медленными или занятыми: повторите попытку через "
+"мгновение."
+msgstr[2] ""
+"Найдено {} потенциальных источников, но ни один не ответил вовремя. Их "
+"соединения могут быть медленными или занятыми: повторите попытку через "
+"мгновение."
+
+#: src/library_panel.rs:2785
+#, rust-format
+msgid ""
+"{} potential source sent an answer this version can’t read. One of you may "
+"need to update the app."
+msgid_plural ""
+"{} potential sources sent answers this version can’t read. Some of you may "
+"need to update the app."
+msgstr[0] ""
+"{} потенциальный источник отправил ответ, который эта версия не может "
+"прочитать. Возможно, одному из вас нужно обновить приложение."
+msgstr[1] ""
+"{} потенциальных источника отправили ответы, которые эта версия не может "
+"прочитать. Возможно, некоторым из вас нужно обновить приложение."
+msgstr[2] ""
+"{} потенциальных источников отправили ответы, которые эта версия не может "
+"прочитать. Возможно, некоторым из вас нужно обновить приложение."
+
+#: src/library_panel.rs:2791
+#, rust-format
+msgid ""
+"{} potential source couldn’t be reached. Check that both apps are sharing "
+"and the local network allows devices to connect. Across the internet, a "
+"reachable source or relay is needed."
+msgid_plural ""
+"{} potential sources couldn’t be reached. Check that both apps are sharing "
+"and the local network allows devices to connect. Across the internet, a "
+"reachable source or relay is needed."
+msgstr[0] ""
+"К {} потенциальному источнику не удалось подключиться. Проверьте, что оба "
+"приложения делятся музыкой и локальная сеть разрешает устройствам "
+"подключаться. Через интернет нужен доступный источник или реле."
+msgstr[1] ""
+"К {} потенциальным источникам не удалось подключиться. Проверьте, что оба "
+"приложения делятся музыкой и локальная сеть разрешает устройствам "
+"подключаться. Через интернет нужен доступный источник или реле."
+msgstr[2] ""
+"К {} потенциальным источникам не удалось подключиться. Проверьте, что оба "
+"приложения делятся музыкой и локальная сеть разрешает устройствам "
+"подключаться. Через интернет нужен доступный источник или реле."
+
+#: src/library_panel.rs:2800
+msgid ""
+"The search took too long and nobody answered in time. Your connection may be "
+"slow: try again."
+msgstr ""
+"Поиск занял слишком много времени, и никто не ответил вовремя. Ваше "
+"подключение может быть медленным: повторите попытку."
+
+#: src/library_panel.rs:2883
+msgid "nobody who has it sent it in time"
+msgstr "никто из имеющих её не отправил вовремя"
+
+#: src/library_panel.rs:3009
+msgid "Remove From Favorites"
+msgstr "Удалить из избранного"
+
+#: src/library_panel.rs:3012
+msgid "Add to Favorites"
+msgstr "Добавить в избранное"
+
+#: src/library_panel.rs:3024
+#, rust-format
+msgid "This type of file is not accepted. Accepted types: {}"
+msgstr "Этот тип файла не принимается. Принимаемые типы: {}"
+
+#: src/library_panel.rs:3031
+#, rust-format
+msgid "The file is larger than the {} MiB limit"
+msgstr "Файл больше ограничения в {} МиБ"
+
+#: src/library_panel.rs:3056
+#, rust-format
+msgid "The file name does not match its contents, which are {}"
+msgstr "Имя файла не соответствует его содержимому: {}"
+
+#: src/library_panel.rs:3060
+#, rust-format
+msgid "This is not an audio file; it looks like {}"
+msgstr "Это не аудиофайл; похоже на {}"
+
+#: src/library_panel.rs:3061
+msgid "This is not an audio file"
+msgstr "Это не аудиофайл"
+
+#: src/library_panel.rs:3069
+msgid "Availability Unconfirmed"
+msgstr "Доступность не подтверждена"
+
+#: src/library_panel.rs:3069
+msgid ""
+"Hopea is running, but other nodes have not confirmed that they can reach "
+"your shares yet. This can take time when few listeners are online."
+msgstr ""
+"Hopea запущена, но другие узлы ещё не подтвердили, что могут достучаться до "
+"ваших общих файлов. Это может занять время, когда в сети мало слушателей."
+
+#: src/library_panel.rs:3070
+msgid "Online · Direct Sharing"
+msgstr "В сети · Прямой обмен"
+
+#: src/library_panel.rs:3070
+msgid ""
+"Another node successfully reached this device over IPv4 during the last "
+"check. Your shares can be discovered directly. This does not guarantee a "
+"result for every search."
+msgstr ""
+"Другой узел успешно связался с этим устройством по IPv4 во время последней "
+"проверки. Ваши общие файлы можно найти напрямую. Это не гарантирует "
+"результат каждого поиска."
+
+#: src/library_panel.rs:3071
+msgid "Online · IPv6 Sharing"
+msgstr "В сети · Обмен по IPv6"
+
+#: src/library_panel.rs:3071
+msgid ""
+"Another node successfully reached this device over IPv6 during the last "
+"check. Listeners without IPv6 may need a relay to reach your shares."
+msgstr ""
+"Другой узел успешно связался с этим устройством по IPv6 во время последней "
+"проверки. Слушателям без IPv6 может понадобиться реле, чтобы достучаться до "
+"ваших общих файлов."
+
+#: src/library_panel.rs:3072
+msgid "Online · Sharing Through a Relay"
+msgstr "В сети · Обмен через реле"
+
+#: src/library_panel.rs:3072
+msgid ""
+"Another Hopea node forwards searches and music for this device. Availability "
+"depends on that relay staying connected."
+msgstr ""
+"Другой узел Hopea пересылает поисковые запросы и музыку для этого "
+"устройства. Доступность зависит от того, останется ли это реле подключённым."
+
+#: src/library_panel.rs:3073
+msgid "Your Shares Are Unreachable"
+msgstr "Ваши общие файлы недоступны"
+
+#: src/library_panel.rs:3073
+msgid ""
+"Other nodes could not reach this device, and no relay connection is active. "
+"You can still search reachable sources. A router, provider NAT, VPN or "
+"firewall may prevent incoming connections. Hopea has no permanently "
+"available public relay."
+msgstr ""
+"Другие узлы не смогли связаться с этим устройством, и активное подключение "
+"через реле отсутствует. Вы всё ещё можете искать доступные источники. "
+"Роутер, NAT провайдера, VPN или брандмауэр могут блокировать входящие "
+"подключения. У Hopea нет постоянно доступного публичного реле."
+
+#: src/library_panel.rs:3074
+msgid "Network Status Unavailable"
+msgstr "Состояние сети недоступно"
+
+#: src/library_panel.rs:3074
+msgid ""
+"Hopea could not read the local node’s status. It will retry automatically "
+"while this panel is open."
+msgstr ""
+"Hopea не удалось прочитать состояние локального узла. Она повторит попытку "
+"автоматически, пока эта панель открыта."
+
+#: src/library_panel.rs:3192
+msgid ""
+"To improve the connection:\n"
+"\n"
+"• Make sure both devices have joined Hopea and the owner is sharing the "
+"song. Keep Hopea open and allow time for discovery.\n"
+"\n"
+"• If you require a VPN, check that it is connected. For incoming "
+"connections, the VPN must support port forwarding; an ordinary VPN may not.\n"
+"\n"
+"• On a network you manage, allow Hopea through the firewall. If you have two "
+"routers, incoming connections must pass through both. Ask your provider "
+"whether you have a public IP address.\n"
+"\n"
+"• If incoming connections are unavailable, a reachable Hopea relay is "
+"needed. Hopea looks for one automatically, but does not include an always-on "
+"public relay. You can also try another network.\n"
+"\n"
+"Do not disable your firewall, put the device in a router’s DMZ, or expose "
+"the local player API. No change to your router settings is required just to "
+"search reachable sources."
+msgstr ""
+"Чтобы улучшить подключение:\n"
+"\n"
+"• Убедитесь, что оба устройства подключены к Hopea и владелец делится "
+"песней. Держите Hopea открытой и дайте время на обнаружение.\n"
+"\n"
+"• Если вам нужен VPN, проверьте, что он подключён. Для входящих подключений "
+"VPN должен поддерживать перенаправление портов; обычный VPN может не "
+"поддерживать.\n"
+"\n"
+"• В управляемой вами сети разрешите Hopea в брандмауэре. Если у вас два "
+"роутера, входящие подключения должны пройти через оба. Спросите провайдера, "
+"есть ли у вас публичный IP-адрес.\n"
+"\n"
+"• Если входящие подключения недоступны, нужно доступное реле Hopea. Hopea "
+"ищет его автоматически, но не включает постоянно работающее публичное реле. "
+"Вы также можете попробовать другую сеть.\n"
+"\n"
+"Не отключайте брандмауэр, не помещайте устройство в DMZ роутера и не "
+"открывайте локальный API плеера. Для поиска доступных источников не "
+"требуется менять настройки роутера."
+
+#: src/library_panel/account_jobs.rs:64
+msgid "Music Import"
+msgstr "Импорт музыки"
+
+#: src/library_panel/account_jobs.rs:119 src/library_panel/account_jobs.rs:485
+msgid "Import will resume after the game ends"
+msgstr "Импорт продолжится после завершения игры"
+
+#: src/library_panel/account_jobs.rs:129
+msgid "About a minute remaining"
+msgstr "Осталось около минуты"
+
+#: src/library_panel/account_jobs.rs:131
+#, rust-format
+msgid "About {} min remaining"
+msgstr "Осталось около {} мин"
+
+#: src/library_panel/account_jobs.rs:135
+#, rust-format
+msgid "About {} h {} min remaining"
+msgstr "Осталось около {} ч {} мин"
+
+#: src/library_panel/account_jobs.rs:141
+msgid "Estimating remaining time…"
+msgstr "Оценка оставшегося времени…"
+
+#: src/library_panel/account_jobs.rs:153
+#, rust-format
+msgid "Shared {} · Skipped {} · Covers {} · Names only {}"
+msgstr "Общий доступ: {} · Пропущено: {} · Обложки: {} · Только названия: {}"
+
+#: src/library_panel/account_jobs.rs:161
+#, rust-format
+msgid "Failed {}"
+msgstr "Ошибок: {}"
+
+#: src/library_panel/account_jobs.rs:168
+msgid "_Stop Import"
+msgstr "_Остановить импорт"
+
+#: src/library_panel/account_jobs.rs:192
+msgid "Import cancelled. Completed songs were kept."
+msgstr "Импорт отменён. Завершённые песни сохранены."
+
+#: src/library_panel/account_jobs.rs:238
+msgid "No import has been started"
+msgstr "Импорт не начинался"
+
+#: src/library_panel/account_jobs.rs:256
+msgid "Reading your library for selection…"
+msgstr "Чтение вашей медиатеки для выбора…"
+
+#: src/library_panel/account_jobs.rs:285
+msgid "Import Complete"
+msgstr "Импорт завершён"
+
+#: src/library_panel/account_jobs.rs:356
+msgid "The service returned too many import warnings"
+msgstr "Сервис вернул слишком много предупреждений импорта"
+
+#: src/library_panel/account_jobs.rs:365
+msgid "The service could not finish reading the library"
+msgstr "Сервис не смог завершить чтение медиатеки"
+
+#: src/library_panel/account_jobs.rs:384
+msgid "Import cancelled. No selected songs were imported."
+msgstr "Импорт отменён. Ни одна выбранная песня не импортирована."
+
+#: src/library_panel/account_jobs.rs:388
+msgid "Starting background import…"
+msgstr "Запуск фонового импорта…"
+
+#: src/library_panel/account_jobs.rs:390
+msgid "Import started. Use Import Progress to check it."
+msgstr "Импорт начат. Используйте «Ход импорта», чтобы проверить его."
+
+#: src/library_panel/account_jobs.rs:395
+msgid ""
+"Audio import needs the sharing network. Connect to the VPN required by your "
+"settings, or import song names only."
+msgstr ""
+"Для импорта аудио нужна сеть обмена. Подключитесь к VPN, требуемому "
+"настройками, или импортируйте только названия песен."
+
+#: src/library_panel/account_jobs.rs:407
+msgid "Unable to connect to the sharing network. No audio files were imported."
+msgstr "Не удалось подключиться к сети обмена. Аудиофайлы не импортированы."
+
+#. Check ownership before downloading anything. A stale history entry
+#. must not cause an audio download in the cover-update phase.
+#: src/library_panel/account_jobs.rs:413
+msgid "Saving selected albums…"
+msgstr "Сохранение выбранных альбомов…"
+
+#: src/library_panel/account_jobs.rs:421
+msgid "Checking existing songs before updating covers…"
+msgstr "Проверка существующих песен перед обновлением обложек…"
+
+#: src/library_panel/account_jobs.rs:447
+msgid "Unable to check previously imported audio; retry when connected."
+msgstr ""
+"Не удалось проверить ранее импортированное аудио; повторите при подключении."
+
+#: src/library_panel/account_jobs.rs:483
+msgid "Paused while gaming"
+msgstr "Приостановлено на время игры"
+
+#: src/library_panel/account_jobs.rs:494
+msgid "Importing without cover art"
+msgstr "Импорт без обложек"
+
+#: src/library_panel/account_jobs.rs:496
+msgid "Updating existing cover art"
+msgstr "Обновление существующих обложек"
+
+#: src/library_panel/account_jobs.rs:498
+msgid "Downloading music and cover art"
+msgstr "Скачивание музыки и обложек"
+
+#: src/library_panel/account_jobs.rs:520
+msgid "Connect to use the existing version"
+msgstr "Подключитесь, чтобы использовать существующую версию"
+
+#: src/library_panel/account_jobs.rs:524
+msgid "The existing audio is unavailable"
+msgstr "Существующее аудио недоступно"
+
+#: src/library_panel/account_jobs.rs:526
+msgid "The existing track is no longer available; select another version"
+msgstr "Существующий трек больше недоступен; выберите другую версию"
+
+#: src/library_panel/account_jobs.rs:530
+msgid ""
+"The existing audio has changed or is unavailable; select another version"
+msgstr "Существующее аудио изменилось или недоступно; выберите другую версию"
+
+#: src/library_panel/account_jobs.rs:569
+msgid "The importer stopped while reading cover art"
+msgstr "Импортёр остановился при чтении обложки"
+
+#: src/library_panel/account_jobs.rs:578
+#, rust-format
+msgid "Cover art: {}"
+msgstr "Обложка: {}"
+
+#: src/library_panel/account_jobs.rs:659
+msgid "The importer stopped while downloading a song"
+msgstr "Импортёр остановился при скачивании песни"
+
+#: src/library_panel/account_jobs.rs:666
+#: src/library_panel/import_preview.rs:217
+msgid "The importer returned an unexpected file"
+msgstr "Импортёр вернул неожиданный файл"
+
+#: src/library_panel/account_jobs.rs:768
+#, rust-format
+msgid "Audio unavailable: {}"
+msgstr "Аудио недоступно: {}"
+
+#: src/library_panel/account_jobs.rs:819
+#, rust-format
+msgid "Both versions were kept: {}"
+msgstr "Обе версии сохранены: {}"
+
+#: src/library_panel/account_jobs.rs:836
+#, rust-format
+msgid ""
+"Shared {} audio files; skipped {}; covers updated {}; names only {}; failed "
+"{}; cover errors {}; no cover supplied by service {}. Names without audio "
+"cannot be shared yet."
+msgstr ""
+"Общий доступ к {} аудиофайлам; пропущено {}; обложки обновлены {}; только "
+"названия {}; ошибок {}; ошибок обложек {}; сервис не предоставил обложку {}. "
+"Названия без аудио пока нельзя сделать общими."
+
+#: src/library_panel/account_jobs.rs:841
+#, rust-format
+msgid "{} albums saved in My Albums"
+msgstr "{} альбомов сохранено в «Моих альбомах»"
+
+#: src/library_panel/account_jobs.rs:1071
+#: src/library_panel/account_jobs.rs:1158
+#: src/library_panel/account_jobs.rs:1166
+#: src/library_panel/account_jobs.rs:1183
+#: src/library_panel/account_jobs.rs:1200
+#: src/library_panel/account_jobs.rs:1270
+#: src/library_panel/account_jobs.rs:1280
+#: src/library_panel/import_picker.rs:869
+#, rust-format
+msgid "{} of {} selected"
+msgstr "Выбрано {} из {}"
+
+#: src/library_panel/account_jobs.rs:1125
+msgid "Next"
+msgstr "Далее"
+
+#: src/library_panel/account_jobs.rs:1126
+msgid "Previous"
+msgstr "Назад"
+
+#: src/library_panel/import_picker.rs:186
+#: src/library_panel/import_picker.rs:197
+msgid "Choose Music to Import"
+msgstr "Выберите музыку для импорта"
+
+#: src/library_panel/import_picker.rs:224
+msgid "Albums and Playlists"
+msgstr "Альбомы и плейлисты"
+
+#: src/library_panel/import_picker.rs:229
+msgid ""
+"Open an album to view its tracks. Use its checkbox to select or deselect all "
+"songs."
+msgstr ""
+"Откройте альбом, чтобы увидеть его треки. Используйте его флажок, чтобы "
+"выбрать или снять выбор всех песен."
+
+#: src/library_panel/import_picker.rs:234
+msgid ""
+"Select albums separately. Open an album to browse and listen to its songs."
+msgstr ""
+"Выбирайте альбомы по отдельности. Откройте альбом, чтобы просмотреть и "
+"прослушать его песни."
+
+#: src/library_panel/import_picker.rs:248
+msgid "Search songs, artists or albums"
+msgstr "Искать песни, исполнителей или альбомы"
+
+#: src/library_panel/import_picker.rs:255
+#: src/library_panel/import_picker.rs:260
+#: src/library_panel/import_picker.rs:837
+msgid "Other Songs"
+msgstr "Другие песни"
+
+#: src/library_panel/import_picker.rs:256
+msgid "Return to songs outside albums and playlists"
+msgstr "Вернуться к песням вне альбомов и плейлистов"
+
+#: src/library_panel/import_picker.rs:271
+msgid "Hide Duplicates"
+msgstr "Скрыть дубликаты"
+
+#: src/library_panel/import_picker.rs:273
+msgid "Hide possible duplicates in this list without changing your selection"
+msgstr "Скрыть возможные дубликаты в этом списке, не меняя ваш выбор"
+
+#: src/library_panel/import_picker.rs:285
+#: src/library_panel/import_picker.rs:857
+msgid "Select all tracks"
+msgstr "Выбрать все треки"
+
+#: src/library_panel/import_picker.rs:314
+msgid "Stop Preview"
+msgstr "Остановить предпросмотр"
+
+#: src/library_panel/import_picker.rs:350
+msgid "Import Selected"
+msgstr "Импортировать выбранное"
+
+#: src/library_panel/import_picker.rs:362
+msgid "Cover downloads are off"
+msgstr "Скачивание обложек отключено"
+
+#: src/library_panel/import_picker.rs:658
+#, rust-format
+msgid "Conflict resolved: {}"
+msgstr "Конфликт решён: {}"
+
+#: src/library_panel/import_picker.rs:661
+#: src/library_panel/import_picker.rs:741
+msgid "Undo"
+msgstr "Отменить"
+
+#: src/library_panel/import_picker.rs:725
+msgid "Conflict resolved"
+msgstr "Конфликт решён"
+
+#: src/library_panel/import_picker.rs:795
+#, rust-format
+msgid "Compare Duplicates ({})"
+msgstr "Сравнить дубликаты ({})"
+
+#: src/library_panel/import_picker.rs:824
+msgid "All conflicts in this list are resolved. Your choices are saved."
+msgstr "Все конфликты в этом списке решены. Ваш выбор сохранён."
+
+#: src/library_panel/import_picker.rs:826
+msgid ""
+"No songs match this filter. Turn off Hide Duplicates to see possible matches."
+msgstr ""
+"Ни одна песня не соответствует этому фильтру. Отключите «Скрыть дубликаты», "
+"чтобы увидеть возможные совпадения."
+
+#: src/library_panel/import_picker.rs:829
+msgid ""
+"All songs are in albums or playlists. Open a collection above to choose its "
+"tracks."
+msgstr ""
+"Все песни находятся в альбомах или плейлистах. Откройте коллекцию выше, "
+"чтобы выбрать её треки."
+
+#: src/library_panel/import_picker.rs:831
+msgid "No matching songs"
+msgstr "Нет подходящих песен"
+
+#: src/library_panel/import_picker.rs:839
+#, rust-format
+msgid "Duplicates in {}"
+msgstr "Дубликаты в {}"
+
+#: src/library_panel/import_picker.rs:844
+msgid "Back to Songs"
+msgstr "Назад к песням"
+
+#: src/library_panel/import_picker.rs:846
+msgid "Back to Albums"
+msgstr "Назад к альбомам"
+
+#: src/library_panel/import_picker.rs:849
+msgid "Return to the previous list"
+msgstr "Вернуться к предыдущему списку"
+
+#: src/library_panel/import_picker.rs:855
+msgid "Import Entire Album"
+msgstr "Импортировать весь альбом"
+
+#: src/library_panel/import_picker.rs:859
+msgid "Select all matches"
+msgstr "Выбрать все совпадения"
+
+#: src/library_panel/import_picker.rs:909
+#, rust-format
+msgid "{} possible duplicates"
+msgstr "Возможных дубликатов: {}"
+
+#: src/library_panel/import_picker.rs:944
+#, rust-format
+msgid "Select all songs in {}"
+msgstr "Выбрать все песни в {}"
+
+#: src/library_panel/import_picker.rs:973
+#, rust-format
+msgid "All {} songs selected"
+msgstr "Выбраны все песни: {}"
+
+#: src/library_panel/import_picker.rs:988
+#, rust-format
+msgid "{} possible duplicates — review before importing"
+msgstr "Возможных дубликатов: {} — проверьте перед импортом"
+
+#: src/library_panel/import_picker.rs:991
+msgid ""
+"Some songs may already be in your library. Open the album to compare them, "
+"or check it to import the whole album."
+msgstr ""
+"Некоторые песни могут уже быть в вашей медиатеке. Откройте альбом, чтобы "
+"сравнить их, или установите флажок, чтобы импортировать весь альбом."
+
+#: src/library_panel/import_picker.rs:1077
+msgid "Possible duplicate — listen to both versions"
+msgstr "Возможный дубликат — прослушайте обе версии"
+
+#: src/library_panel/import_picker.rs:1095
+msgid "Keep Existing"
+msgstr "Оставить существующую"
+
+#: src/library_panel/import_picker.rs:1103
+msgid "Import This Version"
+msgstr "Импортировать эту версию"
+
+#: src/library_panel/import_picker.rs:1115
+msgid "In Your Library"
+msgstr "В вашей медиатеке"
+
+#: src/library_panel/import_picker.rs:1117
+msgid "Incoming Track"
+msgstr "Входящий трек"
+
+#: src/library_panel/import_picker.rs:1204
+#: src/library_panel/import_preview.rs:126 src/tray.rs:75 src/tray/linux.rs:254
+#: src/window.rs:971
+msgid "Play"
+msgstr "Воспроизвести"
+
+#: src/library_panel/import_picker.rs:1221
+msgid "Only an import record remains; audio is unavailable."
+msgstr "Осталась только запись импорта; аудио недоступно."
+
+#: src/library_panel/import_picker.rs:1239
+msgid "Keep Both"
+msgstr "Оставить обе"
+
+#: src/library_panel/import_picker.rs:1248
+msgid ""
+"Replacement happens after a successful import. The left audio file is kept "
+"on disk."
+msgstr ""
+"Замена происходит после успешного импорта. Левый аудиофайл остаётся на диске."
+
+#: src/library_panel/import_picker.rs:1287
+msgid "Previously imported"
+msgstr "Ранее импортировано"
+
+#: src/library_panel/import_picker.rs:1321
+msgid "Possible duplicate"
+msgstr "Возможный дубликат"
+
+#: src/library_panel/import_picker.rs:1331
+msgid "Listen to the existing copy"
+msgstr "Прослушать существующую копию"
+
+#: src/library_panel/import_picker.rs:1338
+msgid "Audio unavailable — the service did not provide a download"
+msgstr "Аудио недоступно — сервис не предоставил загрузку"
+
+#: src/library_panel/import_preview.rs:69
+msgid "Listen before importing"
+msgstr "Прослушать перед импортом"
+
+#: src/library_panel/import_preview.rs:83
+msgid ""
+"An incoming preview is still downloading. You can listen to the library copy "
+"while you wait."
+msgstr ""
+"Входящий предпросмотр всё ещё скачивается. Вы можете слушать копию из "
+"медиатеки, пока ждёте."
+
+#: src/library_panel/import_preview.rs:94
+msgid "Preparing…"
+msgstr "Подготовка…"
+
+#: src/library_panel/import_preview.rs:100
+msgid "Preparing preview… This file is not shared until you import it."
+msgstr ""
+"Подготовка предпросмотра… Этот файл не станет общим, пока вы его не "
+"импортируете."
+
+#: src/library_panel/import_preview.rs:138
+msgid "Open the player window to listen to this song"
+msgstr "Откройте окно плеера, чтобы прослушать эту песню"
+
+#: src/library_panel/import_preview.rs:189
+msgid "Connect to your library to listen to this copy"
+msgstr "Подключитесь к своей медиатеке, чтобы прослушать эту копию"
+
+#: src/library_panel/import_preview.rs:194
+msgid "Preview is unavailable for this song"
+msgstr "Предпросмотр для этой песни недоступен"
+
+#: src/library_panel/import_preview.rs:207
+msgid "The importer stopped before the preview was ready"
+msgstr "Импортёр остановился до готовности предпросмотра"
+
+#: src/library_panel/import_preview.rs:213
+msgid "The service did not provide audio for this song"
+msgstr "Сервис не предоставил аудио для этой песни"
+
+#: src/library_panel/import_preview.rs:426
+msgid "The service did not provide a cover"
+msgstr "Сервис не предоставил обложку"
+
+#: src/library_panel/import_review.rs:26
+msgid "Duplicates"
+msgstr "Дубликаты"
+
+#: src/library_panel/import_review.rs:46
+msgid ""
+"Identical audio was found after downloading. The existing library track was "
+"reused."
+msgstr ""
+"После скачивания найдено идентичное аудио. Существующий трек из медиатеки "
+"был повторно использован."
+
+#: src/library_panel/import_review.rs:96
+msgid "Keep Existing Cover"
+msgstr "Оставить существующую обложку"
+
+#: src/library_panel/import_review.rs:97
+msgid "Use New Cover"
+msgstr "Использовать новую обложку"
+
+#: src/library_panel/import_review.rs:109
+msgid "Existing cover kept"
+msgstr "Существующая обложка сохранена"
+
+#: src/library_panel/import_review.rs:152
+msgid "Cover updated; audio was kept"
+msgstr "Обложка обновлена; аудио сохранено"
+
+#: src/library_panel/import_warnings.rs:111
+msgid "Some music needs attention"
+msgstr "Некоторой музыке требуется внимание"
+
+#: src/library_panel/import_warnings.rs:120
+#, rust-format
+msgid "Warnings ({})"
+msgstr "Предупреждения ({})"
+
+#: src/library_panel/import_warnings.rs:141
+msgid ""
+"Available songs and complete albums are ready to import. Warnings are "
+"grouped by cause, then sorted by name."
+msgstr ""
+"Доступные песни и полные альбомы готовы к импорту. Предупреждения "
+"сгруппированы по причине, затем отсортированы по названию."
+
+#: src/library_panel/import_warnings.rs:150
+#, rust-format
+msgid "{} · {}"
+msgstr "{} · {}"
+
+#: src/library_panel/import_warnings.rs:189
+msgid "Show details"
+msgstr "Показать подробности"
+
+#: src/library_panel/import_warnings.rs:225
+#: src/library_panel/import_warnings.rs:235
+msgid "Import Warnings"
+msgstr "Предупреждения импорта"
+
+#: src/library_panel/search_results.rs:177
+msgid "No Songs Available Now"
+msgstr "Сейчас нет доступных треков"
+
+#: src/library_panel/search_results.rs:178
+msgid ""
+"Try another search. Songs already on this computer and songs with no "
+"reachable sources are hidden."
+msgstr ""
+"Попробуйте другой запрос. Уже имеющиеся треки и музыка без доступных "
+"источников скрыты."
+
+#: src/library_panel/service_sign_in.rs:17
+msgid "Spotify Sign-In"
+msgstr "Вход в Spotify"
+
+#: src/library_panel/service_sign_in.rs:18
+msgid ""
+"Enter the public Client ID of your Spotify developer application. Register "
+"http://127.0.0.1:43821/callback as its Redirect URI. Your account must be "
+"allowed to use that application. No Client Secret is needed."
+msgstr ""
+"Введите публичный Client ID вашего приложения Spotify для разработчиков. "
+"Зарегистрируйте http://127.0.0.1:43821/callback как Redirect URI. Ваш "
+"аккаунт должен иметь разрешение использовать это приложение. Client Secret "
+"не требуется."
+
+#: src/library_panel/service_sign_in.rs:21
+msgid "_Sign In"
+msgstr "_Войти"
+
+#: src/library_panel/service_sign_in.rs:49
+msgid "Signing In"
+msgstr "Вход"
+
+#: src/library_panel/service_sign_in.rs:50
+msgid "Connecting to the music service…"
+msgstr "Подключение к музыкальному сервису…"
+
+#: src/library_panel/service_sign_in.rs:63
+msgid "The service returned an invalid sign-in page"
+msgstr "Сервис вернул неверную страницу входа"
+
+#: src/library_panel/service_sign_in.rs:68
+msgid ""
+"Complete sign-in in your browser. Hopea will continue automatically. You can "
+"cancel here at any time."
+msgstr ""
+"Завершите вход в браузере. Hopea продолжит автоматически. Вы можете отменить "
+"это здесь в любой момент."
+
+#: src/library_panel/service_sign_in.rs:70
+msgid ""
+"Enter this code on the page opened in your browser and approve access. Hopea "
+"will continue automatically."
+msgstr ""
+"Введите этот код на открывшейся в браузере странице и подтвердите доступ. "
+"Hopea продолжит автоматически."
+
+#: src/library_panel/service_sign_in.rs:81
+msgid "The sign-in process stopped unexpectedly"
+msgstr "Процесс входа неожиданно остановился"
+
+#: src/library_panel/service_sign_in.rs:139
+msgid "Sign-in timed out. Please try again."
+msgstr "Время входа истекло. Попробуйте снова."
+
+#: src/library_panel/sign_in_help.rs:11
+msgid ""
+"1. Open https://vk.ru/audio in your usual browser and sign in.\n"
+"2. Press F12 (or Ctrl+Shift+I), open Network, then reload the page. Select a "
+"request to vk.ru, such as audio or al_audio.php.\n"
+"3. In Request Headers, copy the VALUE of Cookie, without the word Cookie:. "
+"Use request cookies, not response Set-Cookie headers.\n"
+"4. Paste it into Session Cookie or Access Token in Hopea.\n"
+"\n"
+"Keep the full Cookie value. It must contain remixsid or remixsid6; keep both "
+"when present. Also keep remixmid if present: it identifies the signed-in "
+"account. If it is absent, Hopea checks the signed-in account on VK. Do not "
+"substitute the profile you want to import.\n"
+"\n"
+"VK Profile ID to Import is a separate field: enter the numeric ID of the "
+"music owner, for example 123456789.\n"
+"\n"
+"In Zen/Firefox you can also find these names under Storage → Cookies → "
+"https://vk.ru; in Chrome under Application → Cookies. Copy name=value pairs "
+"separated by a semicolon and a space."
+msgstr ""
+"1. Откройте https://vk.ru/audio в обычном браузере и войдите.\n"
+"2. Нажмите F12 (или Ctrl+Shift+I), откройте «Сеть», затем перезагрузите "
+"страницу. Выберите запрос к vk.ru, например audio или al_audio.php.\n"
+"3. В заголовках запроса скопируйте ЗНАЧЕНИЕ Cookie без слова Cookie:. "
+"Используйте cookie запроса, а не заголовки Set-Cookie ответа.\n"
+"4. Вставьте его в поле «Cookie сеанса или токен доступа» в Hopea.\n"
+"\n"
+"Сохраняйте полное значение Cookie. Оно должно содержать remixsid или "
+"remixsid6; сохраняйте оба, если они есть. Также сохраняйте remixmid, если он "
+"есть: он идентифицирует аккаунт, в который выполнен вход. Если его нет, "
+"Hopea проверяет аккаунт, в который выполнен вход, на VK. Не подменяйте его "
+"профилем, который хотите импортировать.\n"
+"\n"
+"«ID профиля VK для импорта» — отдельное поле: введите числовой ID владельца "
+"музыки, например 123456789.\n"
+"\n"
+"В Zen/Firefox эти имена также можно найти в разделе «Хранилище» → «Cookie» → "
+"https://vk.ru; в Chrome — в разделе «Приложение» → «Cookie». Копируйте пары "
+"name=value, разделённые точкой с запятой и пробелом."
+
+#: src/library_panel/sign_in_help.rs:17
+msgid ""
+"Use Sign In with Browser to get a confirmation code. Enter it on the Yandex "
+"page and approve access; Hopea receives the token automatically.\n"
+"\n"
+"For manual sign-in, this importer needs a Yandex Music OAuth access token, "
+"not browser cookies. Session_id, sessionid2 and yandexuid cannot be pasted "
+"here as a replacement.\n"
+"\n"
+"1. Open the yandex-music library’s token instructions using the link below.\n"
+"2. Follow its authorization instructions for your account.\n"
+"3. Paste only the resulting access token into Hopea, without quotes or the "
+"prefix OAuth.\n"
+"\n"
+"A successful sign-in on music.yandex.ru alone does not produce this token. "
+"Access to audio depends on your account."
+msgstr ""
+"Используйте «Войти через браузер», чтобы получить код подтверждения. Введите "
+"его на странице Яндекса и подтвердите доступ; Hopea получит токен "
+"автоматически.\n"
+"\n"
+"Для ручного входа этому импортёру нужен OAuth-токен доступа Яндекс Музыки, а "
+"не cookie браузера. Session_id, sessionid2 и yandexuid нельзя вставлять сюда "
+"в качестве замены.\n"
+"\n"
+"1. Откройте инструкции по токену библиотеки yandex-music по ссылке ниже.\n"
+"2. Следуйте инструкциям авторизации для вашего аккаунта.\n"
+"3. Вставьте в Hopea только полученный токен доступа, без кавычек и префикса "
+"OAuth.\n"
+"\n"
+"Успешный вход только на music.yandex.ru не создаёт этот токен. Доступ к "
+"аудио зависит от вашего аккаунта."
+
+#: src/library_panel/sign_in_help.rs:23
+msgid ""
+"Use Sign In with Browser and enter your Spotify developer application’s "
+"public Client ID. Register http://127.0.0.1:43821/callback as its Redirect "
+"URI. Complete authorization in the browser; Hopea receives the token "
+"automatically. No Client Secret is needed.\n"
+"\n"
+"For manual sign-in, this importer needs a Spotify OAuth access token, not "
+"cookies such as sp_dc or sp_key.\n"
+"\n"
+"1. Use a Spotify developer application and its user authorization flow, "
+"described at the link below. Client Credentials tokens cannot read your "
+"personal library.\n"
+"2. Request user-library-read, playlist-read-private and playlist-read-"
+"collaborative. For direct audio import also request streaming.\n"
+"3. Paste only access_token into Hopea, without quotes or the prefix Bearer. "
+"Do not paste a client secret or refresh token.\n"
+"\n"
+"If the token has expired, authorize again. Direct audio requires Premium and "
+"a compatible account; you can turn off audio download to import the catalog "
+"only."
+msgstr ""
+"Используйте «Войти через браузер» и введите публичный Client ID вашего "
+"приложения Spotify для разработчиков. Зарегистрируйте http://127.0.0.1:43821/"
+"callback как Redirect URI. Завершите авторизацию в браузере; Hopea получит "
+"токен автоматически. Client Secret не требуется.\n"
+"\n"
+"Для ручного входа этому импортёру нужен OAuth-токен доступа Spotify, а не "
+"cookie вроде sp_dc или sp_key.\n"
+"\n"
+"1. Используйте приложение Spotify для разработчиков и его поток "
+"пользовательской авторизации, описанный по ссылке ниже. Токены Client "
+"Credentials не могут читать вашу личную медиатеку.\n"
+"2. Запросите user-library-read, playlist-read-private и playlist-read-"
+"collaborative. Для прямого импорта аудио также запросите streaming.\n"
+"3. Вставьте в Hopea только access_token, без кавычек и префикса Bearer. Не "
+"вставляйте client secret или refresh token.\n"
+"\n"
+"Если токен истёк, авторизуйтесь снова. Прямое аудио требует Premium и "
+"совместимого аккаунта; можно отключить скачивание аудио, чтобы импортировать "
+"только каталог."
+
+#: src/library_panel/sign_in_help.rs:29
+msgid ""
+"1. Open https://music.youtube.com and sign in. Press F12 (or Ctrl+Shift+I) "
+"and open Network.\n"
+"2. Open Library and filter requests by /browse. Select a successful POST "
+"request to music.youtube.com.\n"
+"3. From Request Headers copy the values of Cookie, Authorization and X-Goog-"
+"AuthUser into the JSON template below. Paste the completed JSON into Hopea.\n"
+"\n"
+"Copy the entire Cookie value, including SAPISID and __Secure-3PAPISID when "
+"present. Do not copy only one cookie. Keep Authorization exactly as sent by "
+"the browser, and use the request’s X-Goog-AuthUser value (usually 0). The "
+"JSON must use double quotes.\n"
+"\n"
+"In Zen/Firefox these are under Headers → Request Headers. In Chrome use the "
+"same section; if cookies are hidden, Copy as fetch (Node.js) includes them. "
+"Extract only the headers; do not execute the copied code."
+msgstr ""
+"1. Откройте https://music.youtube.com и войдите. Нажмите F12 (или "
+"Ctrl+Shift+I) и откройте «Сеть».\n"
+"2. Откройте «Медиатеку» и отфильтруйте запросы по /browse. Выберите успешный "
+"POST-запрос к music.youtube.com.\n"
+"3. В заголовках запроса скопируйте значения Cookie, Authorization и X-Goog-"
+"AuthUser в шаблон JSON ниже. Вставьте заполненный JSON в Hopea.\n"
+"\n"
+"Копируйте всё значение Cookie, включая SAPISID и __Secure-3PAPISID, если они "
+"есть. Не копируйте только один cookie. Сохраняйте Authorization точно в том "
+"виде, как его отправил браузер, и используйте значение X-Goog-AuthUser из "
+"запроса (обычно 0). В JSON должны использоваться двойные кавычки.\n"
+"\n"
+"В Zen/Firefox они находятся в разделе «Заголовки» → «Заголовки запроса». В "
+"Chrome используйте тот же раздел; если cookie скрыты, «Копировать как fetch "
+"(Node.js)» включает их. Извлекайте только заголовки; не выполняйте "
+"скопированный код."
+
+#: src/library_panel/sign_in_help.rs:45
+msgid ""
+"Example only — replace the placeholders with your own values; omit cookies "
+"that are absent."
+msgstr ""
+"Только пример — замените заполнители своими значениями; пропустите "
+"отсутствующие cookie."
+
+#: src/library_panel/sign_in_help.rs:62
+msgid "Authorization Instructions"
+msgstr "Инструкции по авторизации"
+
+#: src/library_panel/sign_in_help.rs:66
+msgid ""
+"These values grant access to your account. Paste them only into Hopea’s sign-"
+"in field, never into chat, screenshots or bug reports. Hopea uses them for "
+"this import and does not save them."
+msgstr ""
+"Эти значения дают доступ к вашему аккаунту. Вставляйте их только в поле "
+"входа Hopea, никогда в чат, скриншоты или отчёты об ошибках. Hopea "
+"использует их для этого импорта и не сохраняет."
+
+#: src/library_panel/sign_in_help.rs:76
+msgid "Manual Sign-In"
+msgstr "Ручной вход"
+
+#: src/library_panel/sign_in_help.rs:79
+msgid "_Back"
+msgstr "_Назад"
+
+#: src/lyrics.rs:120
+msgid "Reconnect to share the lyrics"
+msgstr "Подключитесь к сети, чтобы передать текст песни"
+
+#: src/lyrics.rs:272
+msgid "The lyrics service didn’t answer properly"
+msgstr "Служба текстов песен ответила неправильно"
+
+#: src/lyrics.rs:284
+msgid "The lyrics service sent too much"
+msgstr "Служба текстов песен отправила слишком много данных"
+
+#: src/lyrics.rs:289
+msgid "The lyrics service sent something unexpected"
+msgstr "Служба текстов песен отправила что-то неожиданное"
+
+#: src/lyrics.rs:305
+msgid "Lyrics must be smaller than 256 KB"
+msgstr "Текст песни должен быть меньше 256 КБ"
+
+#: src/playback_control.rs:122
+msgid "Remove From Your Library"
+msgstr "Удалить из вашей медиатеки"
+
+#: src/playback_control.rs:139
+msgid "Do Not Repeat"
+msgstr "Не повторять"
+
+#: src/playback_control.rs:143
+msgid "Repeat All Songs"
+msgstr "Повторить все песни"
+
+#: src/playback_control.rs:147
+msgid "Repeat the Current Song"
+msgstr "Повторить текущую песню"
+
+#: src/tray.rs:69
+msgid "No Track Playing"
+msgstr "Ничего не воспроизводится"
+
+#: src/tray.rs:73 src/tray/linux.rs:233
+msgid "Pause"
+msgstr "Пауза"
+
+#: src/tray.rs:80
+msgid "Playing"
+msgstr "Воспроизводится"
+
+#: src/tray.rs:82
+msgid "Paused"
+msgstr "На паузе"
+
+#: src/tray/linux.rs:74 src/tray/windows.rs:37
+msgid "Previous Track"
+msgstr "Предыдущий трек"
+
+#: src/tray/linux.rs:95 src/tray/windows.rs:39
+msgid "Next Track"
+msgstr "Следующий трек"
+
+#: src/tray/linux.rs:104
+msgid "_Show Hopea"
+msgstr "_Показать Hopea"
+
+#: src/tray/windows.rs:40
+msgid "Show Hopea"
+msgstr "Показать Hopea"
+
+#: src/tray/windows.rs:41
+msgid "Quit"
+msgstr "Выйти"
+
+#: src/window.rs:233
+msgid "Audio files"
+msgstr "Аудиофайлы"
+
+#: src/window.rs:243
+msgid "_Add Song"
+msgstr "_Добавить песню"
+
+#: src/window.rs:247
+msgid "Open File"
+msgstr "Открыть файл"
+
+#: src/window.rs:252 src/window.rs:274 src/window.rs:3000
+msgid "Unable to access files"
+msgstr "Невозможно получить доступ к файлам"
+
+#: src/window.rs:266
+msgid "_Add Folder"
+msgstr "_Добавить папку"
+
+#: src/window.rs:269
+msgid "Open Folder"
+msgstr "Открыть папку"
+
+#: src/window.rs:489
+msgid "Import finished"
+msgstr "Импорт завершён"
+
+#: src/window.rs:490
+msgid "View Result"
+msgstr "Посмотреть результат"
+
+#: src/window.rs:741
+msgid "Welcome to Hopea"
+msgstr "Добро пожаловать в Hopea"
+
+#: src/window.rs:743
+msgid "Play your music or import your collection."
+msgstr "Воспроизводите свою музыку или импортируйте коллекцию."
+
+#: src/window.rs:745
+msgid ""
+"Share only music you have permission to share. Other listeners can see your "
+"network address."
+msgstr ""
+"Делитесь только музыкой, на которую у вас есть разрешение. Другие слушатели "
+"могут видеть адрес вашей сети."
+
+#: src/window.rs:752
+msgid "_Get Started"
+msgstr "_Начать"
+
+#: src/window.rs:855
+msgid "Unable to read this audio document"
+msgstr "Не удалось прочитать этот аудиофайл"
+
+#: src/window.rs:864
+msgid "No available song found"
+msgstr "Доступных песен не найдено"
+
+#: src/window.rs:959
+msgid "No songs found"
+msgstr "Песни не найдены"
+
+#: src/window.rs:971
+msgid "Added a new song"
+msgstr "Добавлена новая песня"
+
+#: src/window.rs:977
+#, rust-format
+msgid "Added one song"
+msgid_plural "Added {} songs"
+msgstr[0] "Добавлена {} песня"
+msgstr[1] "Добавлено {} песни"
+msgstr[2] "Добавлено {} песен"
+
+#: src/window.rs:1637
+msgid "Unable to access dropped files"
+msgstr "Невозможно получить доступ к сброшенным файлам"
+
+#: src/window.rs:1769
+msgid "Join the network in Shared Music to keep and share songs"
+msgstr ""
+"Подключитесь к сети в разделе «Общая музыка», чтобы сохранять песни и "
+"делиться ими"
+
+#. Translators: `{title}` is replaced by the title of a song
+#: src/window.rs:1782
+#, rust-format
+msgid "Added “{title}” to your library"
+msgstr "«{title}» добавлена в вашу медиатеку"
+
+#. Translators: `{title}` is replaced by the title of a song
+#: src/window.rs:1800
+#, rust-format
+msgid "Added “{title}” to your library and sharing it"
+msgstr "«{title}» добавлена в вашу медиатеку и стала общей"
+
+#: src/window.rs:1966
+#, rust-format
+msgid "Removed “{title}” from favorites"
+msgstr "«{title}» удалена из избранного"
+
+#: src/window.rs:1970
+msgid "_Undo"
+msgstr "_Отменить"
+
+#: src/window.rs:2245
+msgid ""
+"Songs picked from the genres and artists you star and listen to. Your "
+"current music keeps playing until you press Play."
+msgstr ""
+"Песни, подобранные по жанрам и исполнителям, которые вы отмечаете и "
+"слушаете. Текущая музыка продолжает играть, пока вы не нажмёте "
+"«Воспроизвести»."
+
+#: src/window.rs:2249
+msgid "Your Music"
+msgstr "Ваша музыка"
+
+#: src/window.rs:2250
+msgid ""
+"Press Play to return to your playlist. Your current music keeps playing "
+"while you browse."
+msgstr ""
+"Нажмите «Воспроизвести», чтобы вернуться к своему списку. Текущая музыка "
+"продолжает играть, пока вы просматриваете."
+
+#: src/window.rs:2252
+msgid "Play My Music"
+msgstr "Воспроизвести мою музыку"
+
+#: src/window.rs:2300
+msgid "Join the network in Shared Music to get music picked for you"
+msgstr ""
+"Подключитесь к сети в разделе «Общая музыка», чтобы получать музыку, "
+"подобранную для вас"
+
+#: src/window.rs:2352
+msgid ""
+"Nothing to recommend yet: star songs you like or listen to some, and music "
+"like them shows up here when someone who has it is online"
+msgstr ""
+"Пока нечего рекомендовать: отмечайте понравившиеся песни или послушайте "
+"несколько, и похожая музыка появится здесь, когда кто-то, у кого она есть, "
+"будет в сети"
+
+#: src/window.rs:2611
+msgid "Nothing Playing"
+msgstr "Ничего не воспроизводится"
+
+#: src/window.rs:2651
+msgid "No Lyrics Found Online Either"
+msgstr "Текст также не найден в интернете"
+
+#: src/window.rs:2799
+#, rust-format
+msgid "Found {} of your songs on the network and starred it"
+msgid_plural "Found {} of your songs on the network and starred them"
+msgstr[0] "Найдена {} ваша песня в сети и отмечена"
+msgstr[1] "Найдено {} ваших песни в сети и отмечены"
+msgstr[2] "Найдено {} ваших песен в сети и отмечены"
+
+#: src/window.rs:2865
 #, rust-format
 msgid "{hours} hour {minutes} remaining"
 msgid_plural "{hours} hours {minutes} remaining"
@@ -487,7 +4073,7 @@ msgstr[2] "Осталось {hours} часов {minutes}"
 #. Translators: the '{}' must be left unmodified, and
 #. it will be replaced by the number of minutes remaining
 #. in the playlist
-#: src/window.rs:1362
+#: src/window.rs:2875
 #, rust-format
 msgid "{} minute remaining"
 msgid_plural "{} minutes remaining"
@@ -495,13 +4081,13 @@ msgstr[0] "Осталась {} минута"
 msgstr[1] "Осталось {} минуты"
 msgstr[2] "Осталось {} минут"
 
-#: src/window.rs:1466
+#: src/window.rs:2979
 msgid "No song selected"
 msgstr "Не выбрана ни одна песня"
 
 #. Translators: The '{}' must be left unmodified, and
 #. it is expanded to the number of songs selected
-#: src/window.rs:1471
+#: src/window.rs:2984
 #, rust-format
 msgid "{} song selected"
 msgid_plural "{} songs selected"
@@ -512,17 +4098,386 @@ msgstr[2] "Выбрано {} песен"
 #. Translators: `{title}` and `{artist}` must be left
 #. untranslated; they will expand to the title and
 #. artist of the currently playing song, respectively
-#: src/window.rs:1527
+#: src/window.rs:3170
 #, rust-format
 msgid "Currently playing “{title}” by “{artist}”"
-msgstr "Сейчас играет \"{title}\" от \"{artist}\""
+msgstr "Сейчас играет «{title}» от «{artist}»"
 
-#: src/window.rs:1564
+#: src/window.rs:3212
 msgid "Unable to open folder"
 msgstr "Невозможно открыть папку"
 
-#~ msgid "_Cancel"
-#~ msgstr "_Отменить"
+#. Translators: `{speed}` is a speed, such as "1.2 MB/s"
+#: src/window.rs:3296
+#, rust-format
+msgid "On this computer · sharing ↑ {speed}"
+msgstr "На этом компьютере · раздача ↑ {speed}"
+
+#. Translators: `{percent}` is a number from 0 to 100
+#: src/window.rs:3305
+#, rust-format
+msgid "{percent}% here · looking for people who have it"
+msgstr "{percent}% здесь · ищем людей, у которых это есть"
+
+#. Translators: `{percent}` is a number from 0 to 100, `{n}` a
+#. count of people, `{speed}` a speed such as "1.2 MB/s"
+#: src/window.rs:3312
+#, rust-format
+msgid "Downloading {percent}% · from {n} person · ↓ {speed}"
+msgid_plural "Downloading {percent}% · from {n} people · ↓ {speed}"
+msgstr[0] "Скачивание {percent}% · от {n} человека · ↓ {speed}"
+msgstr[1] "Скачивание {percent}% · от {n} человек · ↓ {speed}"
+msgstr[2] "Скачивание {percent}% · от {n} человек · ↓ {speed}"
+
+#: src/window/collections.rs:16
+msgid "Album Could Not Be Updated"
+msgstr "Не удалось обновить альбом"
+
+#: src/window/collections.rs:159
+msgid "New Album"
+msgstr "Новый альбом"
+
+#: src/window/collections.rs:163
+msgid "Open a shared Hopea album"
+msgstr "Открыть общий альбом Hopea"
+
+#: src/window/collections.rs:171
+msgid "Create an album, choose its songs and share it with friends."
+msgstr "Создайте альбом, выберите его песни и поделитесь им с друзьями."
+
+#: src/window/collections.rs:195
+#, rust-format
+msgid "{} songs"
+msgstr "Песен: {}"
+
+#: src/window/collections.rs:247
+msgid "Open Hopea Album"
+msgstr "Открыть альбом Hopea"
+
+#: src/window/collections.rs:269 src/window/collections.rs:400
+#: src/window/collections.rs:532
+msgid "Play Album"
+msgstr "Воспроизвести альбом"
+
+#: src/window/collections.rs:271 src/window/collections.rs:485
+msgid "Edit Album"
+msgstr "Редактировать альбом"
+
+#: src/window/collections.rs:395
+msgid "No available songs in this album"
+msgstr "В этом альбоме нет доступных песен"
+
+#: src/window/collections.rs:412
+msgid "Save Album…"
+msgstr "Сохранить альбом…"
+
+#: src/window/collections.rs:500
+msgid "Album Name"
+msgstr "Название альбома"
+
+#: src/window/collections.rs:510
+msgid "Choose album cover"
+msgstr "Выбрать обложку альбома"
+
+#: src/window/collections.rs:530 src/window/collections.rs:1014
+msgid "Add Songs"
+msgstr "Добавить песни"
+
+#: src/window/collections.rs:533
+msgid "Share Album…"
+msgstr "Поделиться альбомом…"
+
+#: src/window/collections.rs:564
+msgid "Delete Album…"
+msgstr "Удалить альбом…"
+
+#: src/window/collections.rs:610
+msgid "Delete Album?"
+msgstr "Удалить альбом?"
+
+#: src/window/collections.rs:611
+msgid ""
+"Only this album will be removed. Its songs will stay in your music and keep "
+"being shared."
+msgstr ""
+"Будет удалён только этот альбом. Его песни останутся в вашей музыке и "
+"продолжат быть общими."
+
+#: src/window/collections.rs:616
+msgid "Delete Album"
+msgstr "Удалить альбом"
+
+#: src/window/collections.rs:681
+msgid "Not downloaded"
+msgstr "Не скачано"
+
+#: src/window/collections.rs:699
+msgid "Song Actions"
+msgstr "Действия с песней"
+
+#: src/window/collections.rs:770
+msgid "No songs yet. Use Add Songs to choose from your music."
+msgstr ""
+"Песен пока нет. Используйте «Добавить песни», чтобы выбрать из своей музыки."
+
+#: src/window/collections.rs:884
+msgid "Choose Album Cover"
+msgstr "Выбрать обложку альбома"
+
+#: src/window/collections.rs:949
+msgid "Finding album songs…"
+msgstr "Поиск песен альбома…"
+
+#: src/window/collections.rs:991
+msgid ""
+"Album saved. Its songs are being shared. Send the album file to another "
+"Hopea user."
+msgstr ""
+"Альбом сохранён. Его песни стали общими. Отправьте файл альбома другому "
+"пользователю Hopea."
+
+#: src/window/collections.rs:1015
+msgid "Add Selected"
+msgstr "Добавить выбранное"
+
+#: src/window/collections.rs:1018
+msgid "Select All"
+msgstr "Выбрать все"
+
+#: src/window/collections.rs:1090
+msgid "Add or import music into My Music first."
+msgstr "Сначала добавьте или импортируйте музыку в «Мою музыку»."
+
+#: src/window/collections.rs:1147
+msgid "Join Shared Music to find this album’s songs"
+msgstr "Подключитесь к общей музыке, чтобы найти песни этого альбома"
+
+#: src/window/collections.rs:1160
+msgid "This song is not shared yet"
+msgstr "Эта песня ещё не является общей"
+
+#: src/window/collections.rs:1173
+msgid "Unable to search for album songs"
+msgstr "Не удалось найти песни альбома"
+
+#: src/window/collections.rs:1183
+#, rust-format
+msgid "Song unavailable: {}. Its owner may be offline."
+msgstr "Песня недоступна: {}. Возможно, её владелец не в сети."
+
+#: src/window/collections.rs:1193
+msgid "Add songs to the album first"
+msgstr "Сначала добавьте песни в альбом"
+
+#: src/window/collections.rs:1234
+msgid "Add songs before sharing the album"
+msgstr "Добавьте песни перед тем, как делиться альбомом"
+
+#: src/window/collections.rs:1237
+msgid "Share Hopea Album"
+msgstr "Поделиться альбомом Hopea"
+
+#: src/window/collections.rs:1252
+#, rust-format
+msgid "Sharing {} of {}: {}"
+msgstr "Общий доступ {} из {}: {}"
+
+#: src/window/collections.rs:1267
+msgid "Unable to keep the album song for sharing"
+msgstr "Не удалось сохранить песню альбома для общего доступа"
+
+#: src/window/collections.rs:1275
+msgid "Unable to check song availability"
+msgstr "Не удалось проверить доступность песни"
+
+#: src/window/collections.rs:1279
+msgid ""
+"A song is still downloading. Try sharing the album again when it is "
+"available."
+msgstr ""
+"Песня всё ещё скачивается. Попробуйте поделиться альбомом снова, когда она "
+"станет доступна."
+
+#: src/window/collections.rs:1296
+msgid "Unable to save the shared album file"
+msgstr "Не удалось сохранить файл общего альбома"
+
+#: src/window/metadata.rs:53
+msgid "Reconnect to choose covers and lyrics"
+msgstr "Подключитесь к сети, чтобы выбрать обложку и текст"
+
+#: src/window/metadata.rs:56 src/window/metadata.rs:115
+msgid "Share this song first"
+msgstr "Сначала добавьте песню в общую медиатеку"
+
+#: src/window/metadata.rs:62 src/window/metadata.rs:83
+msgid "Lyrics could not be read"
+msgstr "Не удалось прочитать текст песни"
+
+#: src/window/metadata.rs:75 src/window/song_editor.rs:15
+msgid "Unable to read saved song edits"
+msgstr "Не удалось прочитать сохранённые изменения песни"
+
+#: src/window/metadata.rs:152
+msgid "No shared covers or lyrics found"
+msgstr "Обложки и тексты в сети не найдены"
+
+#: src/window/metadata.rs:159
+msgid "Alternative covers or lyrics are available"
+msgstr "Доступны другие обложки или тексты"
+
+#: src/window/metadata.rs:160
+msgid "Choose…"
+msgstr "Выбрать…"
+
+#: src/window/metadata.rs:184
+msgid "Choose Cover and Lyrics"
+msgstr "Выбор обложки и текста"
+
+#: src/window/metadata.rs:206
+msgid ""
+"One audio track, different covers and lyrics. Counts show recently confirmed "
+"peers sharing each variant."
+msgstr ""
+"Одна аудиодорожка — разные обложки и тексты. Числа показывают количество "
+"недавно проверенных пиров, раздающих каждый вариант."
+
+#: src/window/metadata.rs:212
+msgid "To keep a manual choice, turn off automatic selection in Settings."
+msgstr ""
+"Чтобы сохранить ручной выбор, выключите автоматический выбор в настройках."
+
+#: src/window/metadata.rs:235 src/window/song_editor.rs:79
+msgid "Cover"
+msgstr "Обложка"
+
+#: src/window/metadata.rs:289
+#, rust-format
+msgid "{count} peers"
+msgstr "Пиров: {count}"
+
+#: src/window/metadata.rs:326
+msgid "Play and Compare Lyrics"
+msgstr "Послушать и сравнить текст"
+
+#: src/window/metadata.rs:370
+msgid "Use Selected"
+msgstr "Использовать выбранное"
+
+#: src/window/song_editor.rs:23
+msgid "Edit Song"
+msgstr "Редактировать песню"
+
+#: src/window/song_editor.rs:76
+msgid "Choose Image…"
+msgstr "Выбрать изображение…"
+
+#: src/window/song_editor.rs:81
+msgid ""
+"Paste lyrics or edit the text below. Keep [mm:ss.xx] timestamps for "
+"synchronized lyrics."
+msgstr ""
+
+#: src/window/song_editor.rs:178
+msgid "Saving…"
+msgstr ""
+
+#: src/window/song_editor.rs:210
+msgid ""
+"Saved on this computer. Reconnect and save again to publish the cover and "
+"lyrics."
+msgstr ""
+"Сохранено на этом компьютере. Подключитесь к сети и сохраните снова, чтобы "
+"передать обложку и текст песни."
+
+#: src/window/song_editor.rs:210
+msgid "Song changes saved"
+msgstr ""
+
+#: src/window/tests.rs:809
+msgid "Import Not Completed"
+msgstr ""
+
+#~ msgid "Paste lyrics or edit the text below. Keep [mm:ss.xx] timestamps"
+#~ msgstr ""
+#~ "Вставьте текст или отредактируйте его ниже. Сохраняйте метки времени "
+#~ "[mm:ss.xx]"
+
+#~ msgid "Plays music, and nothing else"
+#~ msgstr "Воспроизводит музыку и ничего больше"
+
+#~ msgid ""
+#~ "Hopea is a music player with no delusions of grandeur. If you just want "
+#~ "to play music available on your local system then Hopea is the music "
+#~ "player you are looking for."
+#~ msgstr ""
+#~ "Hopea - это музыкальный проигрыватель без мании величия. Если вы просто "
+#~ "хотите воспроизводить музыку, доступную в вашей локальной системе, то "
+#~ "Hopea - это тот музыкальный проигрыватель, который вы ищете."
+
+#~ msgid "Current features:"
+#~ msgstr "Текущие функции:"
+
+#~ msgid "adaptive UI"
+#~ msgstr "адаптивный пользовательский интерфейс"
+
+#~ msgid "UI recoloring using the album art"
+#~ msgstr ""
+#~ "перекрашивание пользовательского интерфейса с использованием обложки "
+#~ "альбома"
+
+#~ msgid "drag and drop support to queue songs"
+#~ msgstr "поддержка перетаскивания для создания очереди песен"
+
+#~ msgid "shuffle and repeat"
+#~ msgstr "перемешивание и повторение"
+
+#~ msgid "MPRIS integration"
+#~ msgstr "интеграция с MPRIS"
+
+#~ msgid "Emmanuele Bassi"
+#~ msgstr "Emmanuele Bassi"
+
+#~ msgid ""
+#~ "Automatically reduce P2P traffic and background work for Steam games or "
+#~ "games using Feral GameMode."
+#~ msgstr ""
+#~ "Автоматически снижать трафик P2P и фоновую нагрузку во время игр из Steam "
+#~ "или с Feral GameMode."
+
+#~ msgid "Automatic game detection is not available on this platform yet."
+#~ msgstr "Автоматическое обнаружение игр на этой платформе пока недоступно."
+
+#~ msgid ""
+#~ "Automatically detect running games from installed desktop entries. "
+#~ "Unclassified games can use the manual override below."
+#~ msgstr ""
+#~ "Распознавать запущенные игры по установленным ярлыкам приложений. Для игр "
+#~ "без категории используйте ручное включение ниже."
+
+#~ msgid ""
+#~ "Automatic detection is unavailable on this platform. Use the manual "
+#~ "override below to reduce activity."
+#~ msgstr ""
+#~ "Автоматическое обнаружение на этой платформе недоступно. Для снижения "
+#~ "нагрузки используйте ручное включение ниже."
+
+#~ msgid "Keep Game Mode Active"
+#~ msgstr "Держать игровой режим включённым"
+
+#~ msgid ""
+#~ "Use reduced activity until you turn this off, including for games that "
+#~ "are not detected automatically."
+#~ msgstr ""
+#~ "Снижать нагрузку до отключения этой настройки, в том числе для игр, "
+#~ "которые не распознаются автоматически."
+
+#~ msgid ""
+#~ "Game detection is temporarily unavailable. You can use the manual "
+#~ "override below."
+#~ msgstr ""
+#~ "Обнаружение игр временно недоступно. Можно использовать ручное включение "
+#~ "ниже."
 
 #~ msgid "_Track"
 #~ msgstr "_Дорожка"
@@ -593,193 +4548,3 @@ msgstr "Невозможно открыть папку"
 
 #~ msgid "Choose a folder"
 #~ msgstr "Выбрать папку"
-
-#: src/library_panel.rs
-msgid "Start Searching"
-msgstr "Начните поиск"
-
-#: src/library_panel.rs
-msgid "Start a search to discover songs, albums and artists."
-msgstr "Начните поиск, чтобы найти музыку, альбомы и исполнителей."
-
-#: src/library_panel/search_results.rs
-msgid "No Songs Available Now"
-msgstr "Сейчас нет доступных треков"
-
-#: src/library_panel/search_results.rs
-msgid "Try another search. Songs already on this computer and songs with no reachable sources are hidden."
-msgstr "Попробуйте другой запрос. Уже имеющиеся треки и музыка без доступных источников скрыты."
-
-#: src/language.rs
-msgid "Language"
-msgstr "Язык"
-
-#: src/language.rs
-msgid "System language"
-msgstr "Язык системы"
-
-#: src/language.rs
-msgid "Language changes apply after restarting Hopea. Some translations are incomplete."
-msgstr "Язык изменится после перезапуска Hopea. Некоторые переводы неполные."
-
-#: src/language.rs
-msgid "Unable to save language"
-msgstr "Не удалось сохранить язык"
-
-#: src/dialogs.rs
-msgid "Cancel"
-msgstr "Отмена"
-
-#: src/dialogs.rs
-msgid "Save"
-msgstr "Сохранить"
-
-#: src/library/client.rs
-msgid "This song has no available sources right now"
-msgstr "Сейчас у этого трека нет доступных источников"
-
-#: src/lyrics.rs
-msgid "Reconnect to share the lyrics"
-msgstr "Подключитесь к сети, чтобы передать текст песни"
-
-#: src/window/song_editor.rs
-msgid "Saved on this computer. Reconnect and save again to publish the cover and lyrics."
-msgstr "Сохранено на этом компьютере. Подключитесь к сети и сохраните снова, чтобы передать обложку и текст песни."
-
-msgid "Choose the Most Shared Covers and Lyrics"
-msgstr "Выбирать самые популярные обложки и тексты"
-
-msgid "Use the variants shared by the most peers. When disabled, Hopea offers a choice after adding a song."
-msgstr "Выбирать варианты с наибольшим числом раздающих пиров. Если выключено, Hopea предложит выбор после добавления песни."
-
-msgid "Choose Cover and Lyrics…"
-msgstr "Выбрать обложку и текст…"
-
-msgid "Choose Cover and Lyrics"
-msgstr "Выбор обложки и текста"
-
-msgid "Reconnect to choose covers and lyrics"
-msgstr "Подключитесь к сети, чтобы выбрать обложку и текст"
-
-msgid "Share this song first"
-msgstr "Сначала добавьте песню в общую медиатеку"
-
-msgid "Lyrics could not be read"
-msgstr "Не удалось прочитать текст песни"
-
-msgid "No shared covers or lyrics found"
-msgstr "Обложки и тексты в сети не найдены"
-
-msgid "Alternative covers or lyrics are available"
-msgstr "Доступны другие обложки или тексты"
-
-msgid "Choose…"
-msgstr "Выбрать…"
-
-msgid "One audio track, different covers and lyrics. Counts show recently confirmed peers sharing each variant."
-msgstr "Одна аудиодорожка — разные обложки и тексты. Числа показывают количество недавно проверенных пиров, раздающих каждый вариант."
-
-msgid "{count} peers"
-msgstr "Пиров: {count}"
-
-msgid "Play and Compare Lyrics"
-msgstr "Послушать и сравнить текст"
-
-msgid "Use Selected"
-msgstr "Использовать выбранное"
-
-msgid "To keep a manual choice, turn off automatic selection in Settings."
-msgstr "Чтобы сохранить ручной выбор, выключите автоматический выбор в настройках."
-
-msgid "Accent Color"
-msgstr "Акцентный цвет"
-
-msgid "Standard Accent Color"
-msgstr "Стандартный акцентный цвет"
-
-msgid "Custom Accent Color"
-msgstr "Свой акцентный цвет"
-
-msgid "Color Code (#RGB or #RRGGBB)"
-msgstr "Код цвета (#RGB или #RRGGBB)"
-
-msgid "Choose from Palette…"
-msgstr "Выбрать на палитре…"
-
-msgid "Preview changes here. Save applies the color; Cancel restores it."
-msgstr "Цвет виден сразу. «Сохранить» применит его, «Отмена» вернёт прежний."
-
-msgid "Enter a color such as #3584E4"
-msgstr "Введите код цвета, например #3584E4"
-
-msgid "Unable to save accent color"
-msgstr "Не удалось сохранить акцентный цвет"
-
-msgid "Choose Accent Color"
-msgstr "Выберите акцентный цвет"
-
-msgid "Hue"
-msgstr "Цветовой тон"
-
-msgid "Use Color"
-msgstr "Выбрать цвет"
-
-msgid "Unable to read this audio document"
-msgstr "Не удалось прочитать этот аудиофайл"
-
-msgid "Game Mode"
-msgstr "Игровой режим"
-
-msgid "Active: P2P downloads up to 512 KiB/s, sharing up to 128 KiB/s. Lower limits are preserved."
-msgstr "Активен: загрузка P2P до 512 КиБ/с, раздача до 128 КиБ/с. Более низкие ограничения сохраняются."
-
-msgid "Automatically reduce P2P traffic and background work for Steam games or games using Feral GameMode."
-msgstr "Автоматически снижать трафик P2P и фоновую нагрузку во время игр из Steam или с Feral GameMode."
-
-msgid "Automatically reduce P2P traffic and background work for detected full-screen games and apps."
-msgstr "Автоматически снижать трафик P2P и фоновую нагрузку при обнаружении полноэкранных игр и приложений."
-
-msgid "Automatic game detection is not available on this platform yet."
-msgstr "Автоматическое обнаружение игр на этой платформе пока недоступно."
-
-msgid "Paused while gaming"
-msgstr "Приостановлено на время игры"
-
-msgid "Import will resume after the game ends"
-msgstr "Импорт продолжится после завершения игры"
-
-msgid "Automatically detect Steam games, Feral GameMode and installed desktop games."
-msgstr "Автоматически распознавать игры Steam, Feral GameMode и установленные игры с ярлыками приложений."
-
-msgid "Automatically reduce traffic and background work while the active app is categorized as a game by macOS."
-msgstr "Автоматически снижать трафик и фоновую нагрузку, если активное приложение относится к игровой категории macOS."
-
-msgid "Automatically detect running games from installed desktop entries. Unclassified games can use the manual override below."
-msgstr "Распознавать запущенные игры по установленным ярлыкам приложений. Для игр без категории используйте ручное включение ниже."
-
-msgid "Automatic detection is unavailable on this platform. Use the manual override below to reduce activity."
-msgstr "Автоматическое обнаружение на этой платформе недоступно. Для снижения нагрузки используйте ручное включение ниже."
-
-msgid "Allow Usage Access below to detect games. Recent app activity is processed only on this device and is not saved or shared."
-msgstr "Для обнаружения игр разрешите доступ к истории использования ниже. Данные обрабатываются только на устройстве, не сохраняются и не передаются."
-
-msgid "Automatically reduce traffic and background work while the foreground Android app is categorized as a game."
-msgstr "Автоматически снижать трафик и фоновую нагрузку, когда открыто Android-приложение игровой категории."
-
-msgid "Keep Game Mode Active"
-msgstr "Держать игровой режим включённым"
-
-msgid "Use reduced activity until you turn this off, including for games that are not detected automatically."
-msgstr "Снижать нагрузку до отключения этой настройки, в том числе для игр, которые не распознаются автоматически."
-
-msgid "Allow Game Detection…"
-msgstr "Разрешить обнаружение игр…"
-
-msgid "Open Android Usage Access settings. App activity stays on this device and is not saved or shared."
-msgstr "Открыть настройки доступа к истории использования Android. Данные остаются на устройстве, не сохраняются и не передаются."
-
-msgid "Unable to open Usage Access settings"
-msgstr "Не удалось открыть настройки доступа к истории использования"
-
-msgid "Game detection is temporarily unavailable. You can use the manual override below."
-msgstr "Обнаружение игр временно недоступно. Можно использовать ручное включение ниже."

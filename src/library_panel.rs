@@ -100,9 +100,16 @@ mod imp {
         #[template_child]
         pub join_button: TemplateChild<gtk::Button>,
         #[template_child]
-        pub reach_banner: TemplateChild<adw::Banner>,
+        pub reach_status: TemplateChild<gtk::Box>,
+        #[template_child]
+        pub reach_indicator: TemplateChild<gtk::Box>,
+        #[template_child]
+        pub reach_title: TemplateChild<gtk::Label>,
+        #[template_child]
+        pub reach_details: TemplateChild<gtk::Button>,
         #[template_child]
         pub reach_summary: TemplateChild<gtk::Label>,
+        pub checking_since: Cell<Option<std::time::Instant>>,
         #[template_child]
         pub vpn_banner: TemplateChild<adw::Banner>,
         #[template_child]
@@ -285,7 +292,8 @@ impl LibraryPanel {
     /// reach it.
     fn refresh_me(&self) {
         let Some(client) = library::client() else {
-            self.imp().reach_banner.set_title(&i18n("Not Connected"));
+            self.imp().me.replace(None);
+            self.set_reach_status(None);
             self.imp()
                 .reach_summary
                 .set_text(&i18n("Join the network to discover and share music."));
@@ -308,12 +316,7 @@ impl LibraryPanel {
                     Ok(me) => this.update_me(me),
                     Err(_) => {
                         this.imp().me.replace(None);
-                        this.imp().reach_summary.set_text(&i18n(
-                            "The local node is not responding. Retrying automatically.",
-                        ));
-                        this.imp()
-                            .reach_banner
-                            .set_title(&i18n("Network Status Unavailable"));
+                        this.set_reach_status(None);
                     }
                 }
             }
@@ -321,16 +324,51 @@ impl LibraryPanel {
     }
 
     fn update_me(&self, me: Me) {
-        let (title, _) = sharing_status(Some(me.reachability));
-        self.imp().reach_banner.set_title(&title);
-        self.imp().reach_summary.set_text(&match me.reachability {
-            Reachability::Checking => i18n("Your shares have not been checked by another listener yet."),
-            Reachability::Direct => i18n("Other listeners can reach your shares directly."),
-            Reachability::Ipv6 => i18n("Your shares are reachable over IPv6. IPv4-only listeners may need a relay."),
-            Reachability::Relay => i18n("A relay helps other listeners find and download your music."),
-            Reachability::Unreachable => i18n("You can search reachable sources, but your own shares are not reachable from outside."),
-        });
+        self.set_reach_status(Some(me.reachability));
         self.imp().me.replace(Some(me));
+    }
+
+    fn set_reach_status(&self, reach: Option<Reachability>) {
+        let imp = self.imp();
+        let unconfirmed = if reach == Some(Reachability::Checking) {
+            let since = imp
+                .checking_since
+                .get()
+                .unwrap_or_else(std::time::Instant::now);
+            imp.checking_since.set(Some(since));
+            since.elapsed() >= std::time::Duration::from_secs(60)
+        } else {
+            imp.checking_since.set(None);
+            false
+        };
+        let online = matches!(
+            reach,
+            Some(Reachability::Direct | Reachability::Ipv6 | Reachability::Relay)
+        );
+        let (title, summary, color) = match reach {
+            Some(Reachability::Direct | Reachability::Ipv6 | Reachability::Relay) =>
+                (i18n("Online"), String::new(), "success"),
+            Some(Reachability::Checking) if unconfirmed => (i18n("Connection Unconfirmed"),
+                i18n("No other listener has confirmed your connection yet. There may be no reachable listeners, or your network may block communication. Try searching, keep Hopea open on both devices, or see Connection Help."), "warning"),
+            Some(Reachability::Checking) => (i18n("Checking Connection…"),
+                i18n("Waiting for another listener to confirm your connection. You can already try searching."), "warning"),
+            Some(Reachability::Unreachable) => (i18n("Limited Connection"),
+                i18n("Other listeners cannot reach your music. Your router, provider or VPN may block incoming connections. Searching can still work."), "warning"),
+            None => (i18n("Offline"),
+                i18n("The sharing service is not responding. Hopea will retry automatically."), "error"),
+        };
+        imp.reach_title.set_text(&title);
+        for class in ["success", "warning", "error"] {
+            imp.reach_indicator.remove_css_class(class);
+        }
+        imp.reach_indicator.add_css_class(color);
+        imp.reach_summary.set_text(&summary);
+        imp.reach_summary.set_visible(!online);
+        imp.reach_details.set_label(&if online {
+            i18n("Details")
+        } else {
+            i18n("Connection Help")
+        });
     }
 
     fn settings(&self) -> gio::Settings {
@@ -343,7 +381,7 @@ impl LibraryPanel {
     fn connect_signals(&self) {
         let imp = self.imp();
 
-        imp.reach_banner.connect_button_clicked(clone!(
+        imp.reach_details.connect_clicked(clone!(
             #[weak(rename_to = this)]
             self,
             move |_| {
@@ -3077,18 +3115,34 @@ fn sharing_status_details_fit_mobile_panel() {
             max_upload_bytes: 0,
             reachability: reach,
         });
-        assert!(panel.imp().reach_banner.is_revealed());
-        assert!(!panel.imp().reach_summary.text().is_empty());
+        let online = matches!(
+            reach,
+            Reachability::Direct | Reachability::Ipv6 | Reachability::Relay
+        );
+        assert_eq!(panel.imp().reach_indicator.has_css_class("success"), online);
+        assert_eq!(panel.imp().reach_summary.is_visible(), !online);
         let search_page = panel.imp().view_stack.child_by_name("search").unwrap();
-        assert!(panel.imp().reach_banner.is_ancestor(&search_page));
+        assert!(panel.imp().reach_status.is_ancestor(&search_page));
         assert!(panel.imp().reach_summary.is_ancestor(&search_page));
         if matches!(reach, Reachability::Checking | Reachability::Unreachable) {
-            assert!(!panel.imp().reach_banner.title().starts_with("Online"));
+            assert!(!panel.imp().reach_title.text().starts_with("Online"));
         }
-        panel
-            .imp()
-            .reach_banner
-            .emit_by_name::<()>("button-clicked", &[]);
+        context.block_on(glib::timeout_future(std::time::Duration::from_millis(100)));
+        if let Some(directory) = std::env::var_os("HOPEA_TEST_STATUS_SCREENSHOTS") {
+            let snapshot = gtk::Snapshot::new();
+            snapshot.append_color(
+                &gdk::RGBA::new(0.15, 0.15, 0.15, 1.0),
+                &gtk::graphene::Rect::new(0.0, 0.0, panel.width() as f32, panel.height() as f32),
+            );
+            panel.snapshot_child(&panel.child().unwrap(), &snapshot);
+            window
+                .renderer()
+                .unwrap()
+                .render_texture(&snapshot.to_node().unwrap(), None)
+                .save_to_png(std::path::Path::new(&directory).join(format!("{reach:?}.png")))
+                .unwrap();
+        }
+        panel.imp().reach_details.emit_clicked();
         let dialog = window
             .visible_dialog()
             .unwrap()
@@ -3114,6 +3168,23 @@ fn sharing_status_details_fit_mobile_panel() {
         dialog.close();
         context.block_on(glib::timeout_future(std::time::Duration::from_millis(250)));
     }
+    panel.set_reach_status(None);
+    assert!(panel.imp().reach_indicator.has_css_class("error"));
+    assert!(!panel.imp().reach_indicator.has_css_class("success"));
+    assert!(panel.imp().reach_summary.is_visible());
+    panel.imp().checking_since.set(Some(
+        std::time::Instant::now() - std::time::Duration::from_secs(61),
+    ));
+    panel.set_reach_status(Some(Reachability::Checking));
+    assert_eq!(
+        panel.imp().reach_title.text(),
+        i18n("Connection Unconfirmed")
+    );
+    assert!(panel.imp().reach_indicator.has_css_class("warning"));
+    panel.set_reach_status(Some(Reachability::Direct));
+    assert!(panel.imp().checking_since.get().is_none());
+    panel.set_reach_status(Some(Reachability::Checking));
+    assert_eq!(panel.imp().reach_title.text(), i18n("Checking Connection…"));
     window.close();
 }
 

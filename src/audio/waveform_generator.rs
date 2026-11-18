@@ -30,6 +30,8 @@ mod imp {
         pub remote_retries: Cell<u8>,
         pub remote_retry: RefCell<Option<glib::SourceId>>,
         pub audio_started: Cell<bool>,
+        pub catalog_dirty: Cell<bool>,
+        pub catalog_watch: RefCell<Option<glib::JoinHandle<()>>>,
     }
 
     #[glib::object_subclass]
@@ -39,7 +41,39 @@ mod imp {
     }
 
     impl ObjectImpl for WaveformGenerator {
+        fn constructed(&self) {
+            self.parent_constructed();
+            let mut changes = library::catalog_changes();
+            let weak = self.obj().downgrade();
+            self.catalog_watch
+                .replace(Some(glib::spawn_future_local(async move {
+                    while changes.changed().await.is_ok() {
+                        let Some(generator) = weak.upgrade() else {
+                            break;
+                        };
+                        // A watch channel coalesces bursts without an unbounded queue.
+                        // Keep this flag if a request is already in flight; its
+                        // completion will schedule the delayed fallback instead.
+                        if generator
+                            .imp()
+                            .song
+                            .borrow()
+                            .as_ref()
+                            .and_then(Song::remote_id)
+                            .is_some()
+                            && generator.imp().peaks.borrow().is_none()
+                        {
+                            generator.imp().catalog_dirty.set(true);
+                            generator.retry_remote_peaks();
+                        }
+                    }
+                })));
+        }
+
         fn dispose(&self) {
+            if let Some(watch) = self.catalog_watch.take() {
+                watch.abort();
+            }
             if let Some(retry) = self.remote_retry.take() {
                 retry.remove();
             }
@@ -165,6 +199,30 @@ mod tests {
             }
             glib::timeout_future(Duration::from_millis(50)).await;
             assert_eq!(requests.load(Ordering::SeqCst), 3);
+            // Verification can finish after all six startup retries, including
+            // while playback is paused. A burst of catalog events schedules a
+            // single local request instead of restarting the polling budget.
+            generator.imp().peaks.replace(None);
+            generator.imp().remote_missing.set(true);
+            generator.imp().remote_retries.set(6);
+            generator.imp().audio_started.set(false);
+            generator.retry_remote_peaks();
+            assert!(generator.imp().remote_retry.borrow().is_none());
+            for _ in 0..1000 {
+                library::notify_catalog_changed();
+            }
+            for _ in 0..300 {
+                if generator.peaks().is_some() {
+                    break;
+                }
+                glib::timeout_future(Duration::from_millis(10)).await;
+            }
+            assert_eq!(generator.peaks(), Some(vec![(0.25, 0.5)]));
+            assert_eq!(requests.load(Ordering::SeqCst), 4);
+            assert_eq!(generator.imp().remote_retries.get(), 6);
+            library::notify_catalog_changed();
+            glib::timeout_future(Duration::from_millis(50)).await;
+            assert!(generator.imp().remote_retry.borrow().is_none());
             // A late cache read from the previous selection cannot replace it.
             generator
                 .load_peaks_cache("/nonexistent/old-waveform", u64::MAX)
@@ -196,6 +254,7 @@ impl Controller for WaveformGenerator {
         imp.remote_pending.set(false);
         imp.remote_missing.set(false);
         imp.remote_retries.set(0);
+        imp.catalog_dirty.set(false);
         if let Some(retry) = imp.remote_retry.take() {
             retry.remove();
         }
@@ -311,10 +370,10 @@ impl WaveformGenerator {
 
     fn retry_remote_peaks(&self) {
         let imp = self.imp();
-        if !imp.audio_started.get()
+        let catalog_changed = imp.catalog_dirty.get();
+        if (!catalog_changed && (!imp.audio_started.get() || imp.remote_retries.get() >= 6))
             || !imp.remote_missing.get()
             || imp.remote_pending.get()
-            || imp.remote_retries.get() >= 6
             || imp.remote_retry.borrow().is_some()
         {
             return;
@@ -322,10 +381,17 @@ impl WaveformGenerator {
         let id = imp.song.borrow().as_ref().and_then(Song::remote_id);
         if let Some(id) = id {
             // Playback can start before download verification stores peaks.
-            // At most six local API retries (1/2/4/8/16/32 seconds), never
-            // a peer search, another audio download, or unbounded polling.
-            let delay = std::time::Duration::from_secs(1 << imp.remote_retries.get());
-            imp.remote_retries.set(imp.remote_retries.get() + 1);
+            // Six initial retries, then only catalog/reconnect notifications.
+            // A late verified download can wake this even while paused. All
+            // requests stay local; catalog bursts allow at most one per 2s.
+            let delay = if catalog_changed {
+                std::time::Duration::from_secs(2)
+            } else {
+                let delay = std::time::Duration::from_secs(1 << imp.remote_retries.get());
+                imp.remote_retries.set(imp.remote_retries.get() + 1);
+                delay
+            };
+            imp.catalog_dirty.set(false);
             let generation = imp.generation.get();
             let retry = glib::timeout_add_local_once(
                 delay,
@@ -337,6 +403,7 @@ impl WaveformGenerator {
                             return;
                         }
                         this.imp().remote_retry.take();
+                        this.imp().catalog_dirty.set(false);
                         this.fetch_remote_peaks(id);
                     }
                 ),
@@ -349,6 +416,7 @@ impl WaveformGenerator {
         self.imp().peaks.replace(None);
 
         let Some(client) = library::client() else {
+            self.imp().remote_missing.set(true);
             self.notify("has-peaks");
             return;
         };
@@ -372,10 +440,16 @@ impl WaveformGenerator {
                     return;
                 }
                 this.imp().remote_pending.set(false);
+                if !library::client().is_some_and(|current| current.origin() == client.origin()) {
+                    this.imp().remote_missing.set(true);
+                    this.retry_remote_peaks();
+                    return;
+                }
 
                 match peaks {
                     Ok(peaks) => {
                         this.imp().remote_missing.set(false);
+                        this.imp().catalog_dirty.set(false);
                         let peaks = peaks
                             .into_iter()
                             .map(|(l, r)| (f64::from(l), f64::from(r)))
@@ -384,9 +458,12 @@ impl WaveformGenerator {
                         this.save_peaks();
                     }
                     Err(err) => {
-                        this.imp()
-                            .remote_missing
-                            .set(matches!(err, library::ClientError::NotFound));
+                        this.imp().remote_missing.set(matches!(
+                            err,
+                            library::ClientError::NotFound
+                                | library::ClientError::Unavailable
+                                | library::ClientError::Network(_)
+                        ));
                         warn!("Unable to fetch the waveform: {err}");
                         this.notify("has-peaks");
                         this.retry_remote_peaks();

@@ -39,7 +39,7 @@ async-channel = "2.5.0"
 futures = "0.3.34"
 
 [target.'cfg(target_os = "windows")'.dependencies]
-windows-sys = { version = "0.61.2", features = ["Win32_NetworkManagement_IpHelper", "Win32_NetworkManagement_Ndis", "Win32_Networking_WinSock", "Win32_UI_Shell"] }
+windows-sys = { version = "0.61.2", features = ["Win32_Globalization", "Win32_NetworkManagement_IpHelper", "Win32_NetworkManagement_Ndis", "Win32_Networking_WinSock", "Win32_UI_Shell"] }
 
 [target.'cfg(any(target_os = "windows", target_os = "macos"))'.dependencies]
 # Native tray/menu from Tauri; GTK runs the platform event loop.
@@ -49,7 +49,7 @@ tray-icon = { version = "0.26.1", default-features = false }
 # Already used by the native tray; no game-monitoring SDK or privileged helper.
 objc2 = "0.6.5"
 objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "NSWorkspace", "NSRunningApplication"] }
-objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSBundle", "NSString", "NSURL"] }
+objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSArray", "NSBundle", "NSLocale", "NSString", "NSURL"] }
 
 [target.'cfg(any(target_os = "linux", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd", target_os = "dragonfly"))'.dependencies]
 # MPRIS and the tray icon talk D-Bus, which other systems don't have

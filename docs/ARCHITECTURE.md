@@ -21,11 +21,26 @@ worker with a single pending wake-up and the latest requested value. Slow audio
 driver calls therefore do not run on GTK's main thread. Playback volume feedback
 updates the slider without emitting another user volume command.
 
+Android touch forwarding uses the input device ID, gesture down-time and
+pointer ID to identify a GTK touch sequence. A Java `MotionEvent` object's
+identity is not stable across a drag and must not participate in that key:
+otherwise GTK can receive a move or release for a different sequence than the
+press. Event copies remain alive until the GTK callback finishes and are then
+recycled, including on callback failure. The Android runtime regression test
+exercises a long drag made of distinct event objects and cancellation. This
+does not establish that all device-specific volume hangs have been resolved.
+
 Remote waveforms may become available only after download verification finishes.
 After playback starts, a missing waveform permits at most six delayed requests
 to the configured library API (1, 2, 4, 8, 16 and 32 seconds). These requests do
 not search peers or download audio again. Success stops retries, changing tracks
 cancels the timer, and stale replies cannot update the new track's waveform.
+After those retries, embedded-node catalog changes and client reconnection wake
+a missing waveform again, including while paused. A coalescing watch channel
+and a two-second delayed request bound this fallback; it does not poll peers,
+redownload audio or bypass download verification. Notifications received during
+an API request are retained until it completes. Disposing the generator cancels
+its subscription and pending timer.
 
 All audible playback must go through the application's shared `AudioPlayer`,
 including search, album previews, imports and duplicate comparisons. Never create
@@ -51,6 +66,28 @@ search preserves queue order rather than applying filename sorting. Imports
 append to the shuffled order, and removal rebases indices without another shuffle.
 
 ### UI
+
+Language selection happens before GTK widgets and application workers start.
+A saved manual choice overrides the OS. Linux/BSD use the message locale
+environment (`LC_ALL`, `LC_MESSAGES`, `LANG`, and the GNU `LANGUAGE` list).
+Windows uses `GetUserPreferredUILanguages`, macOS uses `NSLocale` preferred
+languages, and Android exports `Resources.Configuration.getLocales()` before
+starting the native runtime, including per-app locale overrides. Android also
+supplies the absolute path to the extracted translation assets. The Android
+packager explicitly copies Meson's MO targets, since Pixiewood's library
+closure omits them. Before widgets are created, proxy-libintl is connected to
+the GNU gettext instance already linked into the player; Rust and Blueprint
+strings then use the same domain. Android sets the message locale explicitly
+because Bionic only implements C/C.UTF-8. Its gettext build disables iconv:
+all catalogs are UTF-8, and the API 34 Bionic converter loops on the trailing
+NUL in gettext messages. Cached gettext objects are rebuilt once when moving
+to this configuration.
+Locale tags are matched to installed catalogs, first specifically and then by
+base language; Chinese script tags map to the appropriate shipped catalog.
+An absent, unsupported or invalid language falls back to English. The picker
+discovers installed catalogs rather than restricting them to a Rust whitelist.
+Adding `po/<locale>.po` and reconfiguring Meson is sufficient to ship a language.
+Live retranslation of existing widgets is not implemented.
 
 `src/gaming.rs` polls game activity every five seconds on a blocking worker,
 without concurrent probes, and requires three misses before restoring normal
@@ -165,10 +202,22 @@ Media lives in `<data>/media/<info hash>/track.<ext>` (`storage.rs`). Own duplic
 
 Product naming: use Hopea, `hopea`, `hopea-node` and `hopea-spotify`. `src/paths.rs` keeps existing libraries and caches in place. The GSettings storage path and protocol/hash identifiers retain legacy values for compatibility; do not rename those blindly. New installs use hopea data/cache directories.
 
+Search result wrappers are neither selectable nor activatable. Their nested
+action rows handle activation on release, so a pointer press does not steal
+focus from the search field and dismiss the Android keyboard before the tap
+finishes.
+
 ### Sharing status
 
 The network search page shows the node's last reachability result and a short
-explanation above the search field, with a Details dialog: unconfirmed, direct IPv4, IPv6, relayed, or unreachable. While
+explanation above the search field. A compact green Online indicator requires
+confirmed direct IPv4, IPv6 or relay reachability. Checking and limited incoming
+connectivity use an amber indicator; an unavailable local service is shown as
+Offline in red. Problems include an inline explanation and a Connection Help
+button. After one minute without confirmation, Checking becomes Connection
+Unconfirmed, explaining that no reachable helper may be available or networking
+may be blocked. This is an unknown result, not proof of being online or offline;
+background checks continue. Online details retain the connection type and its limitations. While
 visible, it refreshes the authenticated local `/me` response every two seconds,
 with at most one request in flight and stale replies from replaced nodes ignored.
 This does not trigger extra peer probes or change network admission limits.

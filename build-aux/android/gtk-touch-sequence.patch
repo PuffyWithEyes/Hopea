@@ -1,0 +1,24 @@
+--- a/gdk/android/glue/java/org/gtk/android/ToplevelActivity.java
++++ b/gdk/android/glue/java/org/gtk/android/ToplevelActivity.java
+@@ -224,11 +224,19 @@
+ 						return false;
+ 				}
+ 
+-				int identitiy = System.identityHashCode(event);
++				// Hopea: event object identity changes within a drag. Native GTK
++				// combines this device ID with downTime and pointer ID instead.
++				int deviceId = event.getDeviceId();
+ 				// interestingly, calling MotionEvent.obtain translates it into the current View
+ 				// space. No idea where it gets that information from
+ 				MotionEvent copy = MotionEvent.obtainNoHistory(event);
+-				GlibContext.runOnMain(() -> notifyMotionEvent(identitiy, copy));
++				GlibContext.runOnMain(() -> {
++					try {
++						notifyMotionEvent(deviceId, copy);
++					} finally {
++						copy.recycle();
++					}
++				});
+ 				return true;
+ 			}
+ 

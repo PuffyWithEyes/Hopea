@@ -3,15 +3,17 @@
 
 desktop_data = configuration_data()
 desktop_data.set('APPLICATION_ID', application_id)
-desktop_file = i18n.merge_file(
+translation_msgfmt = find_program('msgfmt')
+desktop_file = custom_target('desktop-translations',
   input: configure_file(
     input: 'io.hopea.Hopea.desktop.in.in',
     output: 'io.hopea.Hopea.desktop.in',
     configuration: desktop_data,
   ),
   output: '@0@.desktop'.format(application_id),
-  type: 'desktop',
-  po_dir: '../po',
+  command: [translation_msgfmt, '--desktop', '-d', translation_po_dir, '--template', '@INPUT@', '-o', '@OUTPUT@'],
+  depend_files: translation_sources,
+  build_by_default: true,
   install: true,
   install_dir: get_option('datadir') / 'applications',
 )
@@ -27,14 +29,16 @@ endif
 
 appstream_data = configuration_data()
 appstream_data.set('APPLICATION_ID', application_id)
-appstream_file = i18n.merge_file(
+appstream_file = custom_target('appstream-translations',
   input: configure_file(
     input: 'io.hopea.Hopea.metainfo.xml.in.in',
     output: 'io.hopea.Hopea.metainfo.xml.in',
     configuration: appstream_data,
   ),
   output: '@0@.metainfo.xml'.format(application_id),
-  po_dir: '../po',
+  command: [translation_msgfmt, '--xml', '-d', translation_po_dir, '--template', '@INPUT@', '-o', '@OUTPUT@'],
+  depend_files: translation_sources,
+  build_by_default: true,
   install: true,
   install_dir: get_option('datadir') / 'metainfo',
 )

@@ -1,0 +1,52 @@
+--- a/libintl.c
++++ b/libintl.c
+@@ -82,7 +82,7 @@
+ #  ifdef _WIN32
+ #    define LOOKUP(fn) p_##fn = (void *) GetProcAddress (dll, #fn); if (p_##fn == NULL) return 0
+ #  else
+-#    define LOOKUP(fn) p_##fn = (void *) dlsym (dll, #fn); if (p_##fn == NULL) return 0
++#    define LOOKUP(fn) p_##fn = (void *) dlsym (dll, "libintl_" #fn); if (p_##fn == NULL) return 0
+ #  endif  /* _WIN32 */
+ 
+ 
+@@ -197,10 +197,28 @@
+ 
+ }
+ 
++static int beenhere = 0;
++
++/* Hopea: attach the gettext implementation already linked into the player.
++ * Called once during startup, before GTK constructs any widgets or workers.
++ * A failed lookup retains the original untranslated fallback.
++ */
++int
++g_libintl_use_backend (void *backend)
++{
++  if (backend == NULL || !use_intl_dll (backend))
++    {
++      use_dummy ();
++      beenhere = 1;
++      return 0;
++    }
++  beenhere = 1;
++  return 1;
++}
++
+ static void
+ setup (void)
+ {
+-  static int beenhere = 0;
+ 
+   if (!beenhere)
+     {
+--- a/meson.build
++++ b/meson.build
+@@ -13,7 +13,7 @@
+ 
+ intl_lib = library('intl',
+   'libintl.c',
+-  c_args: ['-DSTUB_ONLY'],
++  c_args: ['-DSTUB_ONLY=0'],
+   soversion : 8,
+   darwin_versions : ['10', '10.5'],
+   install : true)

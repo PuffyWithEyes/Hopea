@@ -24,6 +24,17 @@ struct Running {
 
 static RUNNING: Mutex<Option<Running>> = Mutex::new(None);
 
+static CATALOG_CHANGES: std::sync::LazyLock<tokio::sync::watch::Sender<u64>> =
+    std::sync::LazyLock::new(|| tokio::sync::watch::Sender::new(0));
+
+pub(crate) fn catalog_changes() -> tokio::sync::watch::Receiver<u64> {
+    CATALOG_CHANGES.subscribe()
+}
+
+pub(crate) fn notify_catalog_changed() {
+    CATALOG_CHANGES.send_modify(|revision| *revision = revision.wrapping_add(1));
+}
+
 /// Where the node keeps its catalog, key and music.
 fn data_dir() -> PathBuf {
     crate::paths::data_dir().join("library")
@@ -78,6 +89,7 @@ pub async fn start(
                         }
                     };
                     let url = format!("http://{}", node.api_addr);
+                    let mut changes = node.state.changes.subscribe();
                     node.state
                         .torrents
                         .set_gaming(*gaming_rx.borrow_and_update());
@@ -86,6 +98,10 @@ pub async fn start(
                     loop {
                         tokio::select! {
                             _ = &mut stop_rx => break,
+                            changed = changes.changed() => {
+                                if changed.is_err() { break; }
+                                notify_catalog_changed();
+                            }
                             changed = gaming_rx.changed() => {
                                 if changed.is_err() { break; }
                                 node.state.torrents.set_gaming(*gaming_rx.borrow_and_update());

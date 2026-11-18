@@ -58,7 +58,7 @@ SPDX-FileCopyrightText = "2026 Daniil Klimov"
 SPDX-License-Identifier = "GPL-3.0-or-later"
 
 [[annotations]]
-path = ["build-aux/android/app-links.patch", "build-aux/android/yandex-app-links.patch", "build-aux/android/service-links.patch", "build-aux/android/storage-preservation.patch", "build-aux/android/choreographer-compat.patch", "build-aux/android/choreographer-armv7.patch", "build-aux/android/gstreamer-soup.patch", "build-aux/android/runtime-paths.patch", "build-aux/android/fdk-ndk.patch", "build-aux/android/gtk-compat.patch", "build-aux/android/gtk-input-compat.patch", "build-aux/android/gtk-runtime-compat.patch", "build-aux/android/gtk-media-keys.patch"]
+path = ["build-aux/android/app-links.patch", "build-aux/android/yandex-app-links.patch", "build-aux/android/service-links.patch", "build-aux/android/storage-preservation.patch", "build-aux/android/choreographer-compat.patch", "build-aux/android/choreographer-armv7.patch", "build-aux/android/gstreamer-soup.patch", "build-aux/android/runtime-paths.patch", "build-aux/android/fdk-ndk.patch", "build-aux/android/gtk-compat.patch", "build-aux/android/gtk-input-compat.patch", "build-aux/android/gtk-runtime-compat.patch", "build-aux/android/gtk-media-keys.patch", "build-aux/android/gtk-touch-sequence.patch"]
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 Daniil Klimov"
 SPDX-License-Identifier = "GPL-3.0-or-later"
@@ -151,7 +151,7 @@ SPDX-FileCopyrightText = "2022  Emmanuele Bassi"
 SPDX-License-Identifier = "CC-BY-SA-3.0"
 
 [[annotations]]
-path = ["po/POTFILES.in", "po/LINGUAS"]
+path = "po/POTFILES.in"
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2022  Emmanuele Bassi"
 SPDX-License-Identifier = "CC0-1.0"
@@ -223,3 +223,8 @@ path = ["packaging/README.md", "packaging/windows/README.md", "packaging/release
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 Daniil Klimov"
 SPDX-License-Identifier = "CC0-1.0"
+
+[[annotations]]
+path = ["build-aux/android/intl-backend.patch"]
+SPDX-FileCopyrightText = ["2008 Tor Lillqvist", "2026 Daniil Klimov"]
+SPDX-License-Identifier = "LGPL-2.0-or-later"

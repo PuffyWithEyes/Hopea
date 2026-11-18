@@ -24,6 +24,9 @@ public final class HopeaApplication extends org.gtk.android.RuntimeApplication {
 
     @Override
     public void onCreate() {
+        // Resources includes Android's per-app language override. Export it
+        // before super.onCreate starts GTK; Android has no desktop LANG setup.
+        prepareLanguages();
         // GTK refreshes filesDir when runtime assets change. Keep diagnostics
         // separately, private to this app and excluded from Android backups.
         crashFile = new AtomicFile(new File(getNoBackupFilesDir(), "java-crash.txt"));
@@ -93,5 +96,17 @@ public final class HopeaApplication extends org.gtk.android.RuntimeApplication {
             @Override public void onActivityDestroyed(Activity activity) { }
         });
         super.onCreate();
+    }
+
+    private void prepareLanguages() {
+        try {
+            android.system.Os.setenv("HOPEA_SYSTEM_LANGUAGES",
+                getResources().getConfiguration().getLocales().toLanguageTags(), true);
+            android.system.Os.setenv("HOPEA_LOCALE_DIR",
+                new File(getFilesDir(), "share/locale").getAbsolutePath(), true);
+        } catch (android.system.ErrnoException unavailable) {
+            // Native startup falls back to English if detection is unavailable.
+            android.util.Log.w("Hopea", "Unable to initialize system language");
+        }
     }
 }

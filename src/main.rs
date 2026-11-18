@@ -55,7 +55,7 @@ mod window;
 use std::env;
 
 use config::{APPLICATION_ICON, APPLICATION_ID, GETTEXT_PACKAGE, PKGDATADIR, PROFILE};
-use gettextrs::{bind_textdomain_codeset, bindtextdomain, setlocale, textdomain, LocaleCategory};
+use gettextrs::{bind_textdomain_codeset, bindtextdomain, textdomain};
 use gtk::{gio, glib, prelude::*};
 use log::{debug, error, LevelFilter};
 
@@ -72,10 +72,7 @@ fn main() -> glib::ExitCode {
     platform::init();
     // Read the small bootstrap preference before GTK, GSettings or workers
     // start: changing the process locale while audio threads run is unsafe.
-    let language = language::preference();
-    if !language.is_empty() {
-        env::set_var("LANGUAGE", &language);
-    }
+    language::initialize();
     let mut builder = pretty_env_logger::formatted_builder();
     let level = if APPLICATION_ID.ends_with("Devel") {
         LevelFilter::Debug
@@ -89,15 +86,6 @@ fn main() -> glib::ExitCode {
 
     // Set up gettext translations
     debug!("Setting up locale data");
-    // SAFETY: nothing else runs yet: no other thread can read the locale
-    // while it changes
-    unsafe {
-        setlocale(LocaleCategory::LcAll, "");
-        if !language.is_empty() {
-            setlocale(LocaleCategory::LcMessages, "C.UTF-8");
-        }
-    }
-
     // A relocatable install, such as the Windows bundle, carries its
     // translations next to the program rather than where it was built for
     let locale_dir = language::catalog_dir();

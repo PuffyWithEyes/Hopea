@@ -54,6 +54,62 @@ working caches or the user's music library to run tests.
 
 ## Further information
 
+### Translating Hopea without a translation service
+
+Translations are ordinary UTF-8 gettext `.po` files in `po/`. They can be edited
+offline in a text editor; no API, account or automatic translation is required.
+Generate a current template from the configured build:
+
+```sh
+nix-shell nix/shell.nix --run 'meson compile -C _builddir hopea-pot'
+```
+
+The output is `po/hopea.pot`. Initialize a new `.po` from it with `msginit`,
+using the real locale code (for example `de` or `pt_BR`) and a new output path.
+For an existing language, merge the template into a copy of its catalog:
+
+```sh
+msgmerge --output-file=/tmp/hopea-ru.po po/ru.po po/hopea.pot
+```
+
+Keep each English `msgid` unchanged and put its translation in `msgstr`.
+Preserve placeholders such as `{}`, `{name}`, markup, and intentional newlines.
+Fill every plural form where `msgid_plural` appears. Empty translations fall
+back to English. Remove the `fuzzy` flag only after reviewing that entry.
+Set the language and translator fields in the header, and validate the file:
+
+```sh
+msgfmt --check --output-file=/tmp/hopea.mo /tmp/hopea-ru.po
+```
+
+**`po/` is the only place to submit translations.** Save the finished catalog
+as `po/<locale>.po`, for example `po/ru.po`, `po/az.po` or `po/pt_BR.po`.
+Keep its `Language:` header consistent with the filename. Do not add a second
+language list or edit Rust code: Meson discovers the catalogs, generates
+`LINGUAS` in the build directory, and installs them for the language picker.
+Known locales have native display names; new locales initially display their
+locale code. After adding or removing a catalog, reconfigure and build:
+
+```sh
+nix-shell nix/shell.nix --run 'meson setup --reconfigure _builddir && meson compile -C _builddir'
+```
+
+Edits to an existing catalog only require `meson compile -C _builddir`.
+Restart Hopea to use the rebuilt translation. Changing the language takes effect
+at startup; already created widgets keep their current text. Files in
+`dist/translations/` are working copies, not build inputs. Dropping a `.po`
+beside an installed APK or executable does not load it at runtime.
+Run `python3 tests/test_translations.py` inside the Nix shell to check discovery,
+compilation, installation and desktop-file translation with temporary catalogs.
+
+For an Android emulator, `tests/test_android_gettext.c` exercises the actual
+native gettext and GLib bridge, plural forms, and missing-message fallback.
+Compile it with the matching NDK API 28 compiler and `-ldl`, then run it in an
+isolated test directory containing the APK's native libraries and locale assets:
+`LD_LIBRARY_PATH=. ./test_android_gettext ./libhopea.so ./share/locale ru`.
+Repeat with `en` and `xx` to check English and unsupported-language fallback.
+Do not use a real user's app data for this test.
+
 ### Updating Rust dependencies
 
 Check the latest non-yanked stable release of each actual package before proposing
@@ -96,7 +152,8 @@ Android, Windows, macOS or BSD runtime compatibility.
 
 The Android container runs `tests/test_android_runtime.py subprojects/gtk`
 after applying the GTK compatibility patches. It exercises the patched Java
-methods with recording UI/GTK queues and checks JNI pointer arguments using the
+methods with recording UI/GTK queues, verifies touch sequence stability and
+event-copy lifetime during long drags, and checks JNI pointer arguments using the
 selected NDK compiler. To run it separately, provide a staged GTK directory,
 a host C compiler and a JDK; `ANDROID_RUNTIME_CC` selects an additional NDK
 compiler for the width checks. These are boundary regression checks, not a

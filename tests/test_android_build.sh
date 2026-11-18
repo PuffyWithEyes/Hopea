@@ -39,7 +39,9 @@ mkdir -p "$work/bin"
 cat > "$work/bin/cargo" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
-[[ $* == *'--locked'* ]]
+[[ $am_cv_func_iconv == no ]]
+operation=$1
+if [[ $operation == build ]]; then [[ $* == *'--locked'* ]]; fi
 while (($#)); do
   case "$1" in
     --target) target=$2; shift ;;
@@ -47,6 +49,11 @@ while (($#)); do
   esac
   shift
 done
+if [[ $operation == clean ]]; then
+  [[ $* == '' ]]
+  touch "$directory/cleaned-gettext"
+  exit 0
+fi
 lower=${target//-/_}
 upper=${lower^^}
 linker=CARGO_TARGET_${upper}_LINKER
@@ -63,11 +70,16 @@ EOF
 chmod +x "$work/bin/cargo"
 for arch in aarch64 x86_64 armv7; do
   build_dir="$work/bin-$arch"
-  mkdir -p "$build_dir"
+  mkdir -p "$build_dir/cargo-target"
   PATH="$work/bin:$PATH" sh "$root/build-aux/android/cargo.sh" "$build_dir" "$work/$arch.a"
   expected=$arch-linux-android
   if [[ $arch == armv7 ]]; then expected=armv7-linux-androideabi; fi
   [[ $(cat "$work/$arch.a") == "$expected" ]]
+  test -f "$build_dir/cargo-target/cleaned-gettext"
+  test -f "$build_dir/cargo-target/.gettext-utf8-only"
+  rm "$build_dir/cargo-target/cleaned-gettext"
+  PATH="$work/bin:$PATH" sh "$root/build-aux/android/cargo.sh" "$build_dir" "$work/$arch.a"
+  test ! -e "$build_dir/cargo-target/cleaned-gettext"
 done
 if PATH="$work/bin:$PATH" sh "$root/build-aux/android/cargo.sh" "$work/bin-unknown" "$work/bad.a" 2>/dev/null; then
   echo 'Unsupported architecture accepted' >&2; exit 1

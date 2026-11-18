@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 project('hopea', 'rust',
-  version: '2026.3.2',
+  version: '2026.3.3',
   license: ['GPL-3.0'],
   meson_version: '>= 0.59.0',
   default_options: [ 'warning_level=2', ],
@@ -47,9 +47,9 @@ endif
 
 application_id = 'io.hopea.Hopea@0@'.format(profile)
 
+subdir('po')
 subdir('data')
 subdir('src')
-subdir('po')
 
 reuse = find_program('reuse', required: false)
 import_test_python = find_program('python3', required: false)

@@ -6,7 +6,70 @@ use adw::prelude::*;
 use gtk::{gio, glib};
 use std::{io::Read, path::PathBuf};
 
-// Native names and invitations stay readable even before a language is chosen.
+mod detection;
+
+/// Call only during startup, before application workers and GTK widgets exist.
+pub fn initialize() {
+    // GTK must not later reset our message locale from an unavailable or C
+    // environment locale while constructing the first window.
+    gtk::disable_setlocale();
+    #[cfg(target_os = "android")]
+    initialize_android_backend();
+    let available: Vec<_> = available_languages(&catalog_dir())
+        .into_iter()
+        .map(|(code, _, _)| code)
+        .collect();
+    let language = detection::choose(&preference(), &detection::system_languages(), &available);
+    std::env::set_var("LANGUAGE", &language);
+    #[cfg(target_os = "android")]
+    {
+        // Bionic only implements C/C.UTF-8. GNU gettext on Android therefore
+        // reads the message locale from the environment instead of setlocale.
+        std::env::remove_var("LC_ALL");
+        std::env::set_var("LC_MESSAGES", format!("{language}.UTF-8"));
+    }
+    // GNU gettext ignores LANGUAGE in the plain C locale. Native GUI launches
+    // on Android/macOS/Windows often have no POSIX locale environment at all.
+    unsafe {
+        gettextrs::setlocale(gettextrs::LocaleCategory::LcAll, "");
+        let current = gettextrs::setlocale(gettextrs::LocaleCategory::LcMessages, "");
+        if current
+            .as_deref()
+            .is_none_or(|value| value == b"C" || value == b"POSIX" || value.starts_with(b"C."))
+        {
+            for locale in ["en_US.UTF-8", "en_US.utf8", ".UTF-8", "C.UTF-8"] {
+                if gettextrs::setlocale(gettextrs::LocaleCategory::LcMessages, locale).is_some() {
+                    break;
+                }
+            }
+        }
+    }
+}
+
+#[cfg(target_os = "android")]
+fn initialize_android_backend() {
+    // GLib's Android build uses proxy-libintl. Connect it to the very same
+    // GNU gettext instance as Rust, before either side creates translated UI.
+    #[link(name = "intl")]
+    unsafe extern "C" {
+        fn g_libintl_use_backend(handle: *mut libc::c_void) -> libc::c_int;
+    }
+    unsafe {
+        let handle = libc::dlopen(
+            b"libhopea.so\0".as_ptr().cast(),
+            libc::RTLD_NOW | libc::RTLD_NOLOAD,
+        );
+        if g_libintl_use_backend(handle) == 0 {
+            eprintln!("Hopea: native translation backend unavailable; using English UI fallback");
+        }
+        if !handle.is_null() {
+            libc::dlclose(handle);
+        }
+    }
+}
+
+// Optional friendly labels for known languages, not a whitelist. Any installed
+// po/<locale>.po catalog is selectable; new locales fall back to their code.
 const LANGUAGES: &[(&str, &str, &str)] = &[
     ("en", "English", "Select language"),
     ("ru", "Русский", "Выберите язык"),
@@ -64,13 +127,45 @@ fn preference_path() -> PathBuf {
     glib::user_config_dir().join("hopea").join("language")
 }
 
+fn valid_code(code: &str) -> bool {
+    static PATTERN: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+        regex::Regex::new(r"\A[a-z]{2,3}(?:_[A-Za-z0-9]{2,8}){0,2}(?:@[a-z0-9-]{1,16})?\z").unwrap()
+    });
+    PATTERN.is_match(code)
+}
+
+fn available_languages(directory: &std::path::Path) -> Vec<(String, String, String)> {
+    let mut codes = std::collections::BTreeSet::from(["en".to_string()]);
+    if let Ok(entries) = std::fs::read_dir(directory) {
+        for entry in entries.flatten() {
+            let Some(code) = entry.file_name().to_str().map(str::to_owned) else {
+                continue;
+            };
+            if valid_code(&code) && entry.path().join("LC_MESSAGES/hopea.mo").is_file() {
+                codes.insert(code);
+            }
+        }
+    }
+    codes
+        .into_iter()
+        .map(|code| {
+            let (name, invitation) = LANGUAGES
+                .iter()
+                .find(|(known, _, _)| *known == code)
+                .map(|(_, name, invitation)| ((*name).to_string(), (*invitation).to_string()))
+                .unwrap_or_else(|| (code.clone(), i18n("Select language")));
+            (code, name, invitation)
+        })
+        .collect()
+}
+
 pub fn preference() -> String {
     let mut value = String::new();
     if let Ok(file) = std::fs::File::open(preference_path()) {
         let _ = file.take(64).read_to_string(&mut value);
     }
     let value = value.trim();
-    if LANGUAGES.iter().any(|(code, _, _)| *code == value) {
+    if valid_code(value) {
         value.into()
     } else {
         String::new()
@@ -78,6 +173,10 @@ pub fn preference() -> String {
 }
 
 pub fn catalog_dir() -> PathBuf {
+    #[cfg(target_os = "android")]
+    if let Some(directory) = std::env::var_os("HOPEA_LOCALE_DIR") {
+        return PathBuf::from(directory);
+    }
     if std::env::var_os("MESON_DEVENV").is_some()
         || std::env::current_exe().ok().is_some_and(|exe| {
             exe.starts_with(
@@ -98,18 +197,13 @@ pub fn catalog_dir() -> PathBuf {
 pub struct Settings {
     pub group: adw::PreferencesGroup,
     row: adw::ComboRow,
-    codes: Vec<&'static str>,
+    codes: Vec<String>,
 }
 
 impl Settings {
     pub fn new() -> Self {
         let directory = catalog_dir();
-        let available: Vec<_> = LANGUAGES
-            .iter()
-            .filter(|(code, _, _)| {
-                *code == "en" || directory.join(code).join("LC_MESSAGES/hopea.mo").is_file()
-            })
-            .collect();
+        let available = available_languages(&directory);
         let group = adw::PreferencesGroup::builder()
             .description(i18n(
                 "Language changes apply after restarting Hopea. Some translations are incomplete.",
@@ -122,10 +216,13 @@ impl Settings {
             .transition_duration(500)
             .hhomogeneous(false)
             .build();
-        let phrases: Vec<_> = available.iter().map(|(_, _, phrase)| *phrase).collect();
+        let phrases: Vec<_> = available
+            .iter()
+            .map(|(_, _, phrase)| phrase.clone())
+            .collect();
         for (i, phrase) in phrases.iter().enumerate() {
             let label = gtk::Label::builder()
-                .label(*phrase)
+                .label(phrase)
                 .xalign(0.0)
                 .wrap(true)
                 .wrap_mode(gtk::pango::WrapMode::WordChar)
@@ -149,8 +246,8 @@ impl Settings {
         content.append(&invitation);
         let mut names = vec![i18n("System language")];
         names.extend(available.iter().map(|(_, name, _)| name.to_string()));
-        let mut codes = vec![""];
-        codes.extend(available.iter().map(|(code, _, _)| *code));
+        let mut codes = vec![String::new()];
+        codes.extend(available.iter().map(|(code, _, _)| code.clone()));
         let model = gtk::StringList::new(&names.iter().map(String::as_str).collect::<Vec<_>>());
         let row = adw::ComboRow::builder()
             .name("language-choice")
@@ -177,7 +274,7 @@ impl Settings {
         let code = self
             .codes
             .get(self.row.selected() as usize)
-            .copied()
+            .map(String::as_str)
             .unwrap_or("");
         if code == preference() {
             return Ok(());
@@ -201,18 +298,131 @@ impl Settings {
 #[cfg(test)]
 mod tests {
     use super::*;
+
     #[test]
-    fn every_shipped_translation_has_a_native_name_and_invitation() {
+    #[cfg(not(any(target_os = "android", target_os = "windows", target_os = "macos")))]
+    fn startup_uses_system_language_manual_choice_and_english_fallback() {
+        const EXPECTED: &str = "HOPEA_TEST_EXPECTED_TRANSLATION";
+        if let Ok(expected) = std::env::var(EXPECTED) {
+            initialize();
+            gettextrs::bindtextdomain("hopea", catalog_dir()).unwrap();
+            gettextrs::bind_textdomain_codeset("hopea", "UTF-8").unwrap();
+            gettextrs::textdomain("hopea").unwrap();
+            if std::env::var_os("HOPEA_TEST_TRANSLATION_GTK").is_some() {
+                adw::init().unwrap();
+            }
+            assert_eq!(
+                i18n("For You"),
+                expected,
+                "language={:?}, catalogs={:?}",
+                std::env::var("LANGUAGE"),
+                catalog_dir()
+            );
+            return;
+        }
+        // Locale/gettext caches are process-global. Test real startup in fresh
+        // processes with temporary preferences, never mutate the test runner's
+        // locale or use the listener's config directory.
+        let root = std::env::temp_dir().join(format!(
+            "hopea-locale-startup-{}",
+            glib::uuid_string_random()
+        ));
+        std::fs::create_dir_all(root.join("hopea")).unwrap();
+        for (manual, os_language, expected) in [
+            ("", "ru_RU.UTF-8", "Для вас"),
+            ("en", "ru_RU.UTF-8", "For You"),
+            ("ru", "en_US.UTF-8", "Для вас"),
+            ("ru", "C.UTF-8", "Для вас"),
+            ("", "xx_YY.UTF-8", "For You"),
+            ("", "", "For You"),
+        ] {
+            std::fs::write(root.join("hopea/language"), manual).unwrap();
+            let output = std::process::Command::new(std::env::current_exe().unwrap())
+                .args(["--exact", "language::tests::startup_uses_system_language_manual_choice_and_english_fallback", "--nocapture"])
+                .env(EXPECTED, expected)
+                .env("XDG_CONFIG_HOME", &root)
+                .env("LANG", os_language)
+                .env_remove("LANGUAGE")
+                .env_remove("LC_ALL")
+                .env_remove("LC_MESSAGES")
+                .output().unwrap();
+            assert!(
+                output.status.success(),
+                "manual={manual:?}, os={os_language:?}: {}\n{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+        std::fs::remove_dir_all(root).unwrap();
+    }
+    #[test]
+    fn known_languages_have_valid_codes_and_labels() {
         let mut codes = std::collections::HashSet::new();
         for (code, name, invitation) in LANGUAGES {
             assert!(codes.insert(*code));
+            assert!(valid_code(code));
             assert!(!name.is_empty() && !invitation.is_empty());
         }
-        for code in ["ar", "fa", "tr", "az", "uz", "id"] {
-            assert!(!codes.contains(code));
+        for code in [
+            "ar",
+            "fa",
+            "tr",
+            "az",
+            "uz",
+            "id",
+            "sr_Latn_RS",
+            "sr@latin",
+            "es_419",
+        ] {
+            assert!(valid_code(code));
         }
-        for code in include_str!("../po/LINGUAS").split_whitespace() {
-            assert!(codes.contains(code), "missing language {}", code);
+        for code in [
+            "",
+            "../../ru",
+            "ru/",
+            "ru.po",
+            "ru\n",
+            "ru:en",
+            "System language",
+        ] {
+            assert!(!valid_code(code));
         }
+    }
+
+    #[test]
+    fn installed_catalogs_are_discovered_without_a_rust_registry_entry() {
+        let directory =
+            std::env::temp_dir().join(format!("hopea-languages-{}", glib::uuid_string_random()));
+        for code in ["ru", "az", "sr_Latn_RS", "not-a-language"] {
+            let messages = directory.join(code).join("LC_MESSAGES");
+            std::fs::create_dir_all(&messages).unwrap();
+            std::fs::write(messages.join("hopea.mo"), b"fixture").unwrap();
+        }
+        std::fs::create_dir_all(directory.join("fr")).unwrap();
+        let languages = available_languages(&directory);
+        assert_eq!(
+            languages
+                .iter()
+                .map(|(code, _, _)| code.as_str())
+                .collect::<Vec<_>>(),
+            ["az", "en", "ru", "sr_Latn_RS"]
+        );
+        assert_eq!(
+            languages
+                .iter()
+                .find(|(code, _, _)| code == "az")
+                .unwrap()
+                .1,
+            "az"
+        );
+        assert_eq!(
+            languages
+                .iter()
+                .find(|(code, _, _)| code == "ru")
+                .unwrap()
+                .1,
+            "Русский"
+        );
+        std::fs::remove_dir_all(directory).unwrap();
     }
 }

@@ -34,6 +34,18 @@
     <control>touch</control>
   </recommends>
   <releases>
+    <release version="2026.3.3" date="2026-11-18" type="development">
+      <description>
+        <p>This alpha improves translations, Android touch gestures and waveform recovery.</p>
+        <ul>
+          <li>Discover translations from PO files and detect the system language with an English fallback.</li>
+          <li>Load Android translations from app storage and respect the system's language preferences.</li>
+          <li>Keep Android touch sequences stable throughout a drag.</li>
+          <li>Recover missing waveforms when download verification finishes, including after initial retries.</li>
+          <li>Show a compact network status and explain when connection checks remain unconfirmed.</li>
+        </ul>
+      </description>
+    </release>
     <release version="2026.3.2" date="2026-11-18" type="development">
       <description>
         <p>This alpha improves network discovery and Android playback controls.</p>
