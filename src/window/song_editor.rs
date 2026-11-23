@@ -207,7 +207,7 @@ impl Window {
                             if win.player().and_then(|p| p.state().current_song()).is_some_and(|s| s.equals(&song)) && win.lyrics_shown() {
                                 win.load_lyrics().await;
                             }
-                            win.add_toast(if publication_failed { i18n("Saved on this computer. Reconnect and save again to publish the cover and lyrics.") } else { i18n("Song changes saved") });
+                            win.add_toast(if publication_failed { i18n("Saved on this device. Reconnect and save again to publish the cover and lyrics.") } else { i18n("Song changes saved") });
                             dialog.set_can_close(true);
                             dialog.close();
                         }

@@ -1,0 +1,4308 @@
+diff --git a/.github/workflows/checks.yml b/.github/workflows/checks.yml
+index 9cc32d3..be63a0d 100644
+--- a/.github/workflows/checks.yml
++++ b/.github/workflows/checks.yml
+@@ -48,6 +48,9 @@ jobs:
+           python3 tests/test_android_manifest.py
+           python3 tests/test_android_crash_report.py
+           python3 tests/test_android_language.py
++          python3 tests/test_android_keyboard.py
++      - name: Check lyrics HTTPS without a GIO TLS backend
++        run: nix develop --command bash tests/test_lyrics_https.sh
+       - run: nix shell --inputs-from . nixpkgs#actionlint nixpkgs#shellcheck --command actionlint
+       - run: nix shell --inputs-from . nixpkgs#shellcheck --command shellcheck packaging/*.sh packaging/*/*.sh tests/test_packaging.sh tests/test_native_install.sh
+       - name: Build and test the player
+diff --git a/Cargo.lock b/Cargo.lock
+index 6c032eb..9fd7405 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -1147,12 +1147,14 @@ dependencies = [
+ 
+ [[package]]
+ name = "dontfrag"
+-version = "1.0.1"
++version = "1.0.2"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "f949ddc2e911eaf995d2cabc132a478c73cacd1cc0a04c1f0636544b9586178d"
+ dependencies = [
+  "cfg-if",
+  "libc",
+  "tokio",
+- "windows-sys 0.52.0",
++ "windows-sys 0.61.2",
+ ]
+ 
+ [[package]]
+@@ -2247,6 +2249,7 @@ dependencies = [
+  "pretty_env_logger",
+  "rand 0.10.4",
+  "regex",
++ "reqwest 0.13.5",
+  "serde",
+  "serde_json",
+  "sha2 0.11.1",
+@@ -2256,6 +2259,7 @@ dependencies = [
+  "tracing",
+  "tray-icon",
+  "unicode-normalization",
++ "webpki-root-certs",
+  "windows-sys 0.61.2",
+ ]
+ 
+diff --git a/Cargo.toml b/Cargo.toml
+index 02a9cee..2e24d84 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -39,6 +39,12 @@ async-channel = "2.5.0"
+ futures = "0.3.34"
+ libc = "0.2.191"
+ 
++[target.'cfg(target_os = "android")'.dependencies]
++# Android's GTK bundle has no GIO TLS backend. Lyrics use Rustls with bundled
++# public roots, without depending on a Java platform-verifier bootstrap.
++reqwest = { version = "0.13.5", default-features = false, features = ["rustls"] }
++webpki-root-certs = "1.0.12"
++
+ [target.'cfg(target_os = "windows")'.dependencies]
+ windows-sys = { version = "0.61.2", features = ["Win32_Globalization", "Win32_NetworkManagement_IpHelper", "Win32_NetworkManagement_Ndis", "Win32_Networking_WinSock", "Win32_UI_Shell"] }
+ 
+@@ -88,13 +94,12 @@ debug = false
+ [workspace]
+ resolver = "2"
+ members = ["spotify"]
+-exclude = ["common", "node", "vendor/lofty", "vendor/socket-pktinfo", "vendor/librqbit-dualstack-sockets", "vendor/librqbit", "vendor/dontfrag", "vendor/if-addrs", "vendor/quanta"]
++exclude = ["common", "node", "vendor/lofty", "vendor/socket-pktinfo", "vendor/librqbit-dualstack-sockets", "vendor/librqbit", "vendor/if-addrs", "vendor/quanta"]
+ default-members = ["."]
+ 
+ [patch.crates-io]
+ quanta = { path = "vendor/quanta" }
+ if-addrs = { path = "vendor/if-addrs" }
+-dontfrag = { path = "vendor/dontfrag" }
+ librqbit = { path = "vendor/librqbit" }
+ librqbit-dualstack-sockets = { path = "vendor/librqbit-dualstack-sockets" }
+ # Pinned upstream source with the no-compression build fix (see node/README.md).
+diff --git a/README.md b/README.md
+index 7f7b16c..f2ebd5c 100644
+--- a/README.md
++++ b/README.md
+@@ -153,6 +153,11 @@ unversioned libsoup library name. Waveforms missing while a network track is
+ being verified are requested once more from the local node after audio starts.
+ No additional peer search is triggered by that retry.
+ 
++Online lyrics on Android use Rustls with bundled public root certificates,
++without requiring a GIO TLS module in the GTK bundle. The client verifies
++certificates and hostnames, accepts HTTPS only, and enforces request timeouts
++and response size limits.
++
+ Private settings and music live outside GTK's replaceable resource directory.
+ Existing files are moved before refreshing assets; a destination conflict stops
+ startup without overwriting either copy. Keep application data when updating.
+diff --git a/REUSE.toml b/REUSE.toml
+index 5e043a9..142c560 100644
+--- a/REUSE.toml
++++ b/REUSE.toml
+@@ -12,12 +12,6 @@ precedence = "aggregate"
+ SPDX-FileCopyrightText = ["2018 MaidSafe.net limited.", "2020 messense"]
+ SPDX-License-Identifier = "MIT OR BSD-3-Clause"
+ 
+-[[annotations]]
+-path = "vendor/dontfrag/**"
+-precedence = "aggregate"
+-SPDX-FileCopyrightText = "2023 Nicolas Nattis"
+-SPDX-License-Identifier = "MIT OR Apache-2.0"
+-
+ [[annotations]]
+ path = "vendor/librqbit/**"
+ precedence = "aggregate"
+diff --git a/build-aux/android/java/io/hopea/hopea/HopeaApplication.java b/build-aux/android/java/io/hopea/hopea/HopeaApplication.java
+index 38fca0d..c06ce01 100644
+--- a/build-aux/android/java/io/hopea/hopea/HopeaApplication.java
++++ b/build-aux/android/java/io/hopea/hopea/HopeaApplication.java
+@@ -71,6 +71,7 @@ public final class HopeaApplication extends org.gtk.android.RuntimeApplication {
+ 
+         registerActivityLifecycleCallbacks(new Application.ActivityLifecycleCallbacks() {
+             @Override public void onActivityResumed(Activity activity) {
++                KeyboardVisibility.watch(activity);
+                 if (previousReport == null || activity.isFinishing()) return;
+                 String report = previousReport;
+                 previousReport = null;
+@@ -90,10 +91,10 @@ public final class HopeaApplication extends org.gtk.android.RuntimeApplication {
+             }
+             @Override public void onActivityCreated(Activity activity, Bundle state) { }
+             @Override public void onActivityStarted(Activity activity) { }
+-            @Override public void onActivityPaused(Activity activity) { }
++            @Override public void onActivityPaused(Activity activity) { KeyboardVisibility.stop(activity); }
+             @Override public void onActivityStopped(Activity activity) { }
+             @Override public void onActivitySaveInstanceState(Activity activity, Bundle state) { }
+-            @Override public void onActivityDestroyed(Activity activity) { }
++            @Override public void onActivityDestroyed(Activity activity) { KeyboardVisibility.stop(activity); }
+         });
+         super.onCreate();
+     }
+diff --git a/build-aux/android/java/io/hopea/hopea/KeyboardVisibility.java b/build-aux/android/java/io/hopea/hopea/KeyboardVisibility.java
+new file mode 100644
+index 0000000..5574ced
+--- /dev/null
++++ b/build-aux/android/java/io/hopea/hopea/KeyboardVisibility.java
+@@ -0,0 +1,72 @@
++// SPDX-FileCopyrightText: 2026 Daniil Klimov
++// SPDX-License-Identifier: GPL-3.0-or-later
++package io.hopea.hopea;
++
++import android.app.Activity;
++import android.graphics.Rect;
++import android.os.Build;
++import android.view.View;
++import android.view.ViewTreeObserver;
++import android.view.WindowInsets;
++import java.lang.ref.WeakReference;
++
++/** Read Android views on its UI thread; GTK only reads the published snapshot. */
++public final class KeyboardVisibility {
++    private static volatile int visible = -1;
++    private static WeakReference<Activity> owner = new WeakReference<>(null);
++    private static View decor;
++    private static ViewTreeObserver.OnGlobalLayoutListener listener;
++
++    private KeyboardVisibility() { }
++
++    public static int current() { return visible; }
++
++    public static void watch(Activity activity) {
++        activity.runOnUiThread(() -> {
++            if (activity.isFinishing() || activity.isDestroyed()) return;
++            if (owner.get() == activity && decor != null) {
++                update();
++                return;
++            }
++            detach();
++            owner = new WeakReference<>(activity);
++            decor = activity.getWindow().getDecorView();
++            listener = KeyboardVisibility::update;
++            decor.getViewTreeObserver().addOnGlobalLayoutListener(listener);
++            update();
++        });
++    }
++
++    public static void stop(Activity activity) {
++        activity.runOnUiThread(() -> {
++            if (owner.get() == activity) detach();
++        });
++    }
++
++    private static void detach() {
++        if (decor != null && listener != null && decor.getViewTreeObserver().isAlive())
++            decor.getViewTreeObserver().removeOnGlobalLayoutListener(listener);
++        decor = null;
++        listener = null;
++        owner.clear();
++        visible = -1;
++    }
++
++    private static void update() {
++        if (decor == null) return;
++        if (Build.VERSION.SDK_INT >= 30) {
++            WindowInsets insets = decor.getRootWindowInsets();
++            if (insets != null)
++                visible = insets.isVisible(WindowInsets.Type.ime()) ? 1 : 0;
++        } else {
++            // Android 9/10 lack IME insets. Ignore ordinary navigation/status
++            // bars while detecting the area occupied by the software keyboard.
++            Rect frame = new Rect();
++            decor.getWindowVisibleDisplayFrame(frame);
++            int height = decor.getRootView().getHeight();
++            if (height <= 0) return;
++            int threshold = Math.max((int)(100 * decor.getResources().getDisplayMetrics().density), height / 6);
++            visible = height - frame.bottom > threshold ? 1 : 0;
++        }
++    }
++}
+diff --git a/build-aux/android/java/io/hopea/hopea/PlaybackService.java b/build-aux/android/java/io/hopea/hopea/PlaybackService.java
+index 060cf5d..48fb3bd 100644
+--- a/build-aux/android/java/io/hopea/hopea/PlaybackService.java
++++ b/build-aux/android/java/io/hopea/hopea/PlaybackService.java
+@@ -47,6 +47,7 @@ public final class PlaybackService extends Service {
+         GameDetection.initialize(activity);
+     }
+     public static int gameStatus() { return GameDetection.status(); }
++    public static int keyboardVisible() { return KeyboardVisibility.current(); }
+     public static boolean openUsageAccess() { return GameDetection.openUsageAccess(); }
+     public static void update(boolean active, String song, String performer, long length, long elapsed) {
+         MAIN.post(() -> {
+diff --git a/build-aux/android/main.c b/build-aux/android/main.c
+index fa9572b..a703d08 100644
+--- a/build-aux/android/main.c
++++ b/build-aux/android/main.c
+@@ -8,7 +8,7 @@
+ extern void hopea_android_action(int action);
+ 
+ static jclass service;
+-static jmethodID update_method, vpn_method, game_method, usage_method;
++static jmethodID update_method, vpn_method, game_method, usage_method, keyboard_method;
+ static JavaVM *game_vm;
+ static void media_action(JNIEnv *env, jclass klass, jint action) {
+   hopea_android_action(action);
+@@ -45,7 +45,8 @@ static JNIEnv *bridge(void) {
+   vpn_method = (*env)->GetStaticMethodID(env, klass, "vpn", "()I");
+   game_method = (*env)->GetStaticMethodID(env, klass, "gameStatus", "()I");
+   usage_method = (*env)->GetStaticMethodID(env, klass, "openUsageAccess", "()Z");
+-  if ((*env)->ExceptionCheck(env) || !init || !update_method || !vpn_method || !game_method || !usage_method) goto failed;
++  keyboard_method = (*env)->GetStaticMethodID(env, klass, "keyboardVisible", "()I");
++  if ((*env)->ExceptionCheck(env) || !init || !update_method || !vpn_method || !game_method || !usage_method || !keyboard_method) goto failed;
+   (*env)->CallStaticVoidMethod(env, klass, init, activity);
+   if ((*env)->ExceptionCheck(env)) goto failed;
+   service = (*env)->NewGlobalRef(env, klass);
+@@ -83,6 +84,13 @@ int hopea_android_vpn(void) {
+   if ((*env)->ExceptionCheck(env)) { (*env)->ExceptionClear(env); return 0; }
+   return result;
+ }
++int hopea_android_keyboard(void) {
++  JNIEnv *env = bridge();
++  if (!env) return -1;
++  int result = (*env)->CallStaticIntMethod(env, service, keyboard_method);
++  if ((*env)->ExceptionCheck(env)) { (*env)->ExceptionClear(env); return -1; }
++  return result;
++}
+ // Called on GTK's thread before starting the worker. The worker must never
+ // access GTK/GDK objects or find an activity through gtk_window_get_toplevels.
+ void hopea_android_prepare_gaming(void) { (void)bridge(); }
+diff --git a/docs/ARCHITECTURE.md b/docs/ARCHITECTURE.md
+index 4e6fdaa..eca3c3f 100644
+--- a/docs/ARCHITECTURE.md
++++ b/docs/ARCHITECTURE.md
+@@ -209,25 +209,39 @@ finishes.
+ 
+ ### Sharing status
+ 
+-The network search page shows the node's last reachability result and a short
+-explanation above the search field. A compact green Online indicator requires
+-confirmed direct IPv4, IPv6 or relay reachability. Checking and limited incoming
+-connectivity use an amber indicator; an unavailable local service is shown as
+-Offline in red. Problems include an inline explanation and a Connection Help
+-button. After one minute without confirmation, Checking becomes Connection
+-Unconfirmed, explaining that no reachable helper may be available or networking
+-may be blocked. This is an unknown result, not proof of being online or offline;
+-background checks continue. Online details retain the connection type and its limitations. While
+-visible, it refreshes the authenticated local `/me` response every two seconds,
+-with at most one request in flight and stale replies from replaced nodes ignored.
+-This does not trigger extra peer probes or change network admission limits.
+-Reachability checks retain their existing schedule; a successful check is not a
+-guarantee that every search will find a source.
++The network search page shows one compact status row above the search field;
++explanations and connection recommendations are in Details. A green Online
++indicator requires confirmed direct IPv4, IPv6 or relay reachability. Checking
++and limited incoming connectivity use amber; an unavailable local service is
++Offline in red. After one minute without confirmation, Checking becomes
++Connection Unconfirmed. This is an unknown result, not proof of being online
++or offline; background checks continue. An open Details dialog follows the
++same live status, retaining the connection type and its limitations.
++
++`reach::Status` publishes changes to the API-visible state through a coalescing
++watch channel. The embedded-node bridge wakes an authenticated local `/me` read
++when confirmation changes, even when the search panel is hidden. The visible
++panel also polls every two seconds. Status polls run one at a time; a change
++received during a request schedules another read after it finishes. A replaced
++client is identified by its connection instance, not just its URL, and an old
++join response cannot overwrite a newer status. These updates do not trigger
++extra peer probes or change network admission limits. Reachability checks keep
++their existing schedule; a successful check does not guarantee a search result.
++
++On Android, the row hides while the software keyboard is visible and returns
++when it is dismissed, including when Back leaves focus in the search entry.
++Search focus is a fallback only until Android supplies its keyboard state.
++Joining does not focus search automatically. The Android panel header exposes
++My Music; desktop keeps its existing sidebar-close action. General Settings
++includes About Hopea on every platform and Keyboard Shortcuts only on desktop.
+ 
+ Bootstrap discovery still advertises a node optimistically when no peers are
+ available to test it. The API reports that state as `checking`, never as confirmed
+-direct reachability. No router settings or port mappings are changed by the UI. Its Details dialog
+-includes connection recommendations without advising users to disable their
++direct reachability; transition logs compare that same public status.
++Confirmation after bootstrap is still a distinct notification even though both
++states permit announcements.
++No router settings or port mappings are changed by the UI. Details includes
++connection recommendations without advising users to disable their
+ firewall or expose the authenticated local API. See `node/README.md` for discovery
+ retry and relay limits. Public DHT endpoints are filtered before Hopea HTTP
+ connections; explicit peers and LAN discovery retain their separate trust paths.
+diff --git a/docs/CONTRIBUTING.md b/docs/CONTRIBUTING.md
+index dc2f94b..dcca174 100644
+--- a/docs/CONTRIBUTING.md
++++ b/docs/CONTRIBUTING.md
+@@ -52,6 +52,26 @@ Keep testing proportional to the change. A regression test is useful for a bug
+ fix; link and build checks are enough for a small file relocation. Do not clear
+ working caches or the user's music library to run tests.
+ 
++### Android lyrics and keyboard checks
++
++Run these focused checks with Rust, OpenSSL and Python 3.11+ available; the
++keyboard check also needs a JDK:
++
++```sh
++bash tests/test_lyrics_https.sh
++python3 tests/test_android_keyboard.py
++```
++
++The lyrics harness runs the production Rustls transport against a local HTTPS
++server with temporary certificates. It checks trusted replies, certificate and
++hostname rejection, HTTPS downgrade rejection, status handling and response
++size limits without contacting a lyrics service. The keyboard harness compiles
++the production Java observer with Android API stand-ins and checks UI-thread
++access, show/hide updates, activity cleanup and the API 28 fallback.
++These host checks do not establish APK compatibility: verify lyrics lookup,
++keyboard dismissal with focus retained, rotation and activity resume on actual
++Android 9 and 14 devices or emulators.
++
+ ## Further information
+ 
+ ### Translating Hopea without a translation service
+@@ -141,9 +161,21 @@ carry forward only fixes still needed. The librqbit 9.1.0 refresh still needs ou
+ HTTP interface-binding guard on BSD. Quanta 0.12.6 carries the upstream 32-bit
+ musl `timespec` fix because governor 0.10.4 still requires quanta 0.12; quanta 0.13
+ already includes the fix. See [its patch notes](../vendor/quanta/HOPEA.md) before
+-removing the override. Other vendored crates remain at their latest
+-published stable versions as checked on November 17, 2026; their local fixes have
+-not become removable merely by updating the lockfile.
++removing the override.
++
++The `dontfrag` override was removed after the BSD IPv4 fix was accepted in
++[upstream PR #1](https://github.com/nicbn/dontfrag-rs/pull/1) and published in
++`dontfrag` 1.0.2 on November 17, 2026. Both workspaces now use that registry
++release; their lockfiles pin its checksum
++`f949ddc2e911eaf995d2cabc132a478c73cacd1cc0a04c1f0636544b9586178d`.
++The published archive identifies upstream commit
++`3f2a6f5ba0ba36aeb1e7d4b457481c4902f2691a` and contains the same BSD socket
++implementation as the former Hopea patch, along with the upstream license notices.
++
++`if-addrs` 0.15.0, `librqbit-dualstack-sockets` 0.7.0 and `socket-pktinfo` 0.4.2
++still have no newer published versions as checked on November 23, 2026. Their
++local patches remain; a merged PR alone is not a reason to remove an override
++before the release used by the lockfile contains the required fix.
+ 
+ Run the player, Spotify, common and node checks separately as described above.
+ Network and ingest regression tests must continue to enforce authentication,
+diff --git a/node/Cargo.lock b/node/Cargo.lock
+index 5ded72f..453c8cd 100644
+--- a/node/Cargo.lock
++++ b/node/Cargo.lock
+@@ -721,12 +721,14 @@ dependencies = [
+ 
+ [[package]]
+ name = "dontfrag"
+-version = "1.0.1"
++version = "1.0.2"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "f949ddc2e911eaf995d2cabc132a478c73cacd1cc0a04c1f0636544b9586178d"
+ dependencies = [
+  "cfg-if",
+  "libc",
+  "tokio",
+- "windows-sys 0.52.0",
++ "windows-sys 0.61.2",
+ ]
+ 
+ [[package]]
+diff --git a/node/Cargo.toml b/node/Cargo.toml
+index 482c39b..8465bcc 100644
+--- a/node/Cargo.toml
++++ b/node/Cargo.toml
+@@ -67,7 +67,6 @@ debug = false
+ [patch.crates-io]
+ quanta = { path = "../vendor/quanta" }
+ if-addrs = { path = "../vendor/if-addrs" }
+-dontfrag = { path = "../vendor/dontfrag" }
+ librqbit = { path = "../vendor/librqbit" }
+ librqbit-dualstack-sockets = { path = "../vendor/librqbit-dualstack-sockets" }
+ lofty = { path = "../vendor/lofty" }
+diff --git a/node/src/reach.rs b/node/src/reach.rs
+index bac1941..f01b998 100644
+--- a/node/src/reach.rs
++++ b/node/src/reach.rs
+@@ -36,7 +36,7 @@ use axum::{
+ };
+ use hopea_common::api::Reachability;
+ use serde::{Deserialize, Serialize};
+-use tokio::sync::Semaphore;
++use tokio::sync::{watch, Semaphore};
+ 
+ use crate::{keywords, p2p, relay, AppState};
+ 
+@@ -80,6 +80,7 @@ pub struct DialbackResponse {
+ /// What this node knows about its own reachability.
+ pub struct Status {
+     inner: Mutex<(Reachability, Option<SocketAddr>, bool)>,
++    changes: watch::Sender<Reachability>,
+     /// When each address last asked for a dial-back
+     dialbacks: Mutex<HashMap<IpAddr, Instant>>,
+     dialback_slots: Semaphore,
+@@ -89,6 +90,7 @@ impl Status {
+     pub fn new() -> Self {
+         Self {
+             inner: Mutex::new((Reachability::Checking, None, false)),
++            changes: watch::channel(Reachability::Checking).0,
+             dialbacks: Mutex::default(),
+             dialback_slots: Semaphore::new(4),
+         }
+@@ -104,7 +106,33 @@ impl Status {
+     }
+ 
+     pub fn set(&self, reachability: Reachability, relay: Option<SocketAddr>) {
+-        *self.inner.lock().unwrap_or_else(|e| e.into_inner()) = (reachability, relay, true);
++        self.replace(reachability, relay, true);
++    }
++
++    /// Observe the same confirmed state that the authenticated API reports.
++    /// Bootstrap advertising is deliberately not an Online notification.
++    pub fn subscribe(&self) -> watch::Receiver<Reachability> {
++        self.changes.subscribe()
++    }
++
++    fn replace(&self, reachability: Reachability, relay: Option<SocketAddr>, confirmed: bool) {
++        let mut status = self.inner.lock().unwrap_or_else(|e| e.into_inner());
++        *status = (reachability, relay, confirmed);
++        let reported = if confirmed {
++            reachability
++        } else {
++            Reachability::Checking
++        };
++        // Publish while holding the state lock: a later transition must not be
++        // followed by an older notification from another worker.
++        self.changes.send_if_modified(|current| {
++            if *current == reported {
++                false
++            } else {
++                *current = reported;
++                true
++            }
++        });
+     }
+ 
+     /// Public status must not mistake bootstrap optimism for a successful check.
+@@ -118,7 +146,7 @@ impl Status {
+     }
+ 
+     pub(crate) fn bootstrap(&self) {
+-        *self.inner.lock().unwrap_or_else(|e| e.into_inner()) = (Reachability::Direct, None, false);
++        self.replace(Reachability::Direct, None, false);
+     }
+ 
+     /// Whether other nodes can connect to this one directly.
+@@ -334,7 +362,7 @@ pub async fn run(state: AppState) {
+             check(&state, &nodes, round).await
+         };
+         round = round.wrapping_add(1);
+-        let before = state.reach.get();
++        let before = (state.reach.get(), state.reach.reported());
+         let next_check = match (v4, v6) {
+             (Some(true), _) => {
+                 state.reach.set(Reachability::Direct, None);
+@@ -367,9 +395,11 @@ pub async fn run(state: AppState) {
+                 continue;
+             }
+         };
+-        let now = state.reach.get();
++        let now = (state.reach.get(), state.reach.reported());
++        if now.1 != before.1 {
++            tracing::info!("Reachability: {:?}", now.1);
++        }
+         if now != before {
+-            tracing::info!("Reachability: {now:?}");
+             state.announce.notify_one();
+         }
+         tokio::time::sleep(next_check).await;
+@@ -380,6 +410,34 @@ pub async fn run(state: AppState) {
+ mod status_tests {
+     use super::*;
+ 
++    #[test]
++    fn confirmation_notifies_observers_even_after_optimistic_bootstrap() {
++        let status = Status::new();
++        let mut changes = status.subscribe();
++        status.bootstrap();
++        assert_eq!(status.get(), Reachability::Direct);
++        assert!(!changes.has_changed().unwrap());
++
++        status.set(Reachability::Direct, None);
++        assert!(changes.has_changed().unwrap());
++        assert_eq!(*changes.borrow_and_update(), Reachability::Direct);
++        assert_eq!(status.reported(), Reachability::Direct);
++        status.set(Reachability::Direct, None);
++        assert!(
++            !changes.has_changed().unwrap(),
++            "unchanged checks must not poll the UI again"
++        );
++
++        status.set(
++            Reachability::Relay,
++            Some(SocketAddr::from(([8, 8, 8, 8], 47391))),
++        );
++        assert_eq!(*changes.borrow_and_update(), Reachability::Relay);
++        status.bootstrap();
++        assert!(changes.has_changed().unwrap());
++        assert_eq!(*changes.borrow_and_update(), Reachability::Checking);
++    }
++
+     #[test]
+     fn retry_rounds_do_not_keep_asking_only_the_first_helpers() {
+         let nodes: Vec<SocketAddr> = (1..=7)
+diff --git a/po/ru.po b/po/ru.po
+index 7998fb4..4b11f21 100644
+--- a/po/ru.po
++++ b/po/ru.po
+@@ -1106,9 +1106,9 @@ msgid "No Songs Found"
+ msgstr "Песни не найдены"
+ 
+ #: src/gtk/library-panel.blp:369
+-msgid "Choose music files on this computer to share with everyone"
++msgid "Choose music files on this device to share with everyone"
+ msgstr ""
+-"Выберите музыкальные файлы на этом компьютере, чтобы поделиться со всеми"
++"Выберите музыкальные файлы на этом устройстве, чтобы поделиться со всеми"
+ 
+ #: src/gtk/library-panel.blp:373
+ msgid "_Share Songs…"
+@@ -2498,11 +2498,11 @@ msgstr "Покинуть сеть?"
+ #: src/library_panel.rs:1671
+ msgid ""
+ "The songs you share will no longer be available to others, and you won’t be "
+-"able to search theirs. Everything stays on this computer for when you join "
++"able to search theirs. Everything stays on this device for when you join "
+ "again."
+ msgstr ""
+ "Песни, которыми вы делитесь, больше не будут доступны другим, и вы не "
+-"сможете искать их. Всё останется на этом компьютере на случай повторного "
++"сможете искать их. Всё останется на этом устройстве на случай повторного "
+ "подключения."
+ 
+ #: src/library_panel.rs:1677
+@@ -2527,10 +2527,10 @@ msgstr "Искать музыку всех"
+ 
+ #: src/library_panel.rs:1838
+ msgid ""
+-"Find new songs and albums. Music already on this computer is hidden from "
++"Find new songs and albums. Music already on this device is hidden from "
+ "search."
+ msgstr ""
+-"Находите новые песни и альбомы. Музыка, уже имеющаяся на этом компьютере, "
++"Находите новые песни и альбомы. Музыка, уже имеющаяся на этом устройстве, "
+ "скрыта из поиска."
+ 
+ #: src/library_panel.rs:1843
+@@ -2550,11 +2550,11 @@ msgstr "опубликовано {name}"
+ 
+ #: src/library_panel.rs:1892
+ #, rust-format
+-msgid "on {} computer"
+-msgid_plural "on {} computers"
+-msgstr[0] "на {} компьютере"
+-msgstr[1] "на {} компьютерах"
+-msgstr[2] "на {} компьютерах"
++msgid "on {} device"
++msgid_plural "on {} devices"
++msgstr[0] "на {} устройстве"
++msgstr[1] "на {} устройствах"
++msgstr[2] "на {} устройствах"
+ 
+ #: src/library_panel.rs:1916
+ msgid "Listen without adding to your playlist"
+@@ -2820,13 +2820,13 @@ msgstr "VPN не включён: другие видят ваш адрес"
+ 
+ #: src/library_panel.rs:2772
+ msgid ""
+-"This computer can’t reach the BitTorrent network (DHT), which is how it "
++"This device can’t reach the BitTorrent network (DHT), which is how it "
+ "finds others. Something blocks UDP traffic: a firewall, a VPN, or the "
+ "network itself (as in some offices, schools and hotels). Try another "
+ "network, or allow UDP for the app. Right after the app starts this can also "
+ "take a minute."
+ msgstr ""
+-"Этот компьютер не может связаться с сетью BitTorrent (DHT), через которую "
++"Это устройство не может связаться с сетью BitTorrent (DHT), через которую "
+ "находит других. Что-то блокирует UDP-трафик: брандмауэр, VPN или сама сеть "
+ "(как в некоторых офисах, школах и отелях). Попробуйте другую сеть или "
+ "разрешите UDP для приложения. Сразу после запуска приложения это также может "
+@@ -4548,3 +4548,33 @@ msgstr ""
+ 
+ #~ msgid "Choose a folder"
+ #~ msgstr "Выбрать папку"
++
++#: src/library_panel.rs
++msgid "Help"
++msgstr "Справка"
++
++#: src/library_panel.rs
++msgid "Keyboard Shortcuts"
++msgstr "Сочетания клавиш"
++
++#: src/library_panel.rs
++msgid "About Hopea"
++msgstr "О приложении Hopea"
++
++msgid "Add music from your device or find songs in Shared Music."
++msgstr "Добавьте музыку с устройства или найдите песни в «Общей музыке»."
++
++msgid "On this device · sharing ↑ {speed}"
++msgstr "На этом устройстве · раздача ↑ {speed}"
++
++msgid "On this device"
++msgstr "На этом устройстве"
++
++msgid "Saved on this device. Reconnect and save again to publish the cover and lyrics."
++msgstr "Сохранено на этом устройстве. Подключитесь к сети и сохраните ещё раз, чтобы опубликовать обложку и текст песни."
++
++msgid "Choose an image on this device"
++msgstr "Выберите изображение на этом устройстве"
++
++msgid "Try another search. Songs already on this device and songs with no reachable sources are hidden."
++msgstr "Попробуйте другой запрос. Песни, которые уже есть на этом устройстве или для которых нет доступных источников, скрыты."
+diff --git a/src/android.rs b/src/android.rs
+index 6fa8189..519e42e 100644
+--- a/src/android.rs
++++ b/src/android.rs
+@@ -19,6 +19,7 @@ extern "C" {
+         position: i64,
+     );
+     fn hopea_android_vpn() -> i32;
++    fn hopea_android_keyboard() -> i32;
+     fn hopea_android_prepare_gaming();
+     fn hopea_android_game_status() -> i32;
+     fn hopea_android_open_usage_settings() -> i32;
+@@ -40,6 +41,15 @@ pub extern "C" fn hopea_android_action(action: i32) {
+ pub fn vpn() -> i32 {
+     unsafe { hopea_android_vpn() }
+ }
++/// `None` until Android has supplied window insets. Search focus is a safe
++/// temporary fallback, but must not keep the status hidden after Back closes IME.
++pub fn keyboard_visible() -> Option<bool> {
++    match unsafe { hopea_android_keyboard() } {
++        0 => Some(false),
++        1 => Some(true),
++        _ => None,
++    }
++}
+ pub fn prepare_gaming() {
+     unsafe { hopea_android_prepare_gaming() }
+ }
+diff --git a/src/application.rs b/src/application.rs
+index 7ff9f3a..3036cdf 100644
+--- a/src/application.rs
++++ b/src/application.rs
+@@ -111,23 +111,25 @@ mod imp {
+             obj.setup_gactions();
+             obj.setup_settings();
+ 
+-            obj.set_accels_for_action("app.quit", &["<primary>q"]);
+-
+-            obj.set_accels_for_action("queue.add-song", &["<primary>s"]);
+-            // Ctrl+A belongs to the focused text editor, including search.
+-            obj.set_accels_for_action("queue.add-folder", &["<primary><shift>o"]);
+-            obj.set_accels_for_action("queue.clear", &["<primary>L"]);
+-            obj.set_accels_for_action("queue.toggle", &["F9"]);
+-            obj.set_accels_for_action("queue.search", &["<primary>F"]);
+-            obj.set_accels_for_action("queue.shuffle", &["<primary>r"]);
+-            obj.set_accels_for_action("win.shared-library", &["<primary>u"]);
+-
+-            obj.set_accels_for_action("win.seek-backwards", &["<primary>Left"]);
+-            obj.set_accels_for_action("win.seek-forward", &["<primary>Right"]);
+-            obj.set_accels_for_action("win.previous", &["<primary>b"]);
+-            obj.set_accels_for_action("win.next", &["<primary>n"]);
+-            obj.set_accels_for_action("win.play", &["<primary>p"]);
+-            obj.set_accels_for_action("win.copy", &["<primary>c"]);
++            // GTK also displays these accelerators in menus. Touch-only
++            // Android menus should not advertise desktop keyboard commands.
++            #[cfg(not(target_os = "android"))]
++            {
++                obj.set_accels_for_action("queue.add-song", &["<primary>s"]);
++                // Ctrl+A belongs to the focused text editor, including search.
++                obj.set_accels_for_action("queue.add-folder", &["<primary><shift>o"]);
++                obj.set_accels_for_action("queue.clear", &["<primary>L"]);
++                obj.set_accels_for_action("queue.toggle", &["F9"]);
++                obj.set_accels_for_action("queue.search", &["<primary>F"]);
++                obj.set_accels_for_action("queue.shuffle", &["<primary>r"]);
++                obj.set_accels_for_action("win.shared-library", &["<primary>u"]);
++                obj.set_accels_for_action("win.seek-backwards", &["<primary>Left"]);
++                obj.set_accels_for_action("win.seek-forward", &["<primary>Right"]);
++                obj.set_accels_for_action("win.previous", &["<primary>b"]);
++                obj.set_accels_for_action("win.next", &["<primary>n"]);
++                obj.set_accels_for_action("win.play", &["<primary>p"]);
++                obj.set_accels_for_action("win.copy", &["<primary>c"]);
++            }
+         }
+     }
+ 
+diff --git a/src/artwork.rs b/src/artwork.rs
+index e8460a0..93be042 100644
+--- a/src/artwork.rs
++++ b/src/artwork.rs
+@@ -138,7 +138,7 @@ pub async fn choose(parent: Option<&gtk::Window>) -> Result<Option<glib::Bytes>,
+     };
+     let path = file
+         .path()
+-        .ok_or_else(|| i18n("Choose an image on this computer"))?;
++        .ok_or_else(|| i18n("Choose an image on this device"))?;
+     let bytes = gio::spawn_blocking(move || {
+         let mut bytes = Vec::new();
+         std::fs::File::open(path)
+diff --git a/src/audio/song.rs b/src/audio/song.rs
+index 2f3b307..669946c 100644
+--- a/src/audio/song.rs
++++ b/src/audio/song.rs
+@@ -520,7 +520,7 @@ impl Song {
+             Err("Invalid song")
+         } else {
+             res.set_property("progress", 1.0_f64);
+-            res.set_property("status", crate::i18n::i18n("On this computer"));
++            res.set_property("status", crate::i18n::i18n("On this device"));
+             // A file shared from here is in the library
+             if let Some(id) = crate::library::shared_files::id_for(uri) {
+                 res.set_library(Some(id), true, false);
+@@ -540,7 +540,7 @@ impl Song {
+         crate::artwork::watch_song(&song);
+         crate::song_edits::apply_cover(&song);
+         song.set_property("progress", 1.0_f64);
+-        song.set_property("status", i18n("On this computer"));
++        song.set_property("status", i18n("On this device"));
+         if let Some(id) = crate::library::shared_files::id_for(&song.uri()) {
+             song.set_library(Some(id), true, false);
+         }
+@@ -584,7 +584,7 @@ impl Song {
+         song.set_property(
+             "status",
+             if track.local {
+-                i18n("On this computer")
++                i18n("On this device")
+             } else {
+                 i18n("Available on the network")
+             },
+diff --git a/src/gtk/library-panel.blp b/src/gtk/library-panel.blp
+index 5e33eda..1456e4c 100644
+--- a/src/gtk/library-panel.blp
++++ b/src/gtk/library-panel.blp
+@@ -31,6 +31,14 @@ template $HopeaLibraryPanel: Adw.Bin {
+               show-start-title-buttons: false;
+               show-end-title-buttons: false;
+ 
++              [start]
++              Button my_music_button {
++                icon-name: "hopea-folder-music-symbolic";
++                tooltip-text: _("My Music");
++                action-name: "win.show-my-music";
++                visible: false;
++              }
++
+               title-widget: Box {
+                 Label title_label {
+                   label: _("Shared Music");
+@@ -48,7 +56,7 @@ template $HopeaLibraryPanel: Adw.Bin {
+               };
+ 
+               [end]
+-              Button {
++              Button close_library_button {
+                 icon-name: "hopea-sidebar-show-right-symbolic";
+                 tooltip-text: _("Hide Shared Music");
+                 action-name: "win.shared-library";
+@@ -219,22 +227,17 @@ template $HopeaLibraryPanel: Adw.Bin {
+                                 Label reach_title {
+                                   label: _("Checking Connection…");
+                                   xalign: 0;
+-                                  wrap: true;
++                                  hexpand: true;
++                                  ellipsize: end;
+                                   styles [ "heading" ]
+                                 }
+                               }
+                               Button reach_details {
+-                                label: _("Connection Help");
++                                label: _("Details");
+                                 valign: center;
+                                 styles [ "flat", "caption" ]
+                               }
+                             }
+-                            Label reach_summary {
+-                              xalign: 0;
+-                              wrap: true;
+-                              wrap-mode: word_char;
+-                              styles [ "dim-label", "caption" ]
+-                            }
+                           };
+                         }
+ 
+@@ -366,7 +369,7 @@ template $HopeaLibraryPanel: Adw.Bin {
+ 
+               Button upload_button {
+                 action-name: "library.upload";
+-                tooltip-text: _("Choose music files on this computer to share with everyone");
++                tooltip-text: _("Choose music files on this device to share with everyone");
+ 
+                 child: Adw.ButtonContent {
+                   icon-name: "hopea-list-add-symbolic";
+diff --git a/src/gtk/playback-control.blp b/src/gtk/playback-control.blp
+index 9bb0b36..3d8dc78 100644
+--- a/src/gtk/playback-control.blp
++++ b/src/gtk/playback-control.blp
+@@ -193,43 +193,7 @@ menu primary_menu {
+     item {
+       label: _("Open Directory");
+       action: "win.open-directory";
+-    }
+-  }
+-
+-  section {
+-    item {
+-      label: _("Add _Song");
+-      action: "queue.add-song";
+-    }
+-
+-    item {
+-      label: _("Add _Folder");
+-      action: "queue.add-folder";
+-    }
+-
+-    item {
+-      label: _("Shared _Music");
+-      action: "win.shared-library";
+-    }
+-
+-    item {
+-      label: _("Shared Music _Settings…");
+-      action: "win.library-settings";
+-    }
+-
+-    item {
+-      label: _("_Bring Your Music Over…");
+-      action: "win.import-music";
+-    }
+-
+-    item {
+-      label: _("My Albums…");
+-      action: "win.my-albums";
+-    }
+-
+-    item {
+-      label: _("Clear");
+-      action: "queue.clear";
++      hidden-when: "action-missing";
+     }
+   }
+ 
+@@ -269,20 +233,4 @@ menu primary_menu {
+     }
+   }
+ 
+-  section {
+-    item {
+-      label: _("_Keyboard Shortcuts");
+-      action: "app.shortcuts";
+-    }
+-
+-    item {
+-      label: _("_About Hopea");
+-      action: "app.about";
+-    }
+-
+-    item {
+-      label: _("_Quit");
+-      action: "app.quit";
+-    }
+-  }
+ }
+diff --git a/src/gtk/playlist-view.blp b/src/gtk/playlist-view.blp
+index 9324180..a4ab52c 100644
+--- a/src/gtk/playlist-view.blp
++++ b/src/gtk/playlist-view.blp
+@@ -61,18 +61,44 @@ template $HopeaPlaylistView: Widget {
+     }
+ 
+     [top]
+-    Box {
++    Box albums_section {
++      orientation: vertical;
++      spacing: 6;
+       margin-start: 12;
+       margin-end: 12;
+       margin-bottom: 6;
+ 
+-      Button {
+-        hexpand: true;
+-        action-name: "win.my-albums";
+-        tooltip-text: _("Create, edit and share albums");
+-        child: Adw.ButtonContent {
+-          icon-name: "hopea-media-optical-symbolic";
+-          label: _("My Albums");
++      Box {
++        spacing: 6;
++        Label {
++          label: _("Albums");
++          xalign: 0;
++          hexpand: true;
++          styles [ "heading" ]
++        }
++        Button new_album_button {
++          label: _("New Album");
++          styles [ "flat" ]
++        }
++        Button open_album_button {
++          icon-name: "hopea-document-open-symbolic";
++          tooltip-text: _("Open a shared Hopea album");
++          styles [ "flat" ]
++        }
++      }
++
++      ScrolledWindow albums_scroll {
++        visible: false;
++        hscrollbar-policy: automatic;
++        vscrollbar-policy: never;
++        min-content-height: 192;
++        max-content-height: 208;
++        propagate-natural-height: true;
++        overlay-scrolling: false;
++        child: ListView albums_list {
++          orientation: horizontal;
++          single-click-activate: true;
++          styles [ "background", "album-results" ]
+         };
+       }
+     }
+diff --git a/src/gtk/shortcuts-dialog.blp b/src/gtk/shortcuts-dialog.blp
+index f5e79d2..5e6d90e 100644
+--- a/src/gtk/shortcuts-dialog.blp
++++ b/src/gtk/shortcuts-dialog.blp
+@@ -22,10 +22,6 @@ Adw.ShortcutsDialog shortcuts_dialog {
+       action-name: "app.shortcuts";
+     }
+ 
+-    Adw.ShortcutsItem {
+-      title: C_("shortcut window", "Quit");
+-      action-name: "app.quit";
+-    }
+   }
+ 
+   Adw.ShortcutsSection {
+diff --git a/src/gtk/window.blp b/src/gtk/window.blp
+index 27fa7b7..2e46fad 100644
+--- a/src/gtk/window.blp
++++ b/src/gtk/window.blp
+@@ -65,6 +65,17 @@ template $HopeaWindow: Adw.ApplicationWindow {
+                   Adw.HeaderBar {
+                     show-title: false;
+ 
++                    [start]
++                    Button my_music_header_start {
++                      visible: false;
++                      action-name: "win.show-my-music";
++                      tooltip-text: _("My Music");
++                      child: Adw.ButtonContent {
++                        icon-name: "hopea-view-queue-symbolic";
++                        label: _("My Music");
++                      };
++                    }
++
+                     [end]
+                     Button import_progress_start {
+                       icon-name: "hopea-folder-download-symbolic";
+@@ -187,6 +198,16 @@ template $HopeaWindow: Adw.ApplicationWindow {
+                     }
+                     [top]
+                     Adw.HeaderBar player_header {
++                      [start]
++                      Button my_music_header {
++                        visible: false;
++                        action-name: "win.show-my-music";
++                        tooltip-text: _("My Music");
++                        child: Adw.ButtonContent {
++                          icon-name: "hopea-view-queue-symbolic";
++                          label: _("My Music");
++                        };
++                      }
+                       [end]
+                       Button import_progress_main {
+                         icon-name: "hopea-folder-download-symbolic";
+diff --git a/src/library/client.rs b/src/library/client.rs
+index 8dd095c..c482c56 100644
+--- a/src/library/client.rs
++++ b/src/library/client.rs
+@@ -221,6 +221,11 @@ impl LibraryClient {
+         &self.inner.origin
+     }
+ 
++    /// Clones share one connection; a restarted node may reuse its old URL.
++    pub(crate) fn same_connection(&self, other: &Self) -> bool {
++        Rc::ptr_eq(&self.inner, &other.inner)
++    }
++
+     pub(super) fn authorization(&self) -> String {
+         format!("Bearer {}", self.inner.token)
+     }
+@@ -647,6 +652,15 @@ async fn read_limited(stream: &gio::InputStream, limit: usize) -> Result<Vec<u8>
+ mod tests {
+     use super::*;
+ 
++    #[test]
++    fn replaced_connection_is_distinct_even_when_the_origin_is_reused() {
++        let before = LibraryClient::new("http://127.0.0.1:47392", "old-test-token").unwrap();
++        let after = LibraryClient::new("http://127.0.0.1:47392", "new-test-token").unwrap();
++        assert_eq!(before.origin(), after.origin());
++        assert!(before.same_connection(&before.clone()));
++        assert!(!before.same_connection(&after));
++    }
++
+     #[test]
+     fn discovery_yields_local_results_before_network_finishes() {
+         use std::{
+diff --git a/src/library/mod.rs b/src/library/mod.rs
+index 3bbf0de..a8d1c27 100644
+--- a/src/library/mod.rs
++++ b/src/library/mod.rs
+@@ -40,7 +40,7 @@ use log::debug;
+ 
+ pub use client::{ClientError, LibraryClient, UploadCover};
+ pub(crate) use node::set_gaming;
+-pub(crate) use node::{catalog_changes, notify_catalog_changed};
++pub(crate) use node::{catalog_changes, notify_catalog_changed, reachability_changes};
+ 
+ thread_local! {
+     /// Whether the listener wants to be on the network in this session
+diff --git a/src/library/node.rs b/src/library/node.rs
+index 711a375..31b3cdd 100644
+--- a/src/library/node.rs
++++ b/src/library/node.rs
+@@ -26,11 +26,17 @@ static RUNNING: Mutex<Option<Running>> = Mutex::new(None);
+ 
+ static CATALOG_CHANGES: std::sync::LazyLock<tokio::sync::watch::Sender<u64>> =
+     std::sync::LazyLock::new(|| tokio::sync::watch::Sender::new(0));
++static REACHABILITY_CHANGES: std::sync::LazyLock<tokio::sync::watch::Sender<u64>> =
++    std::sync::LazyLock::new(|| tokio::sync::watch::Sender::new(0));
+ 
+ pub(crate) fn catalog_changes() -> tokio::sync::watch::Receiver<u64> {
+     CATALOG_CHANGES.subscribe()
+ }
+ 
++pub(crate) fn reachability_changes() -> tokio::sync::watch::Receiver<u64> {
++    REACHABILITY_CHANGES.subscribe()
++}
++
+ pub(crate) fn notify_catalog_changed() {
+     CATALOG_CHANGES.send_modify(|revision| *revision = revision.wrapping_add(1));
+ }
+@@ -90,6 +96,7 @@ pub async fn start(
+                     };
+                     let url = format!("http://{}", node.api_addr);
+                     let mut changes = node.state.changes.subscribe();
++                    let mut reachability = node.state.reach.subscribe();
+                     node.state
+                         .torrents
+                         .set_gaming(*gaming_rx.borrow_and_update());
+@@ -102,6 +109,10 @@ pub async fn start(
+                                 if changed.is_err() { break; }
+                                 notify_catalog_changed();
+                             }
++                            changed = reachability.changed() => {
++                                if changed.is_err() { break; }
++                                REACHABILITY_CHANGES.send_modify(|revision| *revision = revision.wrapping_add(1));
++                            }
+                             changed = gaming_rx.changed() => {
+                                 if changed.is_err() { break; }
+                                 node.state.torrents.set_gaming(*gaming_rx.borrow_and_update());
+diff --git a/src/library_panel.rs b/src/library_panel.rs
+index 6f4b7e2..7c0aa6b 100644
+--- a/src/library_panel.rs
++++ b/src/library_panel.rs
+@@ -39,6 +39,44 @@ use crate::{
+ /// Longest name shown next to shared songs, as the node accepts it
+ const MAX_NAME_CHARS: usize = 32;
+ 
++/// Coalesce status updates without losing a change received during an API read.
++#[derive(Debug, Default)]
++struct StatusPoll {
++    generation: u64,
++    active: Option<u64>,
++    pending: bool,
++}
++
++impl StatusPoll {
++    fn begin(&mut self) -> Option<u64> {
++        if self.active.is_some() {
++            self.pending = true;
++            return None;
++        }
++        self.generation = self.generation.wrapping_add(1);
++        self.active = Some(self.generation);
++        self.active
++    }
++
++    fn finish(&mut self, generation: u64) -> Option<bool> {
++        if self.active != Some(generation) {
++            return None;
++        }
++        self.active = None;
++        Some(std::mem::take(&mut self.pending))
++    }
++
++    fn reset(&mut self) {
++        self.generation = self.generation.wrapping_add(1);
++        self.active = None;
++        self.pending = false;
++    }
++}
++
++fn status_banner_visible(android: bool, keyboard_visible: Option<bool>, editing: bool) -> bool {
++    !android || !keyboard_visible.unwrap_or(editing)
++}
++
+ pub(crate) fn import_subscription_notice() -> String {
+     i18n("Service imports require an active subscription to that service. Importing without one violates Hopea’s import rules.")
+ }
+@@ -94,6 +132,10 @@ mod imp {
+         #[template_child]
+         pub menu_button: TemplateChild<gtk::MenuButton>,
+         #[template_child]
++        pub my_music_button: TemplateChild<gtk::Button>,
++        #[template_child]
++        pub close_library_button: TemplateChild<gtk::Button>,
++        #[template_child]
+         pub stack: TemplateChild<gtk::Stack>,
+         #[template_child]
+         pub name_row: TemplateChild<adw::EntryRow>,
+@@ -107,9 +149,13 @@ mod imp {
+         pub reach_title: TemplateChild<gtk::Label>,
+         #[template_child]
+         pub reach_details: TemplateChild<gtk::Button>,
+-        #[template_child]
+-        pub reach_summary: TemplateChild<gtk::Label>,
+         pub checking_since: Cell<Option<std::time::Instant>>,
++        pub search_editing: Cell<bool>,
++        pub keyboard_visible: Cell<Option<bool>>,
++        #[cfg(test)]
++        pub android_layout: Cell<bool>,
++        pub reach_updates: RefCell<Option<glib::JoinHandle<()>>>,
++        pub reach_dialog: glib::WeakRef<adw::AlertDialog>,
+         #[template_child]
+         pub vpn_banner: TemplateChild<adw::Banner>,
+         #[template_child]
+@@ -166,7 +212,10 @@ mod imp {
+         pub upload_progress: TemplateChild<gtk::ProgressBar>,
+ 
+         pub me: RefCell<Option<Me>>,
+-        pub me_loading: Cell<bool>,
++        pub(super) me_poll: RefCell<StatusPoll>,
++        pub me_revision: Cell<u64>,
++        #[cfg(test)]
++        pub status_fixture: Cell<bool>,
+         pub settings: once_cell::unsync::OnceCell<gio::Settings>,
+         pub loaded: Cell<u32>,
+         pub results: once_cell::unsync::OnceCell<gio::ListStore>,
+@@ -234,10 +283,23 @@ mod imp {
+         fn constructed(&self) {
+             self.parent_constructed();
+             let obj = self.obj();
++            self.my_music_button
++                .set_visible(cfg!(target_os = "android"));
++            self.close_library_button
++                .set_visible(!cfg!(target_os = "android"));
+             obj.setup_results();
+             obj.connect_signals();
+             obj.start();
+         }
++
++        fn dispose(&self) {
++            if let Some(updates) = self.reach_updates.borrow_mut().take() {
++                updates.abort();
++            }
++            // Clear AdwBin's child pointer before the template releases it.
++            self.obj().set_child(gtk::Widget::NONE);
++            self.dispose_template();
++        }
+     }
+ 
+     impl WidgetImpl for LibraryPanel {
+@@ -246,6 +308,7 @@ mod imp {
+             self.obj().refresh_protection_notice();
+             // Reachability may have changed since the panel was last shown
+             self.obj().refresh_me();
++            self.obj().refresh_mobile_status_visibility();
+         }
+     }
+     impl BinImpl for LibraryPanel {}
+@@ -291,41 +354,98 @@ impl LibraryPanel {
+     /// Updates what is shown about this node, such as whether others can
+     /// reach it.
+     fn refresh_me(&self) {
++        #[cfg(test)]
++        if self.imp().status_fixture.get() {
++            return;
++        }
+         let Some(client) = library::client() else {
+-            self.imp().me.replace(None);
+-            self.set_reach_status(None);
+-            self.imp()
+-                .reach_summary
+-                .set_text(&i18n("Join the network to discover and share music."));
++            self.imp().me_poll.borrow_mut().reset();
++            self.clear_me();
+             return;
+         };
+-        if self.imp().me_loading.replace(true) {
++        let Some(request) = self.imp().me_poll.borrow_mut().begin() else {
+             return;
+-        }
++        };
+         glib::spawn_future_local(clone!(
+             #[weak(rename_to = this)]
+             self,
+             async move {
+                 let result = client.me().await;
+-                this.imp().me_loading.set(false);
+-                // Ignore replies from a node that stopped while we were waiting.
+-                if !library::client().is_some_and(|current| current.origin() == client.origin()) {
++                let Some(pending) = this.imp().me_poll.borrow_mut().finish(request) else {
+                     return;
+-                }
+-                match result {
+-                    Ok(me) => this.update_me(me),
+-                    Err(_) => {
+-                        this.imp().me.replace(None);
+-                        this.set_reach_status(None);
++                };
++                // An old node can share the replacement node's URL. Only the
++                // exact connection that began this request may update the UI.
++                if library::client().is_some_and(|current| current.same_connection(&client)) {
++                    match result {
++                        Ok(me) => this.update_me(me),
++                        Err(_) => this.clear_me(),
+                     }
+                 }
++                // A replacement connection may have queued this refresh while
++                // the old request was finishing. Discard its result, not the
++                // replacement's pending read.
++                if pending {
++                    this.refresh_me();
++                }
+             }
+         ));
+     }
+ 
+     fn update_me(&self, me: Me) {
+-        self.set_reach_status(Some(me.reachability));
++        let reachability = me.reachability;
+         self.imp().me.replace(Some(me));
++        self.imp()
++            .me_revision
++            .set(self.imp().me_revision.get().wrapping_add(1));
++        self.set_reach_status(Some(reachability));
++    }
++
++    fn clear_me(&self) {
++        self.imp().me.replace(None);
++        self.imp()
++            .me_revision
++            .set(self.imp().me_revision.get().wrapping_add(1));
++        self.set_reach_status(None);
++    }
++
++    /// Android reports the IME independently of focus: dismissing it with Back
++    /// must restore the banner even while the search entry still owns focus.
++    #[cfg(target_os = "android")]
++    pub(crate) fn set_keyboard_visible(&self, visible: bool) {
++        self.imp().keyboard_visible.set(Some(visible));
++        self.refresh_mobile_status_visibility();
++    }
++
++    pub(crate) fn refresh_mobile_status_visibility(&self) {
++        let imp = self.imp();
++        let android = cfg!(target_os = "android");
++        #[cfg(test)]
++        let android = android || imp.android_layout.get();
++        imp.reach_status.set_visible(status_banner_visible(
++            android,
++            imp.keyboard_visible.get(),
++            imp.search_editing.get(),
++        ));
++    }
++
++    /// Run the Android presentation policy under the native GTK display test.
++    #[cfg(test)]
++    pub(crate) fn test_android_chrome_and_keyboard(&self, keyboard: bool) {
++        let imp = self.imp();
++        imp.android_layout.set(true);
++        imp.keyboard_visible.set(Some(keyboard));
++        if keyboard {
++            imp.search_editing.set(true);
++        }
++        imp.my_music_button.set_visible(true);
++        imp.close_library_button.set_visible(false);
++        self.refresh_mobile_status_visibility();
++    }
++
++    #[cfg(test)]
++    pub(crate) fn test_my_music_button(&self) -> gtk::Button {
++        self.imp().my_music_button.get()
+     }
+ 
+     fn set_reach_status(&self, reach: Option<Reachability>) {
+@@ -345,30 +465,33 @@ impl LibraryPanel {
+             reach,
+             Some(Reachability::Direct | Reachability::Ipv6 | Reachability::Relay)
+         );
+-        let (title, summary, color) = match reach {
+-            Some(Reachability::Direct | Reachability::Ipv6 | Reachability::Relay) =>
+-                (i18n("Online"), String::new(), "success"),
+-            Some(Reachability::Checking) if unconfirmed => (i18n("Connection Unconfirmed"),
+-                i18n("No other listener has confirmed your connection yet. There may be no reachable listeners, or your network may block communication. Try searching, keep Hopea open on both devices, or see Connection Help."), "warning"),
+-            Some(Reachability::Checking) => (i18n("Checking Connection…"),
+-                i18n("Waiting for another listener to confirm your connection. You can already try searching."), "warning"),
+-            Some(Reachability::Unreachable) => (i18n("Limited Connection"),
+-                i18n("Other listeners cannot reach your music. Your router, provider or VPN may block incoming connections. Searching can still work."), "warning"),
+-            None => (i18n("Offline"),
+-                i18n("The sharing service is not responding. Hopea will retry automatically."), "error"),
++        let (title, color) = match reach {
++            Some(Reachability::Direct | Reachability::Ipv6 | Reachability::Relay) => {
++                (i18n("Online"), "success")
++            }
++            Some(Reachability::Checking) if unconfirmed => {
++                (i18n("Connection Unconfirmed"), "warning")
++            }
++            Some(Reachability::Checking) => (i18n("Checking Connection…"), "warning"),
++            Some(Reachability::Unreachable) => (i18n("Limited Connection"), "warning"),
++            None => (i18n("Offline"), "error"),
+         };
+         imp.reach_title.set_text(&title);
+         for class in ["success", "warning", "error"] {
+             imp.reach_indicator.remove_css_class(class);
+         }
+         imp.reach_indicator.add_css_class(color);
+-        imp.reach_summary.set_text(&summary);
+-        imp.reach_summary.set_visible(!online);
+-        imp.reach_details.set_label(&if online {
++        imp.reach_details.set_tooltip_text(Some(&if online {
+             i18n("Details")
+         } else {
+             i18n("Connection Help")
+-        });
++        }));
++        if let Some(dialog) = imp.reach_dialog.upgrade() {
++            let (title, body) = sharing_status(reach);
++            dialog.set_heading(Some(&title));
++            dialog.set_body(&body);
++        }
++        self.refresh_mobile_status_visibility();
+     }
+ 
+     fn settings(&self) -> gio::Settings {
+@@ -381,6 +504,37 @@ impl LibraryPanel {
+     fn connect_signals(&self) {
+         let imp = self.imp();
+ 
++        let mut reachability = library::reachability_changes();
++        let weak = self.downgrade();
++        imp.reach_updates
++            .replace(Some(glib::spawn_future_local(async move {
++                while reachability.changed().await.is_ok() {
++                    let Some(panel) = weak.upgrade() else {
++                        break;
++                    };
++                    panel.refresh_me();
++                }
++            })));
++
++        let search_focus = gtk::EventControllerFocus::new();
++        search_focus.connect_enter(clone!(
++            #[weak(rename_to = this)]
++            self,
++            move |_| {
++                this.imp().search_editing.set(true);
++                this.refresh_mobile_status_visibility();
++            }
++        ));
++        search_focus.connect_leave(clone!(
++            #[weak(rename_to = this)]
++            self,
++            move |_| {
++                this.imp().search_editing.set(false);
++                this.refresh_mobile_status_visibility();
++            }
++        ));
++        imp.search_entry.add_controller(search_focus);
++
+         imp.reach_details.connect_clicked(clone!(
+             #[weak(rename_to = this)]
+             self,
+@@ -409,6 +563,7 @@ impl LibraryPanel {
+                 ));
+                 dialog.add_response("close", &i18n("Close"));
+                 dialog.set_close_response("close");
++                this.imp().reach_dialog.set(Some(&dialog));
+                 dialog.present(Some(&this));
+             }
+         ));
+@@ -678,6 +833,9 @@ impl LibraryPanel {
+     /// Follows the node starting or stopping by itself, as when a VPN goes
+     /// off or comes back.
+     pub fn connection_changed(&self) {
++        self.imp().me_poll.borrow_mut().reset();
++        self.imp().checking_since.set(None);
++        self.clear_me();
+         match library::client() {
+             Some(client) => {
+                 glib::spawn_future_local(clone!(
+@@ -750,24 +908,36 @@ impl LibraryPanel {
+     }
+ 
+     async fn finish_joining(&self, client: LibraryClient) {
+-        let me = match client.me().await {
++        let revision = self.imp().me_revision.get();
++        let result = client.me().await;
++        if !library::client().is_some_and(|current| current.same_connection(&client)) {
++            return;
++        }
++        let me = match result {
+             Ok(me) => me,
+             Err(err) => {
+-                self.toast(&err.to_string());
+-                self.show_welcome();
++                // A newer poll may already have read the confirmed status.
++                if revision == self.imp().me_revision.get() {
++                    self.toast(&err.to_string());
++                    self.show_welcome();
++                }
+                 return;
+             }
+         };
+         let imp = self.imp();
+-        self.update_me(me);
++        if revision == imp.me_revision.get() {
++            self.update_me(me);
++        }
+ 
+         imp.upload_bar.set_visible(false);
+         imp.menu_button.set_visible(true);
+         imp.title_label.set_visible(false);
+         imp.stack.set_visible_child_name("library");
+-        if self.is_mapped() {
++        // On touch devices joining should not immediately open the keyboard.
++        if self.is_mapped() && !cfg!(target_os = "android") {
+             imp.search_entry.grab_focus();
+         }
++        self.refresh_me();
+         self.search();
+ 
+         if let Some(window) = self.window() {
+@@ -1344,8 +1514,7 @@ impl LibraryPanel {
+         (!text.trim().is_empty()).then_some(text)
+     }
+ 
+-    /// The shared music settings: whether to join the network at startup,
+-    /// speed limits, and what unstarring a song does.
++    /// General appearance, sharing and help settings.
+     ///
+     /// Sharing can be limited to at most seven times slower than
+     /// downloading, which the dialog enforces as values change (and the
+@@ -1603,9 +1772,28 @@ impl LibraryPanel {
+         groups.append(&group);
+         groups.append(&import_group);
+         groups.append(&cache_group);
++        let help_group = adw::PreferencesGroup::builder().title(i18n("Help")).build();
++        #[cfg(not(target_os = "android"))]
++        {
++            let shortcuts = adw::ButtonRow::builder()
++                .title(i18n("Keyboard Shortcuts"))
++                .build();
++            shortcuts.set_widget_name("settings-shortcuts");
++            shortcuts.connect_activated(|row| {
++                let _ = row.activate_action("app.shortcuts", None);
++            });
++            help_group.add(&shortcuts);
++        }
++        let about = adw::ButtonRow::builder().title(i18n("About Hopea")).build();
++        about.set_widget_name("settings-about");
++        about.connect_activated(|row| {
++            let _ = row.activate_action("app.about", None);
++        });
++        help_group.add(&about);
++        groups.append(&help_group);
+         if !crate::dialogs::confirm_form(
+             self.window().as_ref(),
+-            &i18n("Shared Music Settings"),
++            &i18n("Settings"),
+             &groups,
+             focus_privacy.then_some(protected_row.upcast_ref()),
+         )
+@@ -1668,7 +1856,7 @@ impl LibraryPanel {
+         let alert = adw::AlertDialog::builder()
+             .heading(i18n("Leave the Network?"))
+             .body(i18n(
+-                "The songs you share will no longer be available to others, and you won’t be able to search theirs. Everything stays on this computer for when you join again.",
++                "The songs you share will no longer be available to others, and you won’t be able to search theirs. Everything stays on this device for when you join again.",
+             ))
+             .close_response("cancel")
+             .default_response("cancel")
+@@ -1835,7 +2023,7 @@ impl LibraryPanel {
+             if query.is_empty() {
+                 imp.empty_page.set_title(&i18n("Search Everyone’s Music"));
+                 imp.empty_page.set_description(Some(&i18n(
+-                    "Find new songs and albums. Music already on this computer is hidden from search.",
++                    "Find new songs and albums. Music already on this device is hidden from search.",
+                 )));
+             } else {
+                 imp.empty_page.set_title(&i18n("No Songs Found"));
+@@ -1889,8 +2077,8 @@ impl LibraryPanel {
+         // for the one more people have
+         if track.sources > 1 {
+             details.push(ni18n_f(
+-                "on {} computer",
+-                "on {} computers",
++                "on {} device",
++                "on {} devices",
+                 track.sources,
+                 &[&track.sources.to_string()],
+             ));
+@@ -2769,7 +2957,7 @@ const NETWORK_SEARCH_DELAY: std::time::Duration = std::time::Duration::from_mill
+ fn search_problem(report: &SearchReport) -> Option<String> {
+     if report.dht == DhtState::NoContact && report.nodes_answered == 0 {
+         return Some(i18n(
+-            "This computer can’t reach the BitTorrent network (DHT), which is how it finds others. Something blocks UDP traffic: a firewall, a VPN, or the network itself (as in some offices, schools and hotels). Try another network, or allow UDP for the app. Right after the app starts this can also take a minute.",
++            "This device can’t reach the BitTorrent network (DHT), which is how it finds others. Something blocks UDP traffic: a firewall, a VPN, or the network itself (as in some offices, schools and hotels). Try another network, or allow UDP for the app. Right after the app starts this can also take a minute.",
+         ));
+     }
+     if report.nodes_asked > 0 && report.nodes_answered == 0 {
+@@ -3094,6 +3282,10 @@ fn sharing_status_details_fit_mobile_panel() {
+     let context = glib::MainContext::default();
+     let _guard = context.acquire().unwrap();
+     let panel: LibraryPanel = glib::Object::new();
++    // This layout test injects each reachability state without a running node.
++    // Keep the regular missing-client poll from replacing that fixture; live
++    // dialog updates and the explicit Offline transition remain under test.
++    panel.imp().status_fixture.set(true);
+     let window = adw::Window::builder()
+         .default_width(360)
+         .default_height(740)
+@@ -3120,14 +3312,20 @@ fn sharing_status_details_fit_mobile_panel() {
+             Reachability::Direct | Reachability::Ipv6 | Reachability::Relay
+         );
+         assert_eq!(panel.imp().reach_indicator.has_css_class("success"), online);
+-        assert_eq!(panel.imp().reach_summary.is_visible(), !online);
+         let search_page = panel.imp().view_stack.child_by_name("search").unwrap();
+         assert!(panel.imp().reach_status.is_ancestor(&search_page));
+-        assert!(panel.imp().reach_summary.is_ancestor(&search_page));
++        assert_eq!(
++            panel.imp().reach_details.label().as_deref(),
++            Some("Details")
++        );
+         if matches!(reach, Reachability::Checking | Reachability::Unreachable) {
+             assert!(!panel.imp().reach_title.text().starts_with("Online"));
+         }
+         context.block_on(glib::timeout_future(std::time::Duration::from_millis(100)));
++        assert!(
++            panel.imp().reach_status.height() <= 56,
++            "connection status must remain one compact row"
++        );
+         if let Some(directory) = std::env::var_os("HOPEA_TEST_STATUS_SCREENSHOTS") {
+             let snapshot = gtk::Snapshot::new();
+             snapshot.append_color(
+@@ -3152,6 +3350,17 @@ fn sharing_status_details_fit_mobile_panel() {
+             dialog.heading().as_deref(),
+             Some(sharing_status(Some(reach)).0.as_str())
+         );
++        if reach == Reachability::Checking {
++            let mut confirmed = panel.imp().me.borrow().clone().unwrap();
++            confirmed.reachability = Reachability::Direct;
++            panel.update_me(confirmed);
++            assert_eq!(panel.imp().reach_title.text(), i18n("Online"));
++            assert_eq!(
++                dialog.heading().as_deref(),
++                Some(sharing_status(Some(Reachability::Direct)).0.as_str()),
++                "an open Details dialog must follow the confirmed state"
++            );
++        }
+         context.block_on(glib::timeout_future(std::time::Duration::from_millis(400)));
+         assert!(panel.measure(gtk::Orientation::Horizontal, -1).0 <= 360);
+         assert!(dialog.width() > 0 && dialog.width() <= window.width());
+@@ -3171,7 +3380,6 @@ fn sharing_status_details_fit_mobile_panel() {
+     panel.set_reach_status(None);
+     assert!(panel.imp().reach_indicator.has_css_class("error"));
+     assert!(!panel.imp().reach_indicator.has_css_class("success"));
+-    assert!(panel.imp().reach_summary.is_visible());
+     panel.imp().checking_since.set(Some(
+         std::time::Instant::now() - std::time::Duration::from_secs(61),
+     ));
+@@ -3191,3 +3399,43 @@ fn sharing_status_details_fit_mobile_panel() {
+ fn connection_recommendations() -> String {
+     i18n("To improve the connection:\n\n• Make sure both devices have joined Hopea and the owner is sharing the song. Keep Hopea open and allow time for discovery.\n\n• If you require a VPN, check that it is connected. For incoming connections, the VPN must support port forwarding; an ordinary VPN may not.\n\n• On a network you manage, allow Hopea through the firewall. If you have two routers, incoming connections must pass through both. Ask your provider whether you have a public IP address.\n\n• If incoming connections are unavailable, a reachable Hopea relay is needed. Hopea looks for one automatically, but does not include an always-on public relay. You can also try another network.\n\nDo not disable your firewall, put the device in a router’s DMZ, or expose the local player API. No change to your router settings is required just to search reachable sources.")
+ }
++
++#[cfg(test)]
++mod status_refresh_tests {
++    use super::{status_banner_visible, StatusPoll};
++
++    #[test]
++    fn confirmation_during_a_read_is_refreshed_after_that_read() {
++        let mut poll = StatusPoll::default();
++        let checking = poll.begin().unwrap();
++        assert_eq!(poll.begin(), None);
++        assert_eq!(poll.begin(), None);
++        assert_eq!(poll.finish(checking), Some(true));
++        let confirmed = poll.begin().unwrap();
++        assert_ne!(checking, confirmed);
++        assert_eq!(poll.finish(confirmed), Some(false));
++    }
++
++    #[test]
++    fn replaced_node_cannot_finish_the_new_nodes_status_read() {
++        let mut poll = StatusPoll::default();
++        let old = poll.begin().unwrap();
++        poll.reset();
++        let new = poll.begin().unwrap();
++        assert_eq!(poll.finish(old), None);
++        assert_eq!(poll.begin(), None, "the new request must remain in flight");
++        assert_eq!(poll.finish(new), Some(true));
++    }
++
++    #[test]
++    fn android_keyboard_visibility_overrides_search_focus() {
++        assert!(status_banner_visible(true, None, false));
++        assert!(!status_banner_visible(true, None, true));
++        assert!(!status_banner_visible(true, Some(true), false));
++        assert!(
++            status_banner_visible(true, Some(false), true),
++            "Back dismisses the IME without moving focus"
++        );
++        assert!(status_banner_visible(false, Some(true), true));
++    }
++}
+diff --git a/src/library_panel/search_results.rs b/src/library_panel/search_results.rs
+index 3d46dc0..a2362bb 100644
+--- a/src/library_panel/search_results.rs
++++ b/src/library_panel/search_results.rs
+@@ -175,7 +175,7 @@ impl LibraryPanel {
+                                 .imp()
+                                 .empty_page
+                                 .set_title(&i18n("No Songs Available Now"));
+-                            panel.imp().empty_page.set_description(Some(&i18n("Try another search. Songs already on this computer and songs with no reachable sources are hidden.")));
++                            panel.imp().empty_page.set_description(Some(&i18n("Try another search. Songs already on this device and songs with no reachable sources are hidden.")));
+                             panel.imp().search_stack.set_visible_child_name("empty");
+                         }
+                     }
+@@ -584,6 +584,97 @@ fn result_press_keeps_search_focus_until_activation() {
+ 
+ #[cfg(test)]
+ impl LibraryPanel {
++    /// Render the joined search page through its real models and factories,
++    /// without starting a node or making network requests during layout tests.
++    pub(crate) fn test_show_search_with_albums(&self) {
++        self.reset_search();
++        let tracks: Vec<_> = (1..=24)
++            .map(|id| Track {
++                id,
++                title: format!("Viewport song {id}"),
++                artist: Some("Viewport artist".into()),
++                album: Some(format!("Viewport album {}", (id - 1) / 3)),
++                album_artist: None,
++                track_number: None,
++                year: None,
++                genre: None,
++                duration_ms: 1000,
++                format: AudioFormat::Flac,
++                codec: "flac".into(),
++                sample_rate: 44100,
++                channels: 2,
++                size: 1024,
++                sha256: format!("{id:064x}"),
++                has_cover: false,
++                uploader: "Viewport fixture".into(),
++                uploaded_at: 0,
++                mine: false,
++                local: false,
++                favorite: false,
++                sources: 1,
++            })
++            .collect();
++        let imp = self.imp();
++        imp.navigation.pop_to_tag("main");
++        imp.upload_bar.set_visible(false);
++        imp.menu_button.set_visible(true);
++        imp.title_label.set_visible(false);
++        imp.stack.set_visible_child_name("library");
++        imp.view_stack.set_visible_child_name("search");
++        self.show_page("Viewport", 0, &tracks, tracks.len() as u64);
++    }
++
++    pub(crate) fn test_search_with_albums_fits(&self) {
++        let imp = self.imp();
++        assert_eq!(imp.stack.visible_child_name().as_deref(), Some("library"));
++        assert_eq!(
++            imp.search_stack.visible_child_name().as_deref(),
++            Some("results")
++        );
++        assert_eq!(imp.album_results.get().unwrap().n_items(), 8);
++        assert_eq!(imp.results.get().unwrap().n_items(), 24);
++        assert!(imp.albums_section.is_visible());
++        if imp.android_layout.get() {
++            assert_eq!(
++                imp.reach_status.get_visible(),
++                status_banner_visible(true, imp.keyboard_visible.get(), imp.search_editing.get()),
++                "the mapped connection row must follow Android keyboard visibility"
++            );
++        }
++        for widget in [
++            imp.search_entry.upcast_ref::<gtk::Widget>(),
++            imp.results_scroll.upcast_ref(),
++        ] {
++            let bounds = widget.compute_bounds(self).unwrap();
++            assert!(
++                bounds.y() >= 0.0 && bounds.y() + bounds.height() <= self.height() as f32 + 1.0,
++                "search and songs must remain inside the joined panel: {bounds:?}, panel={}",
++                self.height()
++            );
++        }
++        let albums = imp.albums_scroll.hadjustment();
++        assert!(
++            albums.upper() > albums.page_size(),
++            "album cards must still scroll horizontally"
++        );
++        let songs = imp.results_scroll.vadjustment();
++        assert!(
++            songs.page_size() >= 48.0,
++            "album cards must leave a usable song viewport: {}px",
++            songs.page_size()
++        );
++        assert!(
++            songs.upper() > songs.page_size(),
++            "fixture must exercise scrollable song results"
++        );
++        songs.set_value(songs.upper() - songs.page_size());
++        assert!(
++            songs.value() > 0.0,
++            "songs at the end must remain reachable"
++        );
++        songs.set_value(0.0);
++    }
++
+     pub async fn test_scroll_loading_and_recycling(&self, window: &Window) {
+         use std::{
+             io::{BufRead, Write},
+diff --git a/src/lyrics.rs b/src/lyrics.rs
+index 2dea288..71f4ad8 100644
+--- a/src/lyrics.rs
++++ b/src/lyrics.rs
+@@ -16,8 +16,13 @@ use std::path::PathBuf;
+ use gtk::{gio, glib, prelude::*};
+ use serde::Deserialize;
+ use sha2::{Digest, Sha256};
++#[cfg(not(target_os = "android"))]
+ use soup::prelude::*;
+ 
++#[cfg(target_os = "android")]
++#[path = "lyrics_https.rs"]
++mod https;
++
+ use crate::{audio::Song, config::VERSION, i18n::i18n};
+ 
+ const MAX_BYTES: usize = hopea_common::lyrics::MAX_BYTES;
+@@ -257,34 +262,9 @@ pub async fn look_up_online(song: &Song) -> Result<Option<Lyrics>, String> {
+         url.push_str(&format!("&artist_name={}", encode(&artist)));
+     }
+ 
+-    let session = soup::Session::new();
+-    session.set_user_agent(&format!("Hopea/{VERSION}"));
+-    session.set_timeout(20);
+-    let msg = soup::Message::new("GET", &url).map_err(|e| e.to_string())?;
+-    let stream = session
+-        .send_future(&msg, glib::Priority::DEFAULT)
+-        .await
+-        .map_err(|e| e.message().to_string())?;
+-    if msg.status() == soup::Status::NotFound {
++    let Some(body) = fetch_online_body(url).await? else {
+         return Ok(None);
+-    }
+-    if msg.status() != soup::Status::Ok {
+-        return Err(i18n("The lyrics service didn’t answer properly"));
+-    }
+-    let mut body = Vec::new();
+-    loop {
+-        let chunk = stream
+-            .read_bytes_future(64 * 1024, glib::Priority::DEFAULT)
+-            .await
+-            .map_err(|e| e.message().to_string())?;
+-        if chunk.is_empty() {
+-            break;
+-        }
+-        if body.len() + chunk.len() > 4 * MAX_BYTES {
+-            return Err(i18n("The lyrics service sent too much"));
+-        }
+-        body.extend_from_slice(&chunk);
+-    }
++    };
+     let found: Vec<Found> = serde_json::from_slice(&body)
+         .map_err(|_| i18n("The lyrics service sent something unexpected"))?;
+ 
+@@ -323,6 +303,66 @@ pub async fn look_up_online(song: &Song) -> Result<Option<Lyrics>, String> {
+     Ok(Some(lyrics))
+ }
+ 
++#[cfg(not(target_os = "android"))]
++async fn fetch_online_body(url: String) -> Result<Option<Vec<u8>>, String> {
++    let session = soup::Session::new();
++    session.set_user_agent(&format!("Hopea/{VERSION}"));
++    session.set_timeout(20);
++    let msg = soup::Message::new("GET", &url).map_err(|e| e.to_string())?;
++    let stream = session
++        .send_future(&msg, glib::Priority::DEFAULT)
++        .await
++        .map_err(|e| e.message().to_string())?;
++    if msg.status() == soup::Status::NotFound {
++        return Ok(None);
++    }
++    if msg.status() != soup::Status::Ok {
++        return Err(i18n("The lyrics service didn’t answer properly"));
++    }
++    let mut body = Vec::new();
++    loop {
++        let chunk = stream
++            .read_bytes_future(64 * 1024, glib::Priority::DEFAULT)
++            .await
++            .map_err(|e| e.message().to_string())?;
++        if chunk.is_empty() {
++            break;
++        }
++        if body.len() + chunk.len() > 4 * MAX_BYTES {
++            return Err(i18n("The lyrics service sent too much"));
++        }
++        body.extend_from_slice(&chunk);
++    }
++    Ok(Some(body))
++}
++
++#[cfg(target_os = "android")]
++async fn fetch_online_body(url: String) -> Result<Option<Vec<u8>>, String> {
++    // GTK's main context is not a Tokio runtime. Keep DNS, TLS and the complete
++    // bounded response on a worker; no GTK objects cross the thread boundary.
++    gio::spawn_blocking(move || {
++        let runtime = tokio::runtime::Builder::new_current_thread()
++            .enable_all()
++            .build()
++            .map_err(|e| e.to_string())?;
++        runtime
++            .block_on(https::fetch(
++                &url,
++                &format!("Hopea/{VERSION}"),
++                4 * MAX_BYTES,
++            ))
++            .map_err(|error| match error {
++                https::FetchError::Transport(error) => error.to_string(),
++                https::FetchError::UnexpectedStatus => {
++                    i18n("The lyrics service didn’t answer properly")
++                }
++                https::FetchError::TooLarge => i18n("The lyrics service sent too much"),
++            })
++    })
++    .await
++    .map_err(|_| i18n("The lyrics service didn’t answer properly"))?
++}
++
+ #[cfg(test)]
+ mod tests {
+     use super::*;
+diff --git a/src/lyrics_https.rs b/src/lyrics_https.rs
+new file mode 100644
+index 0000000..b06d098
+--- /dev/null
++++ b/src/lyrics_https.rs
+@@ -0,0 +1,81 @@
++// SPDX-FileCopyrightText: 2026 Daniil Klimov
++// SPDX-License-Identifier: GPL-3.0-or-later
++
++//! Android lyrics transport, independent of GTK/GIO's optional TLS modules.
++//! The public root certificates are bundled with the APK. Both certificate
++//! and hostname verification stay enabled, including after redirects.
++
++use std::time::Duration;
++
++#[derive(Debug)]
++pub enum FetchError {
++    Transport(reqwest::Error),
++    UnexpectedStatus,
++    TooLarge,
++}
++
++impl From<reqwest::Error> for FetchError {
++    fn from(error: reqwest::Error) -> Self {
++        Self::Transport(error)
++    }
++}
++
++fn client_builder(user_agent: &str) -> Result<reqwest::ClientBuilder, FetchError> {
++    let roots = webpki_root_certs::TLS_SERVER_ROOT_CERTS
++        .iter()
++        .map(|cert| reqwest::Certificate::from_der(cert.as_ref()))
++        .collect::<Result<Vec<_>, _>>()?;
++    Ok(reqwest::Client::builder()
++        .tls_backend_rustls()
++        // Reqwest's default platform verifier requires an extra Java component
++        // and JNI initialization on Android. Supplying public roots explicitly
++        // uses Rustls's WebPKI verifier without either runtime dependency.
++        .tls_certs_only(roots)
++        .https_only(true)
++        .redirect(reqwest::redirect::Policy::limited(3))
++        .timeout(Duration::from_secs(20))
++        .user_agent(user_agent))
++}
++
++pub async fn fetch(
++    url: &str,
++    user_agent: &str,
++    max_bytes: usize,
++) -> Result<Option<Vec<u8>>, FetchError> {
++    let client = client_builder(user_agent)?.build()?;
++    fetch_with_client(&client, url, max_bytes).await
++}
++
++async fn fetch_with_client(
++    client: &reqwest::Client,
++    url: &str,
++    max_bytes: usize,
++) -> Result<Option<Vec<u8>>, FetchError> {
++    let mut response = client.get(url).send().await?;
++    if response.status() == reqwest::StatusCode::NOT_FOUND {
++        return Ok(None);
++    }
++    if response.status() != reqwest::StatusCode::OK {
++        return Err(FetchError::UnexpectedStatus);
++    }
++    if response
++        .content_length()
++        .is_some_and(|n| n > max_bytes as u64)
++    {
++        return Err(FetchError::TooLarge);
++    }
++    let mut body = Vec::new();
++    while let Some(chunk) = response.chunk().await? {
++        // Enforce the limit on actual bytes too: chunked replies may have no
++        // Content-Length. Do not allocate an oversized response first.
++        if chunk.len() > max_bytes.saturating_sub(body.len()) {
++            return Err(FetchError::TooLarge);
++        }
++        body.extend_from_slice(&chunk);
++    }
++    Ok(Some(body))
++}
++
++#[cfg(test)]
++#[path = "../tests/support/lyrics_https.rs"]
++mod tests;
+diff --git a/src/playback_control.rs b/src/playback_control.rs
+index c181dd3..b1edb11 100644
+--- a/src/playback_control.rs
++++ b/src/playback_control.rs
+@@ -72,7 +72,10 @@ mod imp {
+         fn constructed(&self) {
+             self.parent_constructed();
+ 
+-            self.menu_button.set_primary(true);
++            self.menu_button.set_primary(!cfg!(target_os = "android"));
++            // Android opens My Music from the top header, next to Settings.
++            self.playlist_button
++                .set_visible(!cfg!(target_os = "android"));
+         }
+     }
+ 
+diff --git a/src/playlist_view.rs b/src/playlist_view.rs
+index d4fa8f3..8e9e5ec 100644
+--- a/src/playlist_view.rs
++++ b/src/playlist_view.rs
+@@ -3,6 +3,7 @@
+ 
+ use adw::subclass::prelude::*;
+ use gtk::{gio, glib, prelude::*, CompositeTemplate};
++use std::cell::{Cell, OnceCell, RefCell};
+ 
+ mod imp {
+     use super::*;
+@@ -15,6 +16,18 @@ mod imp {
+         #[template_child]
+         pub playlist_page: TemplateChild<adw::NavigationPage>,
+         #[template_child]
++        pub albums_scroll: TemplateChild<gtk::ScrolledWindow>,
++        #[template_child]
++        pub albums_list: TemplateChild<gtk::ListView>,
++        #[template_child]
++        pub new_album_button: TemplateChild<gtk::Button>,
++        #[template_child]
++        pub open_album_button: TemplateChild<gtk::Button>,
++        pub albums: OnceCell<gio::ListStore>,
++        pub albums_monitor: RefCell<Option<gio::FileMonitor>>,
++        pub album_revision: Cell<u64>,
++        pub album_refresh: RefCell<Option<glib::SourceId>>,
++        #[template_child]
+         pub playlist_overlay: TemplateChild<gtk::Overlay>,
+         #[template_child]
+         pub playlist_scroll: TemplateChild<gtk::ScrolledWindow>,
+@@ -61,6 +74,12 @@ mod imp {
+ 
+     impl ObjectImpl for PlaylistView {
+         fn dispose(&self) {
++            if let Some(monitor) = self.albums_monitor.borrow_mut().take() {
++                monitor.cancel();
++            }
++            if let Some(source) = self.album_refresh.borrow_mut().take() {
++                source.remove();
++            }
+             while let Some(child) = self.obj().first_child() {
+                 child.unparent();
+             }
+@@ -90,6 +109,61 @@ impl Default for PlaylistView {
+ }
+ 
+ impl PlaylistView {
++    pub fn albums(&self) -> gio::ListStore {
++        self.imp()
++            .albums
++            .get_or_init(gio::ListStore::new::<glib::BoxedAnyObject>)
++            .clone()
++    }
++
++    pub fn albums_list(&self) -> gtk::ListView {
++        self.imp().albums_list.get()
++    }
++
++    pub fn albums_scroll(&self) -> gtk::ScrolledWindow {
++        self.imp().albums_scroll.get()
++    }
++
++    pub fn new_album_button(&self) -> gtk::Button {
++        self.imp().new_album_button.get()
++    }
++
++    pub fn open_album_button(&self) -> gtk::Button {
++        self.imp().open_album_button.get()
++    }
++
++    pub fn monitor_albums(&self, monitor: gio::FileMonitor) {
++        if let Some(previous) = self.imp().albums_monitor.replace(Some(monitor)) {
++            previous.cancel();
++        }
++    }
++
++    pub fn next_album_revision(&self) -> u64 {
++        let revision = self.imp().album_revision.get().wrapping_add(1);
++        self.imp().album_revision.set(revision);
++        revision
++    }
++
++    pub fn album_revision(&self) -> u64 {
++        self.imp().album_revision.get()
++    }
++
++    pub fn queue_album_refresh(&self, refresh: impl FnOnce() + 'static) {
++        if let Some(source) = self.imp().album_refresh.borrow_mut().take() {
++            source.remove();
++        }
++        let weak = self.downgrade();
++        let source =
++            glib::timeout_add_local_once(std::time::Duration::from_millis(150), move || {
++                let Some(view) = weak.upgrade() else {
++                    return;
++                };
++                view.imp().album_refresh.borrow_mut().take();
++                refresh();
++            });
++        self.imp().album_refresh.replace(Some(source));
++    }
++
+     #[cfg(test)]
+     pub fn visible_page(&self) -> Option<adw::NavigationPage> {
+         self.imp().navigation.visible_page()
+diff --git a/src/window.rs b/src/window.rs
+index 4783e31..8273395 100644
+--- a/src/window.rs
++++ b/src/window.rs
+@@ -7,6 +7,7 @@ mod tests;
+ mod collections;
+ mod import_audition;
+ mod metadata;
++mod sheet_content;
+ mod song_drag;
+ mod song_editor;
+ 
+@@ -86,6 +87,8 @@ mod imp {
+         pub library_split: TemplateChild<adw::OverlaySplitView>,
+         #[template_child]
+         pub library_sheet: TemplateChild<adw::BottomSheet>,
++        pub sheet_content: sheet_content::SheetContent,
++        pub mobile_library_opened: Cell<bool>,
+         #[template_child]
+         pub narrow_breakpoint: TemplateChild<adw::Breakpoint>,
+         #[template_child]
+@@ -95,6 +98,10 @@ mod imp {
+         #[template_child]
+         pub import_progress_main: TemplateChild<gtk::Button>,
+         #[template_child]
++        pub my_music_header_start: TemplateChild<gtk::Button>,
++        #[template_child]
++        pub my_music_header: TemplateChild<gtk::Button>,
++        #[template_child]
+         pub for_you_button: TemplateChild<gtk::ToggleButton>,
+         #[template_child]
+         pub my_music_button: TemplateChild<gtk::ToggleButton>,
+@@ -297,6 +304,7 @@ mod imp {
+                     win.review_metadata(song, false).await;
+                 }
+             });
++            #[cfg(not(target_os = "android"))]
+             klass.install_action_async("win.open-directory", None, async move |win, _, _| {
+                 debug!("Window::win.open-directory()");
+                 win.open_song_directory().await
+@@ -305,6 +313,16 @@ mod imp {
+                 debug!("Window::win.shared-library()");
+                 win.toggle_library();
+             });
++            klass.install_action("win.show-my-music", None, |win, _, _| {
++                if win.is_import_audition() {
++                    return;
++                }
++                win.hide_library_if_overlaid();
++                win.imp().my_music_button.set_active(true);
++                win.set_for_you(false);
++                win.imp().main_stack.set_visible_child_name("main-view");
++                win.set_playlist_visible(true);
++            });
+             // The shared music settings, also before joining and with the
+             // panel hidden
+             klass.install_action_async("win.library-settings", None, async move |win, _, _| {
+@@ -358,10 +376,14 @@ mod imp {
+                 split_view: TemplateChild::default(),
+                 library_split: TemplateChild::default(),
+                 library_sheet: TemplateChild::default(),
++                sheet_content: sheet_content::SheetContent::default(),
++                mobile_library_opened: Cell::default(),
+                 narrow_breakpoint: TemplateChild::default(),
+                 library_panel: TemplateChild::default(),
+                 import_progress_start: TemplateChild::default(),
+                 import_progress_main: TemplateChild::default(),
++                my_music_header_start: TemplateChild::default(),
++                my_music_header: TemplateChild::default(),
+                 for_you_button: TemplateChild::default(),
+                 my_music_button: TemplateChild::default(),
+                 player_header: TemplateChild::default(),
+@@ -506,12 +528,14 @@ impl Window {
+         win.setup_waveform();
+         win.setup_actions();
+         win.setup_playlist();
++        win.setup_collection_shelf();
+         win.setup_drop_target();
+         win.setup_provider();
+         win.bind_state();
+         win.bind_queue();
+         win.connect_signals();
+         win.setup_library_sheet();
++        win.setup_mobile_layout();
+         win.setup_for_you();
+         win.setup_lyrics();
+         win.restore_window_state();
+@@ -792,10 +816,20 @@ impl Window {
+             move |_| {
+                 let imp = win.imp();
+                 let panel = imp.library_panel.get();
++                let was_open = imp.library_split.shows_sidebar();
+                 imp.library_split.set_show_sidebar(false);
+                 imp.library_split.set_sidebar(gtk::Widget::NONE);
+                 panel.add_css_class("in-sheet");
+-                imp.library_sheet.set_sheet(Some(&panel));
++                imp.sheet_content.set_child(Some(panel.upcast_ref()));
++                imp.sheet_content
++                    .set_available_height(imp.library_sheet.height());
++                imp.library_sheet.set_sheet(Some(&imp.sheet_content));
++                if was_open
++                    || cfg!(target_os = "android") && !imp.mobile_library_opened.replace(true)
++                {
++                    // Open discovery at startup without opening the keyboard.
++                    imp.library_sheet.set_open(true);
++                }
+                 imp.player_header.set_title_widget(gtk::Widget::NONE);
+                 imp.mode_switch_narrow.append(&imp.mode_switch.get());
+                 imp.player_header.set_show_title(false);
+@@ -812,6 +846,7 @@ impl Window {
+                 let was_open = imp.library_sheet.is_open();
+                 imp.library_sheet.set_open(false);
+                 imp.library_sheet.set_sheet(gtk::Widget::NONE);
++                imp.sheet_content.set_child(None);
+                 panel.remove_css_class("in-sheet");
+                 imp.library_split.set_sidebar(Some(&panel));
+                 imp.library_split.set_show_sidebar(was_open);
+@@ -824,6 +859,64 @@ impl Window {
+         ));
+     }
+ 
++    fn setup_mobile_layout(&self) {
++        let imp = self.imp();
++        imp.my_music_header.set_visible(cfg!(target_os = "android"));
++        imp.my_music_header_start
++            .set_visible(cfg!(target_os = "android"));
++        // The Android header replaces the old My Music tab as the entry point.
++        // Keep the grouped toggle for its view state, without a second button.
++        imp.my_music_button
++            .set_visible(!cfg!(target_os = "android"));
++        #[cfg(target_os = "android")]
++        {
++            // Android supplies the viewport, including keyboard/landscape
++            // changes. A desktop minimum height can exceed that viewport.
++            // AdwApplicationWindow requires an explicit positive minimum.
++            self.set_height_request(1);
++            imp.status_page.set_description(Some(&i18n(
++                "Add music from your device or find songs in Shared Music.",
++            )));
++            self.connect_map(clone!(
++                #[weak(rename_to = win)]
++                self,
++                move |_| {
++                    let imp = win.imp();
++                    if !imp.mobile_library_opened.replace(true) {
++                        if win.library_in_sheet() {
++                            imp.library_sheet.set_open(true);
++                        } else {
++                            imp.library_split.set_show_sidebar(true);
++                        }
++                    }
++                }
++            ));
++        }
++        glib::timeout_add_local(
++            std::time::Duration::from_millis(150),
++            clone!(
++                #[weak(rename_to = win)]
++                self,
++                #[upgrade_or]
++                glib::ControlFlow::Break,
++                move || {
++                    if win.is_mapped() {
++                        let imp = win.imp();
++                        if win.library_in_sheet() {
++                            imp.sheet_content
++                                .set_available_height(imp.library_sheet.height());
++                        }
++                        #[cfg(target_os = "android")]
++                        if let Some(visible) = crate::android::keyboard_visible() {
++                            imp.library_panel.set_keyboard_visible(visible);
++                        }
++                    }
++                    glib::ControlFlow::Continue
++                }
++            ),
++        );
++    }
++
+     fn queue_songs(&self, queue: Vec<gio::File>) {
+         self.queue_songs_with_feedback(queue, true);
+     }
+@@ -1418,7 +1511,9 @@ impl Window {
+             self.action_set_enabled("win.previous", !queue.is_empty());
+             self.action_set_enabled("win.next", !queue.is_last_song());
+ 
+-            self.action_set_enabled("queue.toggle", !queue.is_empty());
++            // Albums remain accessible with no queued songs, and the playlist
++            // must always be closable after opening it from the mobile header.
++            self.action_set_enabled("queue.toggle", true);
+             self.action_set_enabled("queue.shuffle", queue.n_songs() > 1);
+             self.action_set_enabled("win.replaygain", player.replaygain_available());
+ 
+@@ -3034,7 +3129,9 @@ impl Window {
+             imp.library_sheet.set_open(open);
+             if open {
+                 imp.library_panel.refresh_protection_notice();
+-                imp.library_panel.focus_search();
++                if !cfg!(target_os = "android") {
++                    imp.library_panel.focus_search();
++                }
+             }
+             return;
+         }
+@@ -3042,7 +3139,9 @@ impl Window {
+         imp.library_split.set_show_sidebar(show);
+         if show {
+             imp.library_panel.refresh_protection_notice();
+-            imp.library_panel.focus_search();
++            if !cfg!(target_os = "android") {
++                imp.library_panel.focus_search();
++            }
+         }
+     }
+ 
+@@ -3293,11 +3392,11 @@ fn transfer_text(transfer: &hopea_common::api::Transfer) -> String {
+         if transfer.upload_bps > 0 {
+             i18n_k(
+                 // Translators: `{speed}` is a speed, such as "1.2 MB/s"
+-                "On this computer · sharing ↑ {speed}",
++                "On this device · sharing ↑ {speed}",
+                 &[("speed", &speed(transfer.upload_bps))],
+             )
+         } else {
+-            i18n("On this computer")
++            i18n("On this device")
+         }
+     } else if transfer.peers == 0 {
+         i18n_k(
+diff --git a/src/window/collections.rs b/src/window/collections.rs
+index 1b4350a..fa2e90c 100644
+--- a/src/window/collections.rs
++++ b/src/window/collections.rs
+@@ -134,76 +134,71 @@ impl Window {
+         image
+     }
+ 
+-    pub(super) async fn show_collections(&self) {
+-        self.switch_mode(WindowMode::MainView);
+-        self.set_playlist_visible(true);
+-        self.hide_library_if_overlaid();
+-        let albums = match collections::list().await {
+-            Ok(a) => a,
+-            Err(e) => {
+-                error(self, &e);
+-                return;
+-            }
+-        };
+-        let content = gtk::Box::new(gtk::Orientation::Vertical, 8);
+-        let header = adw::HeaderBar::new();
+-        header.set_show_title(false);
+-        header.set_show_start_title_buttons(false);
+-        header.set_show_end_title_buttons(false);
+-        content.append(&header);
+-        let page = self
+-            .imp()
+-            .playlist_view
+-            .show_page(&i18n("My Albums"), &content);
+-        self.set_playlist_visible(true);
+-        let new = gtk::Button::with_label(&i18n("New Album"));
+-        new.add_css_class("suggested-action");
+-        header.pack_start(&new);
+-        let open = gtk::Button::from_icon_name("hopea-document-open-symbolic");
+-        open.set_tooltip_text(Some(&i18n("Open a shared Hopea album")));
+-        header.pack_end(&open);
+-        let model = gio::ListStore::new::<glib::BoxedAnyObject>();
+-        for album in albums {
+-            model.append(&glib::BoxedAnyObject::new(album));
+-        }
+-        let empty = gtk::Label::builder()
+-            .label(i18n(
+-                "Create an album, choose its songs and share it with friends.",
+-            ))
+-            .wrap(true)
+-            .wrap_mode(gtk::pango::WrapMode::WordChar)
+-            .build();
+-        empty.set_visible(model.n_items() == 0);
+-        content.append(&empty);
++    pub(super) fn setup_collection_shelf(&self) {
++        let view = self.imp().playlist_view.get();
++        let model = view.albums();
++        view.albums_list()
++            .set_model(Some(&gtk::NoSelection::new(Some(model.clone()))));
+         model.connect_items_changed(clone!(
+             #[weak]
+-            empty,
+-            move |m, _, _, _| empty.set_visible(m.n_items() == 0)
++            view,
++            move |m, _, _, _| view.albums_scroll().set_visible(m.n_items() > 0)
+         ));
+         let factory = gtk::SignalListItemFactory::new();
+-        factory.connect_bind(move |_, obj| {
+-            let item = obj.downcast_ref::<gtk::ListItem>().unwrap();
+-            let album = item
+-                .item()
+-                .unwrap()
+-                .downcast::<glib::BoxedAnyObject>()
++        factory.connect_bind(clone!(
++            #[weak(rename_to = win)]
++            self,
++            move |_, obj| {
++                let item = obj.downcast_ref::<gtk::ListItem>().unwrap();
++                let object = item
++                    .item()
++                    .unwrap()
++                    .downcast::<glib::BoxedAnyObject>()
++                    .unwrap();
++                let album = object.borrow::<Album>();
++                let card = gtk::Box::builder()
++                    .orientation(gtk::Orientation::Vertical)
++                    .spacing(4)
++                    .width_request(144)
++                    .margin_start(6)
++                    .margin_end(6)
++                    .margin_bottom(6)
++                    .build();
++                card.set_tooltip_text(Some(&album.name));
++                let picture = if album.cover.is_none() && !album.tracks.is_empty() {
++                    win.collection_thumbnail(&album.tracks[0])
++                } else {
++                    cover(&album)
++                };
++                picture.set_pixel_size(128);
++                picture.set_size_request(128, 128);
++                picture.add_css_class("track-thumbnail");
++                card.append(&picture);
++                for text in [
++                    album.name.clone(),
++                    i18n_f("{} songs", &[&album.tracks.len().to_string()]),
++                ] {
++                    card.append(
++                        &gtk::Label::builder()
++                            .label(text)
++                            .use_markup(false)
++                            .xalign(0.0)
++                            .max_width_chars(18)
++                            .ellipsize(gtk::pango::EllipsizeMode::End)
++                            .build(),
++                    );
++                }
++                item.set_child(Some(&card));
++            }
++        ));
++        factory.connect_unbind(|_, object| {
++            object
++                .downcast_ref::<gtk::ListItem>()
+                 .unwrap()
+-                .borrow::<Album>()
+-                .clone();
+-            let row = adw::ActionRow::builder()
+-                .title(&album.name)
+-                .subtitle(i18n_f("{} songs", &[&album.tracks.len().to_string()]))
+-                .use_markup(false)
+-                .activatable(false)
+-                .build();
+-            row.add_prefix(&cover(&album));
+-            row.add_suffix(&gtk::Image::from_icon_name("hopea-go-next-symbolic"));
+-            item.set_child(Some(&row));
++                .set_child(gtk::Widget::NONE);
+         });
+-        let scroll = list_view(&model, &factory);
+-        let list = scroll.child().unwrap().downcast::<gtk::ListView>().unwrap();
+-        list.set_single_click_activate(true);
+-        list.connect_activate(clone!(
++        view.albums_list().set_factory(Some(&factory));
++        view.albums_list().connect_activate(clone!(
+             #[weak(rename_to=win)]
+             self,
+             #[weak]
+@@ -215,32 +210,25 @@ impl Window {
+                 win.open_collection(item.borrow::<Album>().clone(), model.clone());
+             }
+         ));
+-        content.append(&scroll);
+-        new.connect_clicked(clone!(
++        view.new_album_button().connect_clicked(clone!(
+             #[weak(rename_to=win)]
+             self,
+             #[weak]
+-            page,
+-            #[weak]
+             model,
+             move |_| {
+-                win.edit_collection(&page, Album::new(), model.clone());
++                win.edit_collection(&win, Album::new(), model.clone());
+             }
+         ));
+-        open.connect_clicked(clone!(
++        view.open_album_button().connect_clicked(clone!(
+             #[weak(rename_to=win)]
+             self,
+             #[weak]
+-            page,
+-            #[weak]
+             model,
+             move |_| {
+                 glib::spawn_future_local(clone!(
+                     #[strong]
+                     win,
+                     #[strong]
+-                    page,
+-                    #[strong]
+                     model,
+                     async move {
+                         let chooser = gtk::FileDialog::builder()
+@@ -249,7 +237,7 @@ impl Window {
+                         if let Ok(file) = chooser.open_future(Some(&win)).await {
+                             if let Some(path) = file.path() {
+                                 match collections::open(path).await {
+-                                    Ok(album) => win.edit_collection(&page, album, model),
++                                    Ok(album) => win.edit_collection(&win, album, model),
+                                     Err(e) => error(&win, &e),
+                                 }
+                             }
+@@ -258,6 +246,87 @@ impl Window {
+                 ));
+             }
+         ));
++        view.connect_map(clone!(
++            #[weak(rename_to = win)]
++            self,
++            move |_| win.queue_collection_refresh()
++        ));
++        // Imports save through the same directory as the editor. Watch their
++        // atomic renames too, so a visible shelf updates without reopening it.
++        glib::spawn_future_local(clone!(
++            #[weak(rename_to = win)]
++            self,
++            async move {
++                let directory = gio::spawn_blocking(|| {
++                    let path = crate::paths::data_dir().join("collections");
++                    std::fs::create_dir_all(&path).map(|_| path)
++                })
++                .await;
++                if let Ok(Ok(path)) = directory {
++                    let file = gio::File::for_path(path);
++                    match file.monitor_directory(
++                        gio::FileMonitorFlags::WATCH_MOVES,
++                        None::<&gio::Cancellable>,
++                    ) {
++                        Ok(monitor) => {
++                            monitor.connect_changed(clone!(
++                                #[weak]
++                                win,
++                                move |_, file, other, _| {
++                                    let manifest = |file: &gio::File| {
++                                        file.path().is_some_and(|path| {
++                                            path.extension().and_then(|ext| ext.to_str())
++                                                == Some("json")
++                                        })
++                                    };
++                                    if manifest(file) || other.is_some_and(manifest) {
++                                        win.queue_collection_refresh();
++                                    }
++                                }
++                            ));
++                            win.imp().playlist_view.monitor_albums(monitor);
++                        }
++                        Err(reason) => log::warn!("Unable to watch personal albums: {reason}"),
++                    }
++                }
++                win.queue_collection_refresh();
++            }
++        ));
++    }
++
++    fn queue_collection_refresh(&self) {
++        let weak = self.downgrade();
++        self.imp().playlist_view.queue_album_refresh(move || {
++            if let Some(win) = weak.upgrade() {
++                glib::spawn_future_local(async move {
++                    if let Err(reason) = win.refresh_collection_shelf().await {
++                        log::warn!("Unable to refresh personal albums: {reason}");
++                    }
++                });
++            }
++        });
++    }
++
++    async fn refresh_collection_shelf(&self) -> Result<(), String> {
++        let view = self.imp().playlist_view.get();
++        let revision = view.next_album_revision();
++        let albums = collections::list().await?;
++        if view.album_revision() == revision {
++            let items: Vec<_> = albums.into_iter().map(glib::BoxedAnyObject::new).collect();
++            let model = view.albums();
++            model.splice(0, model.n_items(), &items);
++        }
++        Ok(())
++    }
++
++    pub(super) async fn show_collections(&self) {
++        self.switch_mode(WindowMode::MainView);
++        self.imp().playlist_view.show_playlist();
++        self.set_playlist_visible(true);
++        self.hide_library_if_overlaid();
++        if let Err(reason) = self.refresh_collection_shelf().await {
++            error(self, &reason);
++        }
+     }
+ 
+     fn open_collection(&self, album: Album, albums: gio::ListStore) {
+@@ -294,7 +363,7 @@ impl Window {
+             page,
+             #[weak]
+             model,
+-            #[strong]
++            #[weak]
+             album,
+             move |albums, _, _, _| {
+                 let id = album.borrow().id.clone();
+@@ -1342,10 +1411,13 @@ impl Window {
+         wait().await;
+         assert!(
+             self.visible_dialog().is_none(),
+-            "album browser must replace the playlist, not open a dialog"
++            "browsing albums must keep the playlist visible"
+         );
+         let manager = self.imp().playlist_view.visible_page().unwrap();
+-        assert_eq!(manager.title(), "My Albums");
++        assert_eq!(manager.tag().as_deref(), Some("playlist"));
++        let list = self.imp().playlist_view.albums_list();
++        assert_eq!(list.orientation(), gtk::Orientation::Horizontal);
++        assert!(list.is_single_click_activate());
+         click(&manager, "New Album");
+         wait().await;
+         let editor = self.visible_dialog().unwrap();
+@@ -1422,11 +1494,7 @@ impl Window {
+         assert_eq!(saved.len(), 1);
+         assert_eq!(saved[0].name, "Evening <mix>");
+         assert!(!saved[0].tracks.is_empty());
+-        let list = widgets(manager.upcast_ref())
+-            .into_iter()
+-            .find_map(|w| w.downcast::<gtk::ListView>().ok())
+-            .unwrap();
+-        assert!(list.is_single_click_activate());
++        assert!(self.imp().playlist_view.albums_scroll().is_visible());
+         list.emit_by_name::<()>("activate", &[&0u32]);
+         wait().await;
+         assert!(self.visible_dialog().is_none());
+@@ -1518,5 +1586,69 @@ impl Window {
+             Some("playlist")
+         );
+         wait().await;
++        assert!(!self.imp().playlist_view.albums_scroll().is_visible());
++
++        // Account imports and other collection writers do not hold this view's
++        // model. Their saved albums must appear while the playlist stays open.
++        let mut imported = Vec::new();
++        for n in 0..12 {
++            let mut album = Album::new();
++            album.name = format!("Imported album {n:02}");
++            collections::save(album.clone()).await.unwrap();
++            imported.push(album);
++        }
++        for _ in 0..40 {
++            if list.model().unwrap().n_items() == imported.len() as u32 {
++                break;
++            }
++            glib::timeout_future(std::time::Duration::from_millis(100)).await;
++        }
++        assert_eq!(
++            list.model().unwrap().n_items(),
++            imported.len() as u32,
++            "saving imported albums must update the visible shelf"
++        );
++        wait().await;
++        let horizontal = self.imp().playlist_view.albums_scroll().hadjustment();
++        assert!(
++            horizontal.upper() > horizontal.page_size(),
++            "personal album cards must scroll horizontally"
++        );
++        assert_eq!(
++            self.imp()
++                .playlist_view
++                .visible_page()
++                .unwrap()
++                .tag()
++                .as_deref(),
++            Some("playlist"),
++            "refreshing albums must not replace the song list"
++        );
++        if let Some(path) = std::env::var_os("HOPEA_TEST_ALBUMS_SCREENSHOT") {
++            let paintable = gtk::WidgetPaintable::new(Some(self));
++            self.queue_draw();
++            glib::timeout_future(std::time::Duration::from_millis(150)).await;
++            let snapshot = gtk::Snapshot::new();
++            paintable.snapshot(&snapshot, self.width() as f64, self.height() as f64);
++            self.renderer()
++                .unwrap()
++                .render_texture(
++                    &snapshot.to_node().expect("mapped album shelf must render"),
++                    None,
++                )
++                .save_to_png(path)
++                .unwrap();
++        }
++        for album in imported {
++            collections::remove(album.id).await.unwrap();
++        }
++        for _ in 0..40 {
++            if list.model().unwrap().n_items() == 0 {
++                break;
++            }
++            glib::timeout_future(std::time::Duration::from_millis(100)).await;
++        }
++        assert_eq!(list.model().unwrap().n_items(), 0);
++        assert!(!self.imp().playlist_view.albums_scroll().is_visible());
+     }
+ }
+diff --git a/src/window/sheet_content.rs b/src/window/sheet_content.rs
+new file mode 100644
+index 0000000..fd06809
+--- /dev/null
++++ b/src/window/sheet_content.rs
+@@ -0,0 +1,101 @@
++// SPDX-FileCopyrightText: 2026 Daniil Klimov
++// SPDX-License-Identifier: GPL-3.0-or-later
++
++//! A sheet requests the available height without imposing that as its minimum.
++//! A height-request on the panel would prevent Android from shrinking the
++//! window when the keyboard opens, and would clip controls in landscape.
++
++use gtk::{glib, prelude::*, subclass::prelude::*};
++use std::cell::{Cell, RefCell};
++
++mod imp {
++    use super::*;
++
++    #[derive(Default)]
++    pub struct SheetContent {
++        pub child: RefCell<Option<gtk::Widget>>,
++        pub available_height: Cell<i32>,
++    }
++
++    #[glib::object_subclass]
++    impl ObjectSubclass for SheetContent {
++        const NAME: &'static str = "HopeaSheetContent";
++        type Type = super::SheetContent;
++        type ParentType = gtk::Widget;
++    }
++
++    impl ObjectImpl for SheetContent {
++        fn dispose(&self) {
++            if let Some(child) = self.child.borrow_mut().take() {
++                child.unparent();
++            }
++        }
++    }
++
++    impl WidgetImpl for SheetContent {
++        fn request_mode(&self) -> gtk::SizeRequestMode {
++            gtk::SizeRequestMode::HeightForWidth
++        }
++
++        fn measure(&self, orientation: gtk::Orientation, for_size: i32) -> (i32, i32, i32, i32) {
++            let Some(child) = self.child.borrow().clone() else {
++                return (0, 0, -1, -1);
++            };
++            let (minimum, natural, min_baseline, nat_baseline) =
++                child.measure(orientation, for_size);
++            if orientation == gtk::Orientation::Vertical && self.available_height.get() > 0 {
++                (minimum, minimum.max(self.available_height.get()), -1, -1)
++            } else {
++                (minimum, natural, min_baseline, nat_baseline)
++            }
++        }
++
++        fn size_allocate(&self, width: i32, height: i32, baseline: i32) {
++            if let Some(child) = self.child.borrow().as_ref() {
++                child.allocate(width, height, baseline, None);
++            }
++        }
++
++        fn snapshot(&self, snapshot: &gtk::Snapshot) {
++            if let Some(child) = self.child.borrow().as_ref() {
++                self.obj().snapshot_child(child, snapshot);
++            }
++        }
++    }
++}
++
++glib::wrapper! {
++    pub struct SheetContent(ObjectSubclass<imp::SheetContent>)
++        @extends gtk::Widget,
++        @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget;
++}
++
++impl Default for SheetContent {
++    fn default() -> Self {
++        glib::Object::new()
++    }
++}
++
++impl SheetContent {
++    pub fn set_child(&self, child: Option<&gtk::Widget>) {
++        let imp = self.imp();
++        if imp.child.borrow().as_ref() == child {
++            return;
++        }
++        if let Some(old) = imp.child.borrow_mut().take() {
++            old.unparent();
++        }
++        if let Some(child) = child {
++            child.set_parent(self);
++        }
++        imp.child.replace(child.cloned());
++        self.queue_resize();
++    }
++
++    pub fn set_available_height(&self, height: i32) {
++        let height = height.max(0);
++        if self.imp().available_height.replace(height) != height {
++            self.queue_resize();
++        }
++    }
++}
+diff --git a/src/window/song_editor.rs b/src/window/song_editor.rs
+index 55c8a65..e32b472 100644
+--- a/src/window/song_editor.rs
++++ b/src/window/song_editor.rs
+@@ -207,7 +207,7 @@ impl Window {
+                             if win.player().and_then(|p| p.state().current_song()).is_some_and(|s| s.equals(&song)) && win.lyrics_shown() {
+                                 win.load_lyrics().await;
+                             }
+-                            win.add_toast(if publication_failed { i18n("Saved on this computer. Reconnect and save again to publish the cover and lyrics.") } else { i18n("Song changes saved") });
++                            win.add_toast(if publication_failed { i18n("Saved on this device. Reconnect and save again to publish the cover and lyrics.") } else { i18n("Song changes saved") });
+                             dialog.set_can_close(true);
+                             dialog.close();
+                         }
+diff --git a/src/window/tests.rs b/src/window/tests.rs
+index 9187775..5d1c5c9 100644
+--- a/src/window/tests.rs
++++ b/src/window/tests.rs
+@@ -494,6 +494,11 @@ fn navigation_preserves_playback_and_settings_open_without_search() {
+         window.imp().player_stack.visible_child_name().as_deref(),
+         Some("for-you")
+     );
++    gtk::prelude::WidgetExt::activate_action(&window, "win.show-my-music", None).unwrap();
++    unchanged();
++    assert!(window.imp().split_view.shows_sidebar());
++    assert!(window.imp().my_music_button.is_active());
++    window.imp().split_view.set_show_sidebar(false);
+     window.imp().for_you_button.set_active(false);
+     unchanged();
+     assert_eq!(
+@@ -872,7 +877,6 @@ fn navigation_preserves_playback_and_settings_open_without_search() {
+     context.block_on(panel.test_welcome_layout(&list_window));
+     context.block_on(panel.test_scroll_loading_and_recycling(&window));
+     list_window.close();
+-    context.block_on(window.test_collection_editor());
+     context.block_on(crate::library::import_albums::ImportedAlbums::test_persistence());
+     let editor_window = Window::new(&app);
+     GtkWindowExt::present(&editor_window);
+@@ -944,6 +948,165 @@ fn navigation_preserves_playback_and_settings_open_without_search() {
+     window.close();
+ }
+ 
++/// A focused phone-layout gate, independent of service-import dialogs and jobs.
++#[test]
++#[ignore = "requires a GTK display and isolated XDG directories; see docs/IMPORTING.md"]
++fn mobile_library_navigation_albums_and_keyboard_viewport() {
++    assert_eq!(std::env::var("GSETTINGS_BACKEND").as_deref(), Ok("memory"));
++    assert!(glib::user_data_dir().starts_with("/tmp"));
++    adw::init().unwrap();
++    gtk::Settings::default()
++        .unwrap()
++        .set_gtk_enable_animations(false);
++    gst::init().unwrap();
++    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
++    gio::resources_register(
++        &gio::Resource::load(root.join("_builddir/src/hopea.gresource")).unwrap(),
++    );
++    let context = glib::MainContext::default();
++    let _guard = context.acquire().unwrap();
++    let settings = utils::settings_manager();
++    settings.set_boolean("library-enabled", false).unwrap();
++    settings.set_boolean("library-rules-seen", true).unwrap();
++    settings.set_boolean("game-mode", false).unwrap();
++    let app = crate::application::Application::new();
++    app.set_flags(app.flags() | gio::ApplicationFlags::NON_UNIQUE);
++    app.register(gio::Cancellable::NONE).unwrap();
++    assert!(!app.is_remote());
++    let window = Window::new(&app);
++    let imp = window.imp();
++    let panel = window.import_panel();
++    imp.my_music_header_start.set_visible(true);
++    imp.my_music_header.set_visible(true);
++    imp.my_music_button.set_visible(false);
++    imp.playback_control
++        .imp()
++        .playlist_button
++        .set_visible(false);
++    panel.test_android_chrome_and_keyboard(false);
++    // The desktop minimum is deliberately absent in Android's viewport.
++    window.set_height_request(1);
++    window.set_default_size(390, 780);
++    GtkWindowExt::present(&window);
++    context.block_on(glib::timeout_future(std::time::Duration::from_millis(350)));
++
++    assert!(app.player().queue().is_empty());
++    assert!(imp.my_music_header.is_mapped());
++    imp.my_music_header.emit_clicked();
++    context.block_on(glib::timeout_future(std::time::Duration::from_millis(150)));
++    assert!(imp.split_view.shows_sidebar());
++    let back = imp.playlist_view.back_button();
++    assert!(back.is_mapped() && back.is_sensitive());
++    back.emit_clicked();
++    assert!(
++        !imp.split_view.shows_sidebar(),
++        "the actual Back button must close My Music with an empty queue"
++    );
++
++    let player = app.player();
++    player.set_volume(0.0);
++    let song =
++        Song::from_uri(&gio::File::for_path(root.join("node/tests/fixtures/tone.wav")).uri())
++            .unwrap();
++    player.queue().add_song(&song);
++    panel.test_show_search_with_albums();
++    imp.library_sheet.set_open(true);
++    context.block_on(glib::timeout_future(std::time::Duration::from_millis(350)));
++    // Snapshot playback state without depending on audio hardware or timing.
++    player.state().set_current_song(Some(song.clone()));
++    player.state().set_playback_state(&PlaybackState::Playing);
++    player.state().set_position(42);
++    let unchanged = || {
++        assert_eq!(player.queue().n_songs(), 1);
++        assert_eq!(player.state().current_song(), Some(song.clone()));
++        assert_eq!(player.state().position(), 42);
++        assert!(player.state().playing());
++        assert!(!window.in_for_you());
++    };
++    imp.for_you_button.set_active(true);
++    let header = panel.test_my_music_button();
++    assert!(header.is_mapped() && header.is_sensitive());
++    header.emit_clicked();
++    unchanged();
++    assert!(!imp.library_sheet.is_open());
++    assert!(imp.my_music_button.is_active());
++    assert!(imp.split_view.shows_sidebar());
++    back.emit_clicked();
++    unchanged();
++    assert!(!imp.split_view.shows_sidebar());
++    imp.my_music_header.emit_clicked();
++    unchanged();
++    assert!(imp.split_view.shows_sidebar());
++    back.emit_clicked();
++    player.pause();
++
++    // Joined search contains real album cards and song rows. Simulate the
++    // Android IME policy as well as its smaller viewport, then rotate twice.
++    for (width, height) in [(390, 780), (390, 420), (390, 780), (800, 520), (390, 780)] {
++        panel.test_android_chrome_and_keyboard(height == 420);
++        window.set_default_size(width, height);
++        context.block_on(glib::timeout_future(std::time::Duration::from_millis(350)));
++        if width <= 560 {
++            assert!(window.library_in_sheet());
++            imp.library_sheet.set_open(true);
++            context.block_on(glib::timeout_future(std::time::Duration::from_millis(350)));
++            let available = imp.library_sheet.height();
++            let sheet = imp
++                .sheet_content
++                .compute_bounds(&imp.library_sheet.get())
++                .unwrap();
++            assert!(
++                sheet.height() >= available as f32 * 0.85,
++                "Shared Music must expand near the top: sheet={}, available={}",
++                sheet.height(),
++                available
++            );
++            assert!(
++                sheet.y() >= -1.0 && sheet.y() + sheet.height() <= available as f32 + 1.0,
++                "the sheet must remain inside the viewport when it shrinks"
++            );
++            assert!(
++                window.height() <= height,
++                "sheet natural height must not become a minimum that blocks keyboard resizing"
++            );
++            panel.test_search_with_albums_fits();
++            if let Some(path) = std::env::var_os("HOPEA_TEST_SHEET_SCREENSHOT") {
++                let mut path = std::path::PathBuf::from(path);
++                if height == 420 {
++                    path.set_file_name("shared-music-keyboard.png");
++                }
++                let paintable = gtk::WidgetPaintable::new(Some(&window));
++                let mut node = None;
++                for _ in 0..8 {
++                    window.queue_draw();
++                    context.block_on(glib::timeout_future(std::time::Duration::from_millis(100)));
++                    let snapshot = gtk::Snapshot::new();
++                    paintable.snapshot(&snapshot, window.width() as f64, window.height() as f64);
++                    node = snapshot.to_node();
++                    if node.is_some() {
++                        break;
++                    }
++                }
++                window
++                    .renderer()
++                    .unwrap()
++                    .render_texture(&node.expect("mapped sheet must render after a frame"), None)
++                    .save_to_png(path)
++                    .unwrap();
++            }
++        } else {
++            assert!(!window.library_in_sheet());
++            assert_eq!(imp.library_split.sidebar(), Some(panel.clone().upcast()));
++            panel.test_search_with_albums_fits();
++        }
++    }
++    panel.test_my_music_button().emit_clicked();
++    assert!(!imp.library_sheet.is_open());
++    assert!(imp.split_view.shows_sidebar());
++    context.block_on(window.test_collection_editor());
++    window.close();
++}
++
+ /// Exercise a genuinely scrollable queue, rather than two rows that both fit.
+ #[test]
+ #[ignore = "requires a GTK display and isolated XDG directories; see docs/IMPORTING.md"]
+diff --git a/tests/support/lyrics_https.rs b/tests/support/lyrics_https.rs
+new file mode 100644
+index 0000000..01b60e8
+--- /dev/null
++++ b/tests/support/lyrics_https.rs
+@@ -0,0 +1,190 @@
++// SPDX-FileCopyrightText: 2026 Daniil Klimov
++// SPDX-License-Identifier: GPL-3.0-or-later
++// Run with tests/test_lyrics_https.sh: actual loopback TLS, without GTK or a
++// request to a public service. Test certificates exist only in a temporary dir.
++
++use super::*;
++use std::{
++    io::{Read, Write},
++    net::TcpListener,
++    path::PathBuf,
++    sync::Arc,
++    thread::{self, JoinHandle},
++    time::Instant,
++};
++
++fn fixture(name: &str) -> Vec<u8> {
++    std::fs::read(PathBuf::from(std::env::var_os("HOPEA_TLS_FIXTURES").unwrap()).join(name))
++        .unwrap()
++}
++
++fn runtime() -> tokio::runtime::Runtime {
++    tokio::runtime::Builder::new_current_thread()
++        .enable_all()
++        .build()
++        .unwrap()
++}
++
++fn trusted_client() -> reqwest::Client {
++    client_builder("Hopea-test")
++        .unwrap()
++        .tls_certs_only([reqwest::Certificate::from_der(&fixture("ca.der")).unwrap()])
++        .no_proxy()
++        .build()
++        .unwrap()
++}
++
++fn serve(response: &[u8]) -> (u16, JoinHandle<()>) {
++    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
++    listener.set_nonblocking(true).unwrap();
++    let port = listener.local_addr().unwrap().port();
++    let config = rustls::ServerConfig::builder_with_provider(Arc::new(
++        rustls::crypto::aws_lc_rs::default_provider(),
++    ))
++    .with_safe_default_protocol_versions()
++    .unwrap()
++    .with_no_client_auth()
++    .with_single_cert(
++        vec![rustls::pki_types::CertificateDer::from(fixture(
++            "server.der",
++        ))],
++        rustls::pki_types::PrivatePkcs8KeyDer::from(fixture("server-key.der")).into(),
++    )
++    .unwrap();
++    let response = response.to_vec();
++    let worker = thread::spawn(move || {
++        let deadline = Instant::now() + Duration::from_secs(5);
++        let socket = loop {
++            match listener.accept() {
++                Ok((socket, _)) => break socket,
++                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
++                    assert!(Instant::now() < deadline, "TLS client never connected");
++                    thread::sleep(Duration::from_millis(10));
++                }
++                Err(error) => panic!("{error}"),
++            }
++        };
++        socket
++            .set_read_timeout(Some(Duration::from_secs(5)))
++            .unwrap();
++        socket
++            .set_write_timeout(Some(Duration::from_secs(5)))
++            .unwrap();
++        let connection = rustls::ServerConnection::new(Arc::new(config)).unwrap();
++        let mut stream = rustls::StreamOwned::new(connection, socket);
++        let mut request = Vec::new();
++        let mut chunk = [0; 1024];
++        while !request.windows(4).any(|tail| tail == b"\r\n\r\n") {
++            match stream.read(&mut chunk) {
++                // Certificate rejection ends the handshake before HTTP.
++                Ok(0) | Err(_) => return,
++                Ok(n) => request.extend_from_slice(&chunk[..n]),
++            }
++            assert!(request.len() < 8192);
++        }
++        let _ = stream.write_all(&response);
++        let _ = stream.flush();
++    });
++    (port, worker)
++}
++
++#[test]
++fn retrieves_a_verified_https_reply_without_gio() {
++    let (port, worker) =
++        serve(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\n[]");
++    let answer = runtime().block_on(fetch_with_client(
++        &trusted_client(),
++        &format!("https://localhost:{port}/api/search"),
++        1024,
++    ));
++    assert_eq!(answer.unwrap(), Some(b"[]".to_vec()));
++    worker.join().unwrap();
++}
++
++#[test]
++fn rejects_untrusted_certificates_and_wrong_hostnames() {
++    let (port, worker) = serve(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\n[]");
++    let untrusted = client_builder("Hopea-test")
++        .unwrap()
++        .no_proxy()
++        .build()
++        .unwrap();
++    let result = runtime().block_on(fetch_with_client(
++        &untrusted,
++        &format!("https://localhost:{port}/"),
++        1024,
++    ));
++    assert!(matches!(result, Err(FetchError::Transport(_))));
++    worker.join().unwrap();
++
++    let (port, worker) = serve(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\n[]");
++    // The trusted test certificate is valid only for localhost, not this IP.
++    let result = runtime().block_on(fetch_with_client(
++        &trusted_client(),
++        &format!("https://127.0.0.1:{port}/"),
++        1024,
++    ));
++    assert!(matches!(result, Err(FetchError::Transport(_))));
++    worker.join().unwrap();
++}
++
++#[test]
++fn rejects_http_and_https_to_http_redirects() {
++    assert!(matches!(
++        runtime().block_on(fetch("http://127.0.0.1:1/", "Hopea-test", 1024)),
++        Err(FetchError::Transport(_))
++    ));
++    let (port, worker) = serve(b"HTTP/1.1 302 Found\r\nLocation: http://127.0.0.1:1/\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
++    let result = runtime().block_on(fetch_with_client(
++        &trusted_client(),
++        &format!("https://localhost:{port}/"),
++        1024,
++    ));
++    assert!(matches!(result, Err(FetchError::Transport(_))));
++    worker.join().unwrap();
++}
++
++#[test]
++fn handles_not_found_and_rejects_service_errors() {
++    for (response, not_found) in [
++        (
++            b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".as_slice(),
++            true,
++        ),
++        (
++            b"HTTP/1.1 503 Unavailable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
++                .as_slice(),
++            false,
++        ),
++    ] {
++        let (port, worker) = serve(response);
++        let result = runtime().block_on(fetch_with_client(
++            &trusted_client(),
++            &format!("https://localhost:{port}/"),
++            1024,
++        ));
++        if not_found {
++            assert_eq!(result.unwrap(), None);
++        } else {
++            assert!(matches!(result, Err(FetchError::UnexpectedStatus)));
++        }
++        worker.join().unwrap();
++    }
++}
++
++#[test]
++fn limits_content_length_and_actual_chunked_bytes() {
++    for response in [
++        b"HTTP/1.1 200 OK\r\nContent-Length: 1000000\r\nConnection: close\r\n\r\n".as_slice(),
++        b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n5\r\n12345\r\n5\r\n67890\r\n0\r\n\r\n".as_slice(),
++    ] {
++        let (port, worker) = serve(response);
++        let result = runtime().block_on(fetch_with_client(
++            &trusted_client(),
++            &format!("https://localhost:{port}/"),
++            8,
++        ));
++        assert!(matches!(result, Err(FetchError::TooLarge)));
++        worker.join().unwrap();
++    }
++}
+diff --git a/tests/test_android_gaming.sh b/tests/test_android_gaming.sh
+index b955ae5..80cee5f 100644
+--- a/tests/test_android_gaming.sh
++++ b/tests/test_android_gaming.sh
+@@ -14,6 +14,7 @@ python3 "$root/tests/test_android_app_links.py"
+ python3 "$root/tests/test_android_storage.py"
+ python3 "$root/tests/test_android_crash_report.py"
+ python3 "$root/tests/test_android_language.py"
++python3 "$root/tests/test_android_keyboard.py"
+ # These checks run before Pixiewood downloads GTK. Supply only its Application
+ # superclass contract; Android APIs come from the real SDK. Gradle subsequently
+ # compiles HopeaApplication together with the actual GTK Java sources.
+diff --git a/tests/test_android_keyboard.py b/tests/test_android_keyboard.py
+new file mode 100644
+index 0000000..80c3ea0
+--- /dev/null
++++ b/tests/test_android_keyboard.py
+@@ -0,0 +1,136 @@
++#!/usr/bin/env python3
++# SPDX-FileCopyrightText: 2026 Daniil Klimov
++# SPDX-License-Identifier: GPL-3.0-or-later
++"""Exercise the production keyboard observer at Android's UI-thread boundary."""
++from pathlib import Path
++import subprocess
++import tempfile
++
++root = Path(__file__).resolve().parents[1]
++sources = {
++    'android/os/Build.java': '''package android.os;
++public class Build { public static class VERSION { public static int SDK_INT = 34; } }''',
++    'android/graphics/Rect.java': '''package android.graphics;
++public class Rect { public int bottom; }''',
++    'android/util/DisplayMetrics.java': '''package android.util;
++public class DisplayMetrics { public float density = 1; }''',
++    'android/content/res/Resources.java': '''package android.content.res;
++public class Resources {
++  public android.util.DisplayMetrics getDisplayMetrics() { return new android.util.DisplayMetrics(); }
++}''',
++    'android/view/WindowInsets.java': '''package android.view;
++public class WindowInsets {
++  public boolean shown;
++  public boolean isVisible(int type) { return shown; }
++  public static class Type { public static int ime() { return 8; } }
++}''',
++    'android/view/ViewTreeObserver.java': '''package android.view;
++public class ViewTreeObserver {
++  public interface OnGlobalLayoutListener { void onGlobalLayout(); }
++  public OnGlobalLayoutListener listener;
++  public int adds, removes;
++  public boolean isAlive() { return true; }
++  public void addOnGlobalLayoutListener(OnGlobalLayoutListener value) { listener = value; adds++; }
++  public void removeOnGlobalLayoutListener(OnGlobalLayoutListener value) {
++    assert listener == value; listener = null; removes++;
++  }
++  public void dispatch() {
++    android.app.Activity.ui = true;
++    try { if (listener != null) listener.onGlobalLayout(); }
++    finally { android.app.Activity.ui = false; }
++  }
++}''',
++    'android/view/View.java': '''package android.view;
++public class View {
++  public WindowInsets insets = new WindowInsets();
++  public final ViewTreeObserver observer = new ViewTreeObserver();
++  public int height = 800, bottom = 780;
++  public ViewTreeObserver getViewTreeObserver() { assert android.app.Activity.ui; return observer; }
++  public WindowInsets getRootWindowInsets() { assert android.app.Activity.ui; return insets; }
++  public void getWindowVisibleDisplayFrame(android.graphics.Rect frame) {
++    assert android.app.Activity.ui; frame.bottom = bottom;
++  }
++  public View getRootView() { return this; }
++  public int getHeight() { return height; }
++  public android.content.res.Resources getResources() { return new android.content.res.Resources(); }
++}''',
++    'android/view/Window.java': '''package android.view;
++public class Window {
++  public final View view = new View();
++  public View getDecorView() { assert android.app.Activity.ui; return view; }
++}''',
++    'android/app/Activity.java': '''package android.app;
++public class Activity {
++  public static boolean ui;
++  private static final java.util.ArrayDeque<Runnable> pending = new java.util.ArrayDeque<>();
++  public final android.view.Window window = new android.view.Window();
++  public boolean finished;
++  public boolean isFinishing() { return finished; }
++  public boolean isDestroyed() { return false; }
++  public android.view.Window getWindow() { return window; }
++  public void runOnUiThread(Runnable task) { pending.add(task); }
++  public static void drain() {
++    ui = true;
++    try { while (!pending.isEmpty()) pending.remove().run(); }
++    finally { ui = false; }
++  }
++}''',
++    'io/hopea/hopea/KeyboardVisibilityTest.java': '''package io.hopea.hopea;
++import android.app.Activity;
++import android.os.Build;
++public class KeyboardVisibilityTest {
++  public static void main(String[] args) {
++    assert KeyboardVisibility.current() == -1;
++    Activity first = new Activity();
++    KeyboardVisibility.watch(first);
++    assert KeyboardVisibility.current() == -1; // no views touched on GTK's thread
++    Activity.drain();
++    assert KeyboardVisibility.current() == 0;
++    first.window.view.insets.shown = true;
++    first.window.view.observer.dispatch();
++    assert KeyboardVisibility.current() == 1;
++    // Back hides IME without changing the text entry's focus.
++    first.window.view.insets.shown = false;
++    first.window.view.observer.dispatch();
++    assert KeyboardVisibility.current() == 0;
++    KeyboardVisibility.watch(first); Activity.drain();
++    assert first.window.view.observer.adds == 1;
++    Activity second = new Activity();
++    second.window.view.insets = null;
++    KeyboardVisibility.watch(second); Activity.drain();
++    assert first.window.view.observer.removes == 1;
++    assert KeyboardVisibility.current() == -1; // insets not ready yet
++    KeyboardVisibility.stop(first); Activity.drain();
++    assert second.window.view.observer.listener != null;
++    KeyboardVisibility.stop(second); Activity.drain();
++    assert second.window.view.observer.removes == 1;
++    Build.VERSION.SDK_INT = 28;
++    KeyboardVisibility.watch(first); Activity.drain();
++    assert KeyboardVisibility.current() == 0; // navigation bar is not a keyboard
++    first.window.view.bottom = 480;
++    first.window.view.observer.dispatch();
++    assert KeyboardVisibility.current() == 1;
++    first.window.view.bottom = 780;
++    first.window.view.observer.dispatch();
++    assert KeyboardVisibility.current() == 0;
++    KeyboardVisibility.stop(first); Activity.drain();
++    assert KeyboardVisibility.current() == -1;
++    first.finished = true;
++    KeyboardVisibility.watch(first); Activity.drain();
++    assert first.window.view.observer.listener == null;
++    System.out.println("Android keyboard: UI-thread reads, show/hide, lifecycle and API 28 fallback passed");
++  }
++}''',
++}
++with tempfile.TemporaryDirectory() as directory:
++    work = Path(directory)
++    files = []
++    for name, source in sources.items():
++        path = work / name
++        path.parent.mkdir(parents=True, exist_ok=True)
++        path.write_text(source)
++        files.append(str(path))
++    files.append(str(root / 'build-aux/android/java/io/hopea/hopea/KeyboardVisibility.java'))
++    subprocess.run(['javac', '-d', str(work / 'classes'), *files], check=True)
++    subprocess.run(['java', '-ea', '-cp', str(work / 'classes'),
++                    'io.hopea.hopea.KeyboardVisibilityTest'], check=True)
+diff --git a/tests/test_lyrics_https.sh b/tests/test_lyrics_https.sh
+new file mode 100644
+index 0000000..680e4ef
+--- /dev/null
++++ b/tests/test_lyrics_https.sh
+@@ -0,0 +1,55 @@
++#!/usr/bin/env bash
++# SPDX-FileCopyrightText: 2026 Daniil Klimov
++# SPDX-License-Identifier: GPL-3.0-or-later
++set -euo pipefail
++root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
++work=$(mktemp -d)
++trap 'rm -rf "$work"' EXIT
++export HOPEA_TLS_FIXTURES="$work/certs"
++mkdir -p "$HOPEA_TLS_FIXTURES"
++# Disposable local CA and localhost-only server identity. No production keys,
++# external service calls, installed CA changes or device access are involved.
++openssl req -x509 -newkey rsa:2048 -nodes -days 2 -subj '/CN=Hopea TLS Test CA' \
++  -keyout "$work/ca.key" -out "$work/ca.pem" >/dev/null 2>&1
++openssl req -newkey rsa:2048 -nodes -subj '/CN=localhost' \
++  -keyout "$work/server.key" -out "$work/server.csr" >/dev/null 2>&1
++cat > "$work/server.ext" <<'EOF'
++basicConstraints=critical,CA:FALSE
++keyUsage=critical,digitalSignature,keyEncipherment
++extendedKeyUsage=serverAuth
++subjectAltName=DNS:localhost
++EOF
++openssl x509 -req -in "$work/server.csr" -CA "$work/ca.pem" -CAkey "$work/ca.key" \
++  -CAcreateserial -days 2 -extfile "$work/server.ext" -out "$work/server.pem" >/dev/null 2>&1
++openssl x509 -in "$work/ca.pem" -outform DER -out "$HOPEA_TLS_FIXTURES/ca.der"
++openssl x509 -in "$work/server.pem" -outform DER -out "$HOPEA_TLS_FIXTURES/server.der"
++openssl pkcs8 -topk8 -nocrypt -in "$work/server.key" -outform DER -out "$HOPEA_TLS_FIXTURES/server-key.der"
++# Compile the exact Android transport on the host, without GTK or an emulator.
++# Reuse the application's resolved dependency versions in the temporary crate.
++cp "$root/Cargo.lock" "$work/Cargo.lock"
++python3 - "$root" "$work" <<'PY'
++import json
++from pathlib import Path
++import sys
++import tomllib
++
++root, work = map(Path, sys.argv[1:])
++manifest = tomllib.loads((root / 'Cargo.toml').read_text())
++android = manifest['target']['cfg(target_os = "android")']['dependencies']
++versions = {p['name']: p['version'] for p in tomllib.loads((root / 'Cargo.lock').read_text())['package']}
++(work / 'Cargo.toml').write_text(f'''[package]
++name = "hopea-lyrics-https-test"
++version = "0.1.0"
++edition = "2021"
++[lib]
++path = {json.dumps(str(root / 'src/lyrics_https.rs'))}
++[dependencies]
++reqwest = {{ version = "={android['reqwest']['version']}", default-features = false, features = ["rustls"] }}
++webpki-root-certs = "={android['webpki-root-certs']}"
++tokio = {{ version = "={manifest['dependencies']['tokio']['version']}", features = ["rt", "net", "time"] }}
++[dev-dependencies]
++rustls = "={versions['rustls']}"
++[workspace]
++''')
++PY
++cargo test --manifest-path "$work/Cargo.toml" --target-dir "$root/target/lyrics-https-test" -- --test-threads=1
+diff --git a/vendor/dontfrag/Cargo.toml b/vendor/dontfrag/Cargo.toml
+deleted file mode 100644
+index 6ead5d1..0000000
+--- a/vendor/dontfrag/Cargo.toml
++++ /dev/null
+@@ -1,52 +0,0 @@
+-# THIS FILE IS AUTOMATICALLY GENERATED BY CARGO
+-#
+-# When uploading crates to the registry Cargo will automatically
+-# "normalize" Cargo.toml files for maximal compatibility
+-# with all versions of Cargo and also rewrite `path` dependencies
+-# to registry (e.g., crates.io) dependencies.
+-#
+-# If you are reading this file be aware that the original Cargo.toml
+-# will likely look very different (and much more reasonable).
+-# See Cargo.toml.orig for the original contents.
+-
+-[package]
+-edition = "2021"
+-name = "dontfrag"
+-version = "1.0.1"
+-authors = ["N. Nattis <contact@nicbn.com>"]
+-description = "Library for setting Don't Fragment option (DF) on UDP sockets"
+-homepage = "https://github.com/nicbn/dontfrag-rs"
+-readme = "README.md"
+-keywords = [
+-    "api",
+-    "udp",
+-]
+-categories = [
+-    "api-bindings",
+-    "network-programming",
+-    "os",
+-]
+-license = "MIT OR Apache-2.0"
+-repository = "https://github.com/nicbn/dontfrag-rs"
+-
+-[package.metadata.docs.rs]
+-all-features = true
+-rustdoc-args = [
+-    "--cfg",
+-    "docsrs",
+-]
+-
+-[dependencies.cfg-if]
+-version = "1.0.0"
+-
+-[dependencies.tokio]
+-version = "1.35.0"
+-features = ["net"]
+-optional = true
+-
+-[target."cfg(unix)".dependencies.libc]
+-version = "0.2.150"
+-
+-[target."cfg(windows)".dependencies.windows-sys]
+-version = "0.52.0"
+-features = ["Win32_Networking_WinSock"]
+diff --git a/vendor/dontfrag/Cargo.toml.orig b/vendor/dontfrag/Cargo.toml.orig
+deleted file mode 100644
+index 61b3de0..0000000
+--- a/vendor/dontfrag/Cargo.toml.orig
++++ /dev/null
+@@ -1,26 +0,0 @@
+-[package]
+-name = "dontfrag"
+-version = "1.0.1"
+-edition = "2021"
+-
+-description = "Library for setting Don't Fragment option (DF) on UDP sockets"
+-authors = ["N. Nattis <contact@nicbn.com>"]
+-license = "MIT OR Apache-2.0"
+-homepage = "https://github.com/nicbn/dontfrag-rs"
+-repository = "https://github.com/nicbn/dontfrag-rs"
+-keywords = ["api", "udp"]
+-categories = ["api-bindings", "network-programming", "os"]
+-
+-[dependencies]
+-cfg-if = "1.0.0"
+-tokio = { version = "1.35.0", optional = true, features = ["net"] }
+-
+-[target.'cfg(unix)'.dependencies]
+-libc = "0.2.150"
+-
+-[target.'cfg(windows)'.dependencies]
+-windows-sys = { version = "0.52.0", features = ["Win32_Networking_WinSock"] }
+-
+-[package.metadata.docs.rs]
+-all-features = true
+-rustdoc-args = ["--cfg", "docsrs"]
+diff --git a/vendor/dontfrag/LICENSE-APACHE b/vendor/dontfrag/LICENSE-APACHE
+deleted file mode 100644
+index 3c11d00..0000000
+--- a/vendor/dontfrag/LICENSE-APACHE
++++ /dev/null
+@@ -1,201 +0,0 @@
+-                                 Apache License
+-                           Version 2.0, January 2004
+-                        http://www.apache.org/licenses/
+-
+-   TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
+-
+-   1. Definitions.
+-
+-      "License" shall mean the terms and conditions for use, reproduction,
+-      and distribution as defined by Sections 1 through 9 of this document.
+-
+-      "Licensor" shall mean the copyright owner or entity authorized by
+-      the copyright owner that is granting the License.
+-
+-      "Legal Entity" shall mean the union of the acting entity and all
+-      other entities that control, are controlled by, or are under common
+-      control with that entity. For the purposes of this definition,
+-      "control" means (i) the power, direct or indirect, to cause the
+-      direction or management of such entity, whether by contract or
+-      otherwise, or (ii) ownership of fifty percent (50%) or more of the
+-      outstanding shares, or (iii) beneficial ownership of such entity.
+-
+-      "You" (or "Your") shall mean an individual or Legal Entity
+-      exercising permissions granted by this License.
+-
+-      "Source" form shall mean the preferred form for making modifications,
+-      including but not limited to software source code, documentation
+-      source, and configuration files.
+-
+-      "Object" form shall mean any form resulting from mechanical
+-      transformation or translation of a Source form, including but
+-      not limited to compiled object code, generated documentation,
+-      and conversions to other media types.
+-
+-      "Work" shall mean the work of authorship, whether in Source or
+-      Object form, made available under the License, as indicated by a
+-      copyright notice that is included in or attached to the work
+-      (an example is provided in the Appendix below).
+-
+-      "Derivative Works" shall mean any work, whether in Source or Object
+-      form, that is based on (or derived from) the Work and for which the
+-      editorial revisions, annotations, elaborations, or other modifications
+-      represent, as a whole, an original work of authorship. For the purposes
+-      of this License, Derivative Works shall not include works that remain
+-      separable from, or merely link (or bind by name) to the interfaces of,
+-      the Work and Derivative Works thereof.
+-
+-      "Contribution" shall mean any work of authorship, including
+-      the original version of the Work and any modifications or additions
+-      to that Work or Derivative Works thereof, that is intentionally
+-      submitted to Licensor for inclusion in the Work by the copyright owner
+-      or by an individual or Legal Entity authorized to submit on behalf of
+-      the copyright owner. For the purposes of this definition, "submitted"
+-      means any form of electronic, verbal, or written communication sent
+-      to the Licensor or its representatives, including but not limited to
+-      communication on electronic mailing lists, source code control systems,
+-      and issue tracking systems that are managed by, or on behalf of, the
+-      Licensor for the purpose of discussing and improving the Work, but
+-      excluding communication that is conspicuously marked or otherwise
+-      designated in writing by the copyright owner as "Not a Contribution."
+-
+-      "Contributor" shall mean Licensor and any individual or Legal Entity
+-      on behalf of whom a Contribution has been received by Licensor and
+-      subsequently incorporated within the Work.
+-
+-   2. Grant of Copyright License. Subject to the terms and conditions of
+-      this License, each Contributor hereby grants to You a perpetual,
+-      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
+-      copyright license to reproduce, prepare Derivative Works of,
+-      publicly display, publicly perform, sublicense, and distribute the
+-      Work and such Derivative Works in Source or Object form.
+-
+-   3. Grant of Patent License. Subject to the terms and conditions of
+-      this License, each Contributor hereby grants to You a perpetual,
+-      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
+-      (except as stated in this section) patent license to make, have made,
+-      use, offer to sell, sell, import, and otherwise transfer the Work,
+-      where such license applies only to those patent claims licensable
+-      by such Contributor that are necessarily infringed by their
+-      Contribution(s) alone or by combination of their Contribution(s)
+-      with the Work to which such Contribution(s) was submitted. If You
+-      institute patent litigation against any entity (including a
+-      cross-claim or counterclaim in a lawsuit) alleging that the Work
+-      or a Contribution incorporated within the Work constitutes direct
+-      or contributory patent infringement, then any patent licenses
+-      granted to You under this License for that Work shall terminate
+-      as of the date such litigation is filed.
+-
+-   4. Redistribution. You may reproduce and distribute copies of the
+-      Work or Derivative Works thereof in any medium, with or without
+-      modifications, and in Source or Object form, provided that You
+-      meet the following conditions:
+-
+-      (a) You must give any other recipients of the Work or
+-          Derivative Works a copy of this License; and
+-
+-      (b) You must cause any modified files to carry prominent notices
+-          stating that You changed the files; and
+-
+-      (c) You must retain, in the Source form of any Derivative Works
+-          that You distribute, all copyright, patent, trademark, and
+-          attribution notices from the Source form of the Work,
+-          excluding those notices that do not pertain to any part of
+-          the Derivative Works; and
+-
+-      (d) If the Work includes a "NOTICE" text file as part of its
+-          distribution, then any Derivative Works that You distribute must
+-          include a readable copy of the attribution notices contained
+-          within such NOTICE file, excluding those notices that do not
+-          pertain to any part of the Derivative Works, in at least one
+-          of the following places: within a NOTICE text file distributed
+-          as part of the Derivative Works; within the Source form or
+-          documentation, if provided along with the Derivative Works; or,
+-          within a display generated by the Derivative Works, if and
+-          wherever such third-party notices normally appear. The contents
+-          of the NOTICE file are for informational purposes only and
+-          do not modify the License. You may add Your own attribution
+-          notices within Derivative Works that You distribute, alongside
+-          or as an addendum to the NOTICE text from the Work, provided
+-          that such additional attribution notices cannot be construed
+-          as modifying the License.
+-
+-      You may add Your own copyright statement to Your modifications and
+-      may provide additional or different license terms and conditions
+-      for use, reproduction, or distribution of Your modifications, or
+-      for any such Derivative Works as a whole, provided Your use,
+-      reproduction, and distribution of the Work otherwise complies with
+-      the conditions stated in this License.
+-
+-   5. Submission of Contributions. Unless You explicitly state otherwise,
+-      any Contribution intentionally submitted for inclusion in the Work
+-      by You to the Licensor shall be under the terms and conditions of
+-      this License, without any additional terms or conditions.
+-      Notwithstanding the above, nothing herein shall supersede or modify
+-      the terms of any separate license agreement you may have executed
+-      with Licensor regarding such Contributions.
+-
+-   6. Trademarks. This License does not grant permission to use the trade
+-      names, trademarks, service marks, or product names of the Licensor,
+-      except as required for reasonable and customary use in describing the
+-      origin of the Work and reproducing the content of the NOTICE file.
+-
+-   7. Disclaimer of Warranty. Unless required by applicable law or
+-      agreed to in writing, Licensor provides the Work (and each
+-      Contributor provides its Contributions) on an "AS IS" BASIS,
+-      WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+-      implied, including, without limitation, any warranties or conditions
+-      of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A
+-      PARTICULAR PURPOSE. You are solely responsible for determining the
+-      appropriateness of using or redistributing the Work and assume any
+-      risks associated with Your exercise of permissions under this License.
+-
+-   8. Limitation of Liability. In no event and under no legal theory,
+-      whether in tort (including negligence), contract, or otherwise,
+-      unless required by applicable law (such as deliberate and grossly
+-      negligent acts) or agreed to in writing, shall any Contributor be
+-      liable to You for damages, including any direct, indirect, special,
+-      incidental, or consequential damages of any character arising as a
+-      result of this License or out of the use or inability to use the
+-      Work (including but not limited to damages for loss of goodwill,
+-      work stoppage, computer failure or malfunction, or any and all
+-      other commercial damages or losses), even if such Contributor
+-      has been advised of the possibility of such damages.
+-
+-   9. Accepting Warranty or Additional Liability. While redistributing
+-      the Work or Derivative Works thereof, You may choose to offer,
+-      and charge a fee for, acceptance of support, warranty, indemnity,
+-      or other liability obligations and/or rights consistent with this
+-      License. However, in accepting such obligations, You may act only
+-      on Your own behalf and on Your sole responsibility, not on behalf
+-      of any other Contributor, and only if You agree to indemnify,
+-      defend, and hold each Contributor harmless for any liability
+-      incurred by, or claims asserted against, such Contributor by reason
+-      of your accepting any such warranty or additional liability.
+-
+-   END OF TERMS AND CONDITIONS
+-
+-   APPENDIX: How to apply the Apache License to your work.
+-
+-      To apply the Apache License to your work, attach the following
+-      boilerplate notice, with the fields enclosed by brackets "[]"
+-      replaced with your own identifying information. (Don't include
+-      the brackets!)  The text should be enclosed in the appropriate
+-      comment syntax for the file format. We also recommend that a
+-      file or class name and description of purpose be included on the
+-      same "printed page" as the copyright notice for easier
+-      identification within third-party archives.
+-
+-   Copyright 2023 Nicolas Nattis
+-
+-   Licensed under the Apache License, Version 2.0 (the "License");
+-   you may not use this file except in compliance with the License.
+-   You may obtain a copy of the License at
+-
+-       http://www.apache.org/licenses/LICENSE-2.0
+-
+-   Unless required by applicable law or agreed to in writing, software
+-   distributed under the License is distributed on an "AS IS" BASIS,
+-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+-   See the License for the specific language governing permissions and
+-   limitations under the License.
+diff --git a/vendor/dontfrag/LICENSE-MIT b/vendor/dontfrag/LICENSE-MIT
+deleted file mode 100644
+index 843e70c..0000000
+--- a/vendor/dontfrag/LICENSE-MIT
++++ /dev/null
+@@ -1,21 +0,0 @@
+-MIT License
+-
+-Copyright (c) 2023 Nicolas Nattis
+-
+-Permission is hereby granted, free of charge, to any person obtaining a copy
+-of this software and associated documentation files (the "Software"), to deal
+-in the Software without restriction, including without limitation the rights
+-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+-copies of the Software, and to permit persons to whom the Software is
+-furnished to do so, subject to the following conditions:
+-
+-The above copyright notice and this permission notice shall be included in all
+-copies or substantial portions of the Software.
+-
+-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+-SOFTWARE.
+diff --git a/vendor/dontfrag/README.md b/vendor/dontfrag/README.md
+deleted file mode 100644
+index b92ff9b..0000000
+--- a/vendor/dontfrag/README.md
++++ /dev/null
+@@ -1,46 +0,0 @@
+-# dontfrag-rs
+-
+-[![Crate](https://shields.io/crates/v/dontfrag?style=for-the-badge)](https://crates.io/crates/dontfrag/)
+-[![Documentation](https://img.shields.io/docsrs/dontfrag?style=for-the-badge)](https://docs.rs/dontfrag/latest/dontfrag/)
+-
+-Rust library for setting Don't Fragment option (DF) on UDP sockets.
+-
+-## Platform support
+-
+-* BSD-like: macOS, iOS, tvOS, watchOS, FreeBSD, Dragonfly, OpenBSD, NetBSD
+-* Linux-like: Linux, L4RE, Android, Emscripten
+-* Windows
+-
+-PRs for additional platforms are welcome!
+-
+-## Optional features
+-
+-* `tokio`: Adds support for `tokio::net::UdpSocket`.
+-
+-## License
+-
+-Licensed under either of
+-
+- * Apache License, Version 2.0
+-   ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
+- * MIT license
+-   ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
+-
+-at your option.
+-
+-## Contribution
+-
+-Unless you explicitly state otherwise, any contribution intentionally submitted
+-for inclusion in the work by you, as defined in the Apache-2.0 license, shall be
+-dual licensed as above, without any additional terms or conditions.
+-
+-## Hopea portability patch
+-
+-NetBSD, OpenBSD and DragonFly BSD do not expose the per-socket IPv4
+-`IP_DONTFRAG` option assumed upstream. IPv4 accessors return `Unsupported` on
+-these targets; IPv6 still uses `IPV6_DONTFRAG`. librqbit's uTP socket setup
+-already handles this error and continues without the optional IPv4 setting.
+-
+-Kernel headers: [NetBSD](https://github.com/NetBSD/src/blob/trunk/sys/netinet/in.h),
+-[OpenBSD](https://github.com/openbsd/src/blob/master/sys/netinet/in.h),
+-[DragonFly BSD](https://github.com/DragonFlyBSD/DragonFlyBSD/blob/master/sys/netinet/in.h).
+diff --git a/vendor/dontfrag/src/lib.rs b/vendor/dontfrag/src/lib.rs
+deleted file mode 100644
+index a511ace..0000000
+--- a/vendor/dontfrag/src/lib.rs
++++ /dev/null
+@@ -1,161 +0,0 @@
+-//! # dontfrag
+-//!
+-//! Library for setting Don't Fragment option (DF) on UDP sockets.
+-//!
+-//! Example usage:
+-//!
+-//! ```no_run
+-//! use dontfrag::UdpSocketExt;
+-//!
+-//! let socket = UdpSocket::bind("127.0.0.1:3400").unwrap();
+-//! socket.set_dontfrag_v4(true).unwrap();
+-//! ```
+-//!
+-//! ## Optional features
+-//!
+-//! * `tokio`: Adds support for `tokio::net::UdpSocket`.
+-
+-#![deny(unsafe_op_in_unsafe_fn)]
+-#![cfg_attr(docsrs, feature(doc_cfg))]
+-
+-use std::{io, net::UdpSocket};
+-use sys_common::AsRawSocket;
+-
+-mod sys;
+-mod sys_common;
+-
+-mod private {
+-    pub trait Sealed {}
+-}
+-
+-/// Extension trait that provides methods for getting and setting the
+-/// Don't Fragment (DF) option on UDP sockets.
+-pub trait UdpSocketExt: private::Sealed {
+-    /// Gets the value of the `IP_DONTFRAG` (or equivalent) option for this
+-    /// socket.
+-    ///
+-    /// For more information about this option, see
+-    /// [`UdpSocketExt::set_dontfrag_v4`].
+-    fn dontfrag_v4(&self) -> io::Result<bool>;
+-
+-    /// Gets the value of the `IPV6_DONTFRAG` (or equivalent) option for this
+-    /// socket.
+-    ///
+-    /// For more information about this option, see
+-    /// [`UdpSocketExt::set_dontfrag_v6`].
+-    fn dontfrag_v6(&self) -> io::Result<bool>;
+-
+-    /// Sets the value of the `IP_DONTFRAG` (or equivalent) option for this
+-    /// socket.
+-    ///
+-    /// This option sets the Don't Fragment flag (DF) on IP packets.
+-    ///
+-    /// # Platform-specific behavior
+-    ///
+-    /// On FreeBSD and Darwin, this sets the `IP_DONTFRAG` option.
+-    /// On NetBSD, OpenBSD and DragonFly BSD, IPv4 accessors return
+-    /// [`io::ErrorKind::Unsupported`]; IPv6 retains `IPV6_DONTFRAG` support.
+-    ///
+-    /// On Linux-like systems, this sets the `IP_MTU_DISCOVER` option to
+-    /// either `IP_PMTUDISC_DONT` or `IP_PMTUDISC_DO`.
+-    ///
+-    /// On Windows, this sets the `IP_DONTFRAGMENT` option.
+-    fn set_dontfrag_v4(&self, v: bool) -> io::Result<()>;
+-
+-    /// Sets the value of the `IPV6_DONTFRAG` (or equivalent) option for this
+-    /// socket.
+-    ///
+-    /// This option sets the Don't Fragment flag (DF) on IP packets.
+-    ///
+-    /// # Platform-specific behavior
+-    ///
+-    /// On BSD-like systems (including Darwin) and Windows, this sets
+-    /// the `IPV6_DONTFRAG` option.
+-    ///
+-    /// On Linux-like systems, this sets the `IPV6_MTU_DISCOVER` option to
+-    /// either `IPV6_PMTUDISC_DONT` or `IPV6_PMTUDISC_DO`.
+-    fn set_dontfrag_v6(&self, v: bool) -> io::Result<()>;
+-}
+-
+-impl private::Sealed for UdpSocket {}
+-impl UdpSocketExt for UdpSocket {
+-    #[inline(always)]
+-    fn dontfrag_v4(&self) -> io::Result<bool> {
+-        sys::dontfrag_v4(self.as_raw_socket())
+-    }
+-
+-    #[inline(always)]
+-    fn dontfrag_v6(&self) -> io::Result<bool> {
+-        sys::dontfrag_v6(self.as_raw_socket())
+-    }
+-
+-    #[inline(always)]
+-    fn set_dontfrag_v4(&self, v: bool) -> io::Result<()> {
+-        sys::set_dontfrag_v4(self.as_raw_socket(), v)
+-    }
+-
+-    #[inline(always)]
+-    fn set_dontfrag_v6(&self, v: bool) -> io::Result<()> {
+-        sys::set_dontfrag_v6(self.as_raw_socket(), v)
+-    }
+-}
+-
+-#[cfg(feature = "tokio")]
+-impl private::Sealed for tokio::net::UdpSocket {}
+-#[cfg(feature = "tokio")]
+-#[cfg_attr(docsrs, doc(cfg(feature = "tokio")))]
+-impl UdpSocketExt for tokio::net::UdpSocket {
+-    #[inline(always)]
+-    fn dontfrag_v4(&self) -> io::Result<bool> {
+-        sys::dontfrag_v4(self.as_raw_socket())
+-    }
+-
+-    #[inline(always)]
+-    fn dontfrag_v6(&self) -> io::Result<bool> {
+-        sys::dontfrag_v6(self.as_raw_socket())
+-    }
+-
+-    #[inline(always)]
+-    fn set_dontfrag_v4(&self, v: bool) -> io::Result<()> {
+-        sys::set_dontfrag_v4(self.as_raw_socket(), v)
+-    }
+-
+-    #[inline(always)]
+-    fn set_dontfrag_v6(&self, v: bool) -> io::Result<()> {
+-        sys::set_dontfrag_v6(self.as_raw_socket(), v)
+-    }
+-}
+-
+-#[cfg(test)]
+-mod test {
+-    use super::*;
+-
+-    #[test]
+-    #[cfg(not(any(target_os = "netbsd", target_os = "openbsd", target_os = "dragonfly")))]
+-    fn retain_dontfrag_v4() {
+-        let socket = UdpSocket::bind("127.0.0.1:0").unwrap();
+-        socket.set_dontfrag_v4(true).unwrap();
+-        assert!(socket.dontfrag_v4().unwrap());
+-        socket.set_dontfrag_v4(false).unwrap();
+-        assert!(!socket.dontfrag_v4().unwrap());
+-    }
+-
+-    #[test]
+-    #[cfg(any(target_os = "netbsd", target_os = "openbsd", target_os = "dragonfly"))]
+-    fn ipv4_reports_unsupported() {
+-        let socket = UdpSocket::bind("127.0.0.1:0").unwrap();
+-        assert_eq!(socket.dontfrag_v4().unwrap_err().kind(), io::ErrorKind::Unsupported);
+-        for enabled in [false, true] {
+-            assert_eq!(socket.set_dontfrag_v4(enabled).unwrap_err().kind(), io::ErrorKind::Unsupported);
+-        }
+-    }
+-
+-    #[test]
+-    fn retain_dontfrag_v6() {
+-        let socket = UdpSocket::bind("::1:0").unwrap();
+-        socket.set_dontfrag_v6(true).unwrap();
+-        assert!(socket.dontfrag_v6().unwrap());
+-        socket.set_dontfrag_v6(false).unwrap();
+-        assert!(!socket.dontfrag_v6().unwrap());
+-    }
+-}
+diff --git a/vendor/dontfrag/src/sys/mod.rs b/vendor/dontfrag/src/sys/mod.rs
+deleted file mode 100644
+index 406b4eb..0000000
+--- a/vendor/dontfrag/src/sys/mod.rs
++++ /dev/null
+@@ -1,11 +0,0 @@
+-cfg_if::cfg_if! {
+-    if #[cfg(unix)] {
+-        mod unix;
+-        pub use self::unix::*;
+-    } else if #[cfg(windows)] {
+-        mod windows;
+-        pub use self::windows::*;
+-    } else {
+-        compile_error!("dontfrag: unsupported platform");
+-    }
+-}
+diff --git a/vendor/dontfrag/src/sys/unix/bsd.rs b/vendor/dontfrag/src/sys/unix/bsd.rs
+deleted file mode 100644
+index 89a6b4e..0000000
+--- a/vendor/dontfrag/src/sys/unix/bsd.rs
++++ /dev/null
+@@ -1,41 +0,0 @@
+-use super::{getsockopt_int, setsockopt_int};
+-use libc::{c_int, IPPROTO_IPV6, IPV6_DONTFRAG};
+-#[cfg(not(any(target_os = "netbsd", target_os = "openbsd", target_os = "dragonfly")))]
+-use libc::{IPPROTO_IP, IP_DONTFRAG};
+-use std::io;
+-
+-#[cfg(not(any(target_os = "netbsd", target_os = "openbsd", target_os = "dragonfly")))]
+-pub fn dontfrag_v4(socket: c_int) -> io::Result<bool> {
+-    getsockopt_int(socket, IPPROTO_IP, IP_DONTFRAG).map(|v| v != 0)
+-}
+-
+-pub fn dontfrag_v6(socket: c_int) -> io::Result<bool> {
+-    getsockopt_int(socket, IPPROTO_IPV6, IPV6_DONTFRAG).map(|v| v != 0)
+-}
+-
+-#[cfg(not(any(target_os = "netbsd", target_os = "openbsd", target_os = "dragonfly")))]
+-pub fn set_dontfrag_v4(socket: c_int, v: bool) -> io::Result<()> {
+-    setsockopt_int(socket, IPPROTO_IP, IP_DONTFRAG, v as c_int)
+-}
+-
+-pub fn set_dontfrag_v6(socket: c_int, v: bool) -> io::Result<()> {
+-    setsockopt_int(socket, IPPROTO_IPV6, IPV6_DONTFRAG, v as c_int)
+-}
+-
+-// These kernels do not expose FreeBSD's per-socket IPv4 IP_DONTFRAG option.
+-// Do not invent an option number or report success without changing the socket.
+-#[cfg(any(target_os = "netbsd", target_os = "openbsd", target_os = "dragonfly"))]
+-pub fn dontfrag_v4(_socket: c_int) -> io::Result<bool> {
+-    Err(io::Error::new(
+-        io::ErrorKind::Unsupported,
+-        "IPv4 Don't Fragment socket option is unavailable",
+-    ))
+-}
+-
+-#[cfg(any(target_os = "netbsd", target_os = "openbsd", target_os = "dragonfly"))]
+-pub fn set_dontfrag_v4(_socket: c_int, _v: bool) -> io::Result<()> {
+-    Err(io::Error::new(
+-        io::ErrorKind::Unsupported,
+-        "IPv4 Don't Fragment socket option is unavailable",
+-    ))
+-}
+diff --git a/vendor/dontfrag/src/sys/unix/linux_like.rs b/vendor/dontfrag/src/sys/unix/linux_like.rs
+deleted file mode 100644
+index 46b69d3..0000000
+--- a/vendor/dontfrag/src/sys/unix/linux_like.rs
++++ /dev/null
+@@ -1,36 +0,0 @@
+-use super::{getsockopt_int, setsockopt_int};
+-use libc::{
+-    c_int, IPPROTO_IP, IPPROTO_IPV6, IPV6_MTU_DISCOVER, IPV6_PMTUDISC_DO, IPV6_PMTUDISC_DONT,
+-    IP_MTU_DISCOVER, IP_PMTUDISC_DO, IP_PMTUDISC_DONT,
+-};
+-use std::io;
+-
+-pub fn dontfrag_v4(socket: c_int) -> io::Result<bool> {
+-    getsockopt_int(socket, IPPROTO_IP, IP_MTU_DISCOVER).map(|v| v == IP_PMTUDISC_DO)
+-}
+-
+-pub fn dontfrag_v6(socket: c_int) -> io::Result<bool> {
+-    getsockopt_int(socket, IPPROTO_IPV6, IPV6_MTU_DISCOVER).map(|v| v == IPV6_PMTUDISC_DO)
+-}
+-
+-pub fn set_dontfrag_v4(socket: c_int, v: bool) -> io::Result<()> {
+-    setsockopt_int(
+-        socket,
+-        IPPROTO_IP,
+-        IP_MTU_DISCOVER,
+-        if v { IP_PMTUDISC_DO } else { IP_PMTUDISC_DONT },
+-    )
+-}
+-
+-pub fn set_dontfrag_v6(socket: c_int, v: bool) -> io::Result<()> {
+-    setsockopt_int(
+-        socket,
+-        IPPROTO_IPV6,
+-        IPV6_MTU_DISCOVER,
+-        if v {
+-            IPV6_PMTUDISC_DO
+-        } else {
+-            IPV6_PMTUDISC_DONT
+-        },
+-    )
+-}
+diff --git a/vendor/dontfrag/src/sys/unix/mod.rs b/vendor/dontfrag/src/sys/unix/mod.rs
+deleted file mode 100644
+index b3814d7..0000000
+--- a/vendor/dontfrag/src/sys/unix/mod.rs
++++ /dev/null
+@@ -1,97 +0,0 @@
+-use crate::sys_common::AsRawSocket;
+-use libc::{c_int, c_void, getsockopt, setsockopt, socklen_t};
+-use std::{
+-    io,
+-    mem::{self, MaybeUninit},
+-    net::UdpSocket,
+-    os::fd::AsRawFd,
+-};
+-
+-cfg_if::cfg_if! {
+-    if #[cfg(any(
+-        target_os = "linux",
+-        target_os = "l4re",
+-        target_os = "android",
+-        target_os = "emscripten",
+-    ))] {
+-        mod linux_like;
+-        pub use self::linux_like::*;
+-    } else if #[cfg(any(
+-        target_os = "macos",
+-        target_os = "ios",
+-        target_os = "tvos",
+-        target_os = "watchos",
+-        target_os = "freebsd",
+-        target_os = "dragonfly",
+-        target_os = "openbsd",
+-        target_os = "netbsd",
+-    ))] {
+-        mod bsd;
+-        pub use self::bsd::*;
+-    } else {
+-        compile_error!("dontfrag: unsupported platform");
+-    }
+-}
+-
+-pub type RawSocket = c_int;
+-
+-impl AsRawSocket for UdpSocket {
+-    #[inline(always)]
+-    fn as_raw_socket(&self) -> RawSocket {
+-        self.as_raw_fd()
+-    }
+-}
+-
+-#[cfg(feature = "tokio")]
+-impl AsRawSocket for tokio::net::UdpSocket {
+-    #[inline(always)]
+-    fn as_raw_socket(&self) -> RawSocket {
+-        self.as_raw_fd()
+-    }
+-}
+-
+-fn getsockopt_int(fd: c_int, level: c_int, name: c_int) -> io::Result<c_int> {
+-    let mut option = MaybeUninit::<c_int>::uninit();
+-    let mut len = mem::size_of::<c_int>() as socklen_t;
+-
+-    // Safety: the pointer arguments are all well-defined.
+-    let r = unsafe {
+-        getsockopt(
+-            fd,
+-            level,
+-            name,
+-            option.as_mut_ptr() as *mut c_void,
+-            &mut len,
+-        )
+-    };
+-
+-    if r == 0 {
+-        assert_eq!(len, mem::size_of::<c_int>() as socklen_t);
+-        // Safety: the operation succeeded and the size is equal to c_int.
+-        // So, option is initialized.
+-        Ok(unsafe { option.assume_init() })
+-    } else {
+-        Err(io::Error::last_os_error())
+-    }
+-}
+-
+-fn setsockopt_int(fd: c_int, level: c_int, name: c_int, option: c_int) -> io::Result<()> {
+-    let len = mem::size_of::<c_int>() as socklen_t;
+-
+-    // Safety: the pointer arguments are all well-defined.
+-    let r = unsafe {
+-        setsockopt(
+-            fd,
+-            level,
+-            name,
+-            &option as *const c_int as *const c_void,
+-            len,
+-        )
+-    };
+-
+-    if r == 0 {
+-        Ok(())
+-    } else {
+-        Err(io::Error::last_os_error())
+-    }
+-}
+diff --git a/vendor/dontfrag/src/sys/windows.rs b/vendor/dontfrag/src/sys/windows.rs
+deleted file mode 100644
+index ccbe1c8..0000000
+--- a/vendor/dontfrag/src/sys/windows.rs
++++ /dev/null
+@@ -1,93 +0,0 @@
+-use crate::sys_common;
+-use std::{
+-    io,
+-    mem::{self, MaybeUninit},
+-    net::UdpSocket,
+-    os::raw::c_int,
+-};
+-use windows_sys::{
+-    core::{PCSTR, PSTR},
+-    Win32::Networking::WinSock::{
+-        getsockopt, setsockopt, socklen_t, IPPROTO_IP, IPPROTO_IPV6, IPV6_DONTFRAG,
+-        IP_DONTFRAGMENT, SOCKET,
+-    },
+-};
+-
+-pub type RawSocket = SOCKET;
+-
+-impl sys_common::AsRawSocket for UdpSocket {
+-    #[inline(always)]
+-    fn as_raw_socket(&self) -> RawSocket {
+-        std::os::windows::io::AsRawSocket::as_raw_socket(self) as SOCKET
+-    }
+-}
+-
+-#[cfg(feature = "tokio")]
+-impl sys_common::AsRawSocket for tokio::net::UdpSocket {
+-    #[inline(always)]
+-    fn as_raw_socket(&self) -> RawSocket {
+-        std::os::windows::io::AsRawSocket::as_raw_socket(self) as SOCKET
+-    }
+-}
+-
+-pub fn dontfrag_v4(socket: SOCKET) -> io::Result<bool> {
+-    // Safety: IP_DONTFRAGMENT is defined within IPPROTO_IP
+-    let r = unsafe { getsockopt_int(socket, IPPROTO_IP, IP_DONTFRAGMENT) };
+-    r.map(|v| v != 0)
+-}
+-
+-pub fn dontfrag_v6(socket: SOCKET) -> io::Result<bool> {
+-    // Safety: IPV6_DONTFRAG is defined within IPPROTO_IPV6
+-    let r = unsafe { getsockopt_int(socket, IPPROTO_IPV6, IPV6_DONTFRAG) };
+-    r.map(|v| v != 0)
+-}
+-
+-pub fn set_dontfrag_v4(socket: SOCKET, v: bool) -> io::Result<()> {
+-    // Safety: IP_DONTFRAGMENT is defined within IPPROTO_IP
+-    unsafe { setsockopt_int(socket, IPPROTO_IP, IP_DONTFRAGMENT, v as c_int) }
+-}
+-
+-pub fn set_dontfrag_v6(socket: SOCKET, v: bool) -> io::Result<()> {
+-    // Safety: IPV6_DONTFRAG is defined within IPPROTO_IPV6
+-    unsafe { setsockopt_int(socket, IPPROTO_IPV6, IPV6_DONTFRAG, v as c_int) }
+-}
+-
+-/// # Safety
+-///
+-/// `name` must be an option defined within `level`.
+-unsafe fn getsockopt_int(fd: SOCKET, level: c_int, name: c_int) -> io::Result<c_int> {
+-    let mut option = MaybeUninit::<c_int>::uninit();
+-    let mut len = mem::size_of::<c_int>() as socklen_t;
+-
+-    // Safety: `name` being defined within `level` is guaranteed by the
+-    // setsockopt_int safety contract.
+-    // The pointer arguments are all well-defined.
+-    let r = unsafe { getsockopt(fd, level, name, option.as_mut_ptr() as PSTR, &mut len) };
+-
+-    if r == 0 {
+-        assert_eq!(len, mem::size_of::<c_int>() as socklen_t);
+-        // Safety: the operation succeeded and the size is equal to c_int.
+-        // So, option is initialized.
+-        Ok(unsafe { option.assume_init() })
+-    } else {
+-        Err(io::Error::last_os_error())
+-    }
+-}
+-
+-/// # Safety
+-///
+-/// `name` must be an option defined within `level`.
+-unsafe fn setsockopt_int(fd: SOCKET, level: c_int, name: c_int, option: c_int) -> io::Result<()> {
+-    let len = mem::size_of::<c_int>() as socklen_t;
+-
+-    // Safety: `name` being defined within `level` is guaranteed by the
+-    // setsockopt_int safety contract.
+-    // The pointer arguments are all well-defined.
+-    let r = unsafe { setsockopt(fd, level, name, &option as *const c_int as PCSTR, len) };
+-
+-    if r == 0 {
+-        Ok(())
+-    } else {
+-        Err(io::Error::last_os_error())
+-    }
+-}
+diff --git a/vendor/dontfrag/src/sys_common.rs b/vendor/dontfrag/src/sys_common.rs
+deleted file mode 100644
+index 2111aa4..0000000
+--- a/vendor/dontfrag/src/sys_common.rs
++++ /dev/null
+@@ -1,6 +0,0 @@
+-use crate::sys;
+-
+-/// Used to get the underlying OS handle for the socket.
+-pub trait AsRawSocket {
+-    fn as_raw_socket(&self) -> sys::RawSocket;
+-}

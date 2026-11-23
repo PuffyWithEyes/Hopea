@@ -175,7 +175,7 @@ impl LibraryPanel {
                                 .imp()
                                 .empty_page
                                 .set_title(&i18n("No Songs Available Now"));
-                            panel.imp().empty_page.set_description(Some(&i18n("Try another search. Songs already on this computer and songs with no reachable sources are hidden.")));
+                            panel.imp().empty_page.set_description(Some(&i18n("Try another search. Songs already on this device and songs with no reachable sources are hidden.")));
                             panel.imp().search_stack.set_visible_child_name("empty");
                         }
                     }
@@ -584,6 +584,97 @@ fn result_press_keeps_search_focus_until_activation() {
 
 #[cfg(test)]
 impl LibraryPanel {
+    /// Render the joined search page through its real models and factories,
+    /// without starting a node or making network requests during layout tests.
+    pub(crate) fn test_show_search_with_albums(&self) {
+        self.reset_search();
+        let tracks: Vec<_> = (1..=24)
+            .map(|id| Track {
+                id,
+                title: format!("Viewport song {id}"),
+                artist: Some("Viewport artist".into()),
+                album: Some(format!("Viewport album {}", (id - 1) / 3)),
+                album_artist: None,
+                track_number: None,
+                year: None,
+                genre: None,
+                duration_ms: 1000,
+                format: AudioFormat::Flac,
+                codec: "flac".into(),
+                sample_rate: 44100,
+                channels: 2,
+                size: 1024,
+                sha256: format!("{id:064x}"),
+                has_cover: false,
+                uploader: "Viewport fixture".into(),
+                uploaded_at: 0,
+                mine: false,
+                local: false,
+                favorite: false,
+                sources: 1,
+            })
+            .collect();
+        let imp = self.imp();
+        imp.navigation.pop_to_tag("main");
+        imp.upload_bar.set_visible(false);
+        imp.menu_button.set_visible(true);
+        imp.title_label.set_visible(false);
+        imp.stack.set_visible_child_name("library");
+        imp.view_stack.set_visible_child_name("search");
+        self.show_page("Viewport", 0, &tracks, tracks.len() as u64);
+    }
+
+    pub(crate) fn test_search_with_albums_fits(&self) {
+        let imp = self.imp();
+        assert_eq!(imp.stack.visible_child_name().as_deref(), Some("library"));
+        assert_eq!(
+            imp.search_stack.visible_child_name().as_deref(),
+            Some("results")
+        );
+        assert_eq!(imp.album_results.get().unwrap().n_items(), 8);
+        assert_eq!(imp.results.get().unwrap().n_items(), 24);
+        assert!(imp.albums_section.is_visible());
+        if imp.android_layout.get() {
+            assert_eq!(
+                imp.reach_status.get_visible(),
+                status_banner_visible(true, imp.keyboard_visible.get(), imp.search_editing.get()),
+                "the mapped connection row must follow Android keyboard visibility"
+            );
+        }
+        for widget in [
+            imp.search_entry.upcast_ref::<gtk::Widget>(),
+            imp.results_scroll.upcast_ref(),
+        ] {
+            let bounds = widget.compute_bounds(self).unwrap();
+            assert!(
+                bounds.y() >= 0.0 && bounds.y() + bounds.height() <= self.height() as f32 + 1.0,
+                "search and songs must remain inside the joined panel: {bounds:?}, panel={}",
+                self.height()
+            );
+        }
+        let albums = imp.albums_scroll.hadjustment();
+        assert!(
+            albums.upper() > albums.page_size(),
+            "album cards must still scroll horizontally"
+        );
+        let songs = imp.results_scroll.vadjustment();
+        assert!(
+            songs.page_size() >= 48.0,
+            "album cards must leave a usable song viewport: {}px",
+            songs.page_size()
+        );
+        assert!(
+            songs.upper() > songs.page_size(),
+            "fixture must exercise scrollable song results"
+        );
+        songs.set_value(songs.upper() - songs.page_size());
+        assert!(
+            songs.value() > 0.0,
+            "songs at the end must remain reachable"
+        );
+        songs.set_value(0.0);
+    }
+
     pub async fn test_scroll_loading_and_recycling(&self, window: &Window) {
         use std::{
             io::{BufRead, Write},

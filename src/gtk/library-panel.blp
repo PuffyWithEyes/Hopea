@@ -31,6 +31,14 @@ template $HopeaLibraryPanel: Adw.Bin {
               show-start-title-buttons: false;
               show-end-title-buttons: false;
 
+              [start]
+              Button my_music_button {
+                icon-name: "hopea-folder-music-symbolic";
+                tooltip-text: _("My Music");
+                action-name: "win.show-my-music";
+                visible: false;
+              }
+
               title-widget: Box {
                 Label title_label {
                   label: _("Shared Music");
@@ -48,7 +56,7 @@ template $HopeaLibraryPanel: Adw.Bin {
               };
 
               [end]
-              Button {
+              Button close_library_button {
                 icon-name: "hopea-sidebar-show-right-symbolic";
                 tooltip-text: _("Hide Shared Music");
                 action-name: "win.shared-library";
@@ -219,21 +227,16 @@ template $HopeaLibraryPanel: Adw.Bin {
                                 Label reach_title {
                                   label: _("Checking Connection…");
                                   xalign: 0;
-                                  wrap: true;
+                                  hexpand: true;
+                                  ellipsize: end;
                                   styles [ "heading" ]
                                 }
                               }
                               Button reach_details {
-                                label: _("Connection Help");
+                                label: _("Details");
                                 valign: center;
                                 styles [ "flat", "caption" ]
                               }
-                            }
-                            Label reach_summary {
-                              xalign: 0;
-                              wrap: true;
-                              wrap-mode: word_char;
-                              styles [ "dim-label", "caption" ]
                             }
                           };
                         }
@@ -366,7 +369,7 @@ template $HopeaLibraryPanel: Adw.Bin {
 
               Button upload_button {
                 action-name: "library.upload";
-                tooltip-text: _("Choose music files on this computer to share with everyone");
+                tooltip-text: _("Choose music files on this device to share with everyone");
 
                 child: Adw.ButtonContent {
                   icon-name: "hopea-list-add-symbolic";

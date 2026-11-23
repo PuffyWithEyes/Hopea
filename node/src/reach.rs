@@ -36,7 +36,7 @@ use axum::{
 };
 use hopea_common::api::Reachability;
 use serde::{Deserialize, Serialize};
-use tokio::sync::Semaphore;
+use tokio::sync::{watch, Semaphore};
 
 use crate::{keywords, p2p, relay, AppState};
 
@@ -80,6 +80,7 @@ pub struct DialbackResponse {
 /// What this node knows about its own reachability.
 pub struct Status {
     inner: Mutex<(Reachability, Option<SocketAddr>, bool)>,
+    changes: watch::Sender<Reachability>,
     /// When each address last asked for a dial-back
     dialbacks: Mutex<HashMap<IpAddr, Instant>>,
     dialback_slots: Semaphore,
@@ -89,6 +90,7 @@ impl Status {
     pub fn new() -> Self {
         Self {
             inner: Mutex::new((Reachability::Checking, None, false)),
+            changes: watch::channel(Reachability::Checking).0,
             dialbacks: Mutex::default(),
             dialback_slots: Semaphore::new(4),
         }
@@ -104,7 +106,33 @@ impl Status {
     }
 
     pub fn set(&self, reachability: Reachability, relay: Option<SocketAddr>) {
-        *self.inner.lock().unwrap_or_else(|e| e.into_inner()) = (reachability, relay, true);
+        self.replace(reachability, relay, true);
+    }
+
+    /// Observe the same confirmed state that the authenticated API reports.
+    /// Bootstrap advertising is deliberately not an Online notification.
+    pub fn subscribe(&self) -> watch::Receiver<Reachability> {
+        self.changes.subscribe()
+    }
+
+    fn replace(&self, reachability: Reachability, relay: Option<SocketAddr>, confirmed: bool) {
+        let mut status = self.inner.lock().unwrap_or_else(|e| e.into_inner());
+        *status = (reachability, relay, confirmed);
+        let reported = if confirmed {
+            reachability
+        } else {
+            Reachability::Checking
+        };
+        // Publish while holding the state lock: a later transition must not be
+        // followed by an older notification from another worker.
+        self.changes.send_if_modified(|current| {
+            if *current == reported {
+                false
+            } else {
+                *current = reported;
+                true
+            }
+        });
     }
 
     /// Public status must not mistake bootstrap optimism for a successful check.
@@ -118,7 +146,7 @@ impl Status {
     }
 
     pub(crate) fn bootstrap(&self) {
-        *self.inner.lock().unwrap_or_else(|e| e.into_inner()) = (Reachability::Direct, None, false);
+        self.replace(Reachability::Direct, None, false);
     }
 
     /// Whether other nodes can connect to this one directly.
@@ -334,7 +362,7 @@ pub async fn run(state: AppState) {
             check(&state, &nodes, round).await
         };
         round = round.wrapping_add(1);
-        let before = state.reach.get();
+        let before = (state.reach.get(), state.reach.reported());
         let next_check = match (v4, v6) {
             (Some(true), _) => {
                 state.reach.set(Reachability::Direct, None);
@@ -367,9 +395,11 @@ pub async fn run(state: AppState) {
                 continue;
             }
         };
-        let now = state.reach.get();
+        let now = (state.reach.get(), state.reach.reported());
+        if now.1 != before.1 {
+            tracing::info!("Reachability: {:?}", now.1);
+        }
         if now != before {
-            tracing::info!("Reachability: {now:?}");
             state.announce.notify_one();
         }
         tokio::time::sleep(next_check).await;
@@ -379,6 +409,34 @@ pub async fn run(state: AppState) {
 #[cfg(test)]
 mod status_tests {
     use super::*;
+
+    #[test]
+    fn confirmation_notifies_observers_even_after_optimistic_bootstrap() {
+        let status = Status::new();
+        let mut changes = status.subscribe();
+        status.bootstrap();
+        assert_eq!(status.get(), Reachability::Direct);
+        assert!(!changes.has_changed().unwrap());
+
+        status.set(Reachability::Direct, None);
+        assert!(changes.has_changed().unwrap());
+        assert_eq!(*changes.borrow_and_update(), Reachability::Direct);
+        assert_eq!(status.reported(), Reachability::Direct);
+        status.set(Reachability::Direct, None);
+        assert!(
+            !changes.has_changed().unwrap(),
+            "unchanged checks must not poll the UI again"
+        );
+
+        status.set(
+            Reachability::Relay,
+            Some(SocketAddr::from(([8, 8, 8, 8], 47391))),
+        );
+        assert_eq!(*changes.borrow_and_update(), Reachability::Relay);
+        status.bootstrap();
+        assert!(changes.has_changed().unwrap());
+        assert_eq!(*changes.borrow_and_update(), Reachability::Checking);
+    }
 
     #[test]
     fn retry_rounds_do_not_keep_asking_only_the_first_helpers() {

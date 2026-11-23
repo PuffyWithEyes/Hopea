@@ -13,12 +13,6 @@ SPDX-FileCopyrightText = ["2018 MaidSafe.net limited.", "2020 messense"]
 SPDX-License-Identifier = "MIT OR BSD-3-Clause"
 
 [[annotations]]
-path = "vendor/dontfrag/**"
-precedence = "aggregate"
-SPDX-FileCopyrightText = "2023 Nicolas Nattis"
-SPDX-License-Identifier = "MIT OR Apache-2.0"
-
-[[annotations]]
 path = "vendor/librqbit/**"
 precedence = "aggregate"
 SPDX-FileCopyrightText = "Igor Katson <igor.katson@gmail.com>"

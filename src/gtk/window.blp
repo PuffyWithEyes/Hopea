@@ -65,6 +65,17 @@ template $HopeaWindow: Adw.ApplicationWindow {
                   Adw.HeaderBar {
                     show-title: false;
 
+                    [start]
+                    Button my_music_header_start {
+                      visible: false;
+                      action-name: "win.show-my-music";
+                      tooltip-text: _("My Music");
+                      child: Adw.ButtonContent {
+                        icon-name: "hopea-view-queue-symbolic";
+                        label: _("My Music");
+                      };
+                    }
+
                     [end]
                     Button import_progress_start {
                       icon-name: "hopea-folder-download-symbolic";
@@ -187,6 +198,16 @@ template $HopeaWindow: Adw.ApplicationWindow {
                     }
                     [top]
                     Adw.HeaderBar player_header {
+                      [start]
+                      Button my_music_header {
+                        visible: false;
+                        action-name: "win.show-my-music";
+                        tooltip-text: _("My Music");
+                        child: Adw.ButtonContent {
+                          icon-name: "hopea-view-queue-symbolic";
+                          label: _("My Music");
+                        };
+                      }
                       [end]
                       Button import_progress_main {
                         icon-name: "hopea-folder-download-symbolic";

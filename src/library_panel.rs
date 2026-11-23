@@ -39,6 +39,44 @@ use crate::{
 /// Longest name shown next to shared songs, as the node accepts it
 const MAX_NAME_CHARS: usize = 32;
 
+/// Coalesce status updates without losing a change received during an API read.
+#[derive(Debug, Default)]
+struct StatusPoll {
+    generation: u64,
+    active: Option<u64>,
+    pending: bool,
+}
+
+impl StatusPoll {
+    fn begin(&mut self) -> Option<u64> {
+        if self.active.is_some() {
+            self.pending = true;
+            return None;
+        }
+        self.generation = self.generation.wrapping_add(1);
+        self.active = Some(self.generation);
+        self.active
+    }
+
+    fn finish(&mut self, generation: u64) -> Option<bool> {
+        if self.active != Some(generation) {
+            return None;
+        }
+        self.active = None;
+        Some(std::mem::take(&mut self.pending))
+    }
+
+    fn reset(&mut self) {
+        self.generation = self.generation.wrapping_add(1);
+        self.active = None;
+        self.pending = false;
+    }
+}
+
+fn status_banner_visible(android: bool, keyboard_visible: Option<bool>, editing: bool) -> bool {
+    !android || !keyboard_visible.unwrap_or(editing)
+}
+
 pub(crate) fn import_subscription_notice() -> String {
     i18n("Service imports require an active subscription to that service. Importing without one violates Hopea’s import rules.")
 }
@@ -94,6 +132,10 @@ mod imp {
         #[template_child]
         pub menu_button: TemplateChild<gtk::MenuButton>,
         #[template_child]
+        pub my_music_button: TemplateChild<gtk::Button>,
+        #[template_child]
+        pub close_library_button: TemplateChild<gtk::Button>,
+        #[template_child]
         pub stack: TemplateChild<gtk::Stack>,
         #[template_child]
         pub name_row: TemplateChild<adw::EntryRow>,
@@ -107,9 +149,13 @@ mod imp {
         pub reach_title: TemplateChild<gtk::Label>,
         #[template_child]
         pub reach_details: TemplateChild<gtk::Button>,
-        #[template_child]
-        pub reach_summary: TemplateChild<gtk::Label>,
         pub checking_since: Cell<Option<std::time::Instant>>,
+        pub search_editing: Cell<bool>,
+        pub keyboard_visible: Cell<Option<bool>>,
+        #[cfg(test)]
+        pub android_layout: Cell<bool>,
+        pub reach_updates: RefCell<Option<glib::JoinHandle<()>>>,
+        pub reach_dialog: glib::WeakRef<adw::AlertDialog>,
         #[template_child]
         pub vpn_banner: TemplateChild<adw::Banner>,
         #[template_child]
@@ -166,7 +212,10 @@ mod imp {
         pub upload_progress: TemplateChild<gtk::ProgressBar>,
 
         pub me: RefCell<Option<Me>>,
-        pub me_loading: Cell<bool>,
+        pub(super) me_poll: RefCell<StatusPoll>,
+        pub me_revision: Cell<u64>,
+        #[cfg(test)]
+        pub status_fixture: Cell<bool>,
         pub settings: once_cell::unsync::OnceCell<gio::Settings>,
         pub loaded: Cell<u32>,
         pub results: once_cell::unsync::OnceCell<gio::ListStore>,
@@ -234,9 +283,22 @@ mod imp {
         fn constructed(&self) {
             self.parent_constructed();
             let obj = self.obj();
+            self.my_music_button
+                .set_visible(cfg!(target_os = "android"));
+            self.close_library_button
+                .set_visible(!cfg!(target_os = "android"));
             obj.setup_results();
             obj.connect_signals();
             obj.start();
+        }
+
+        fn dispose(&self) {
+            if let Some(updates) = self.reach_updates.borrow_mut().take() {
+                updates.abort();
+            }
+            // Clear AdwBin's child pointer before the template releases it.
+            self.obj().set_child(gtk::Widget::NONE);
+            self.dispose_template();
         }
     }
 
@@ -246,6 +308,7 @@ mod imp {
             self.obj().refresh_protection_notice();
             // Reachability may have changed since the panel was last shown
             self.obj().refresh_me();
+            self.obj().refresh_mobile_status_visibility();
         }
     }
     impl BinImpl for LibraryPanel {}
@@ -291,41 +354,98 @@ impl LibraryPanel {
     /// Updates what is shown about this node, such as whether others can
     /// reach it.
     fn refresh_me(&self) {
-        let Some(client) = library::client() else {
-            self.imp().me.replace(None);
-            self.set_reach_status(None);
-            self.imp()
-                .reach_summary
-                .set_text(&i18n("Join the network to discover and share music."));
-            return;
-        };
-        if self.imp().me_loading.replace(true) {
+        #[cfg(test)]
+        if self.imp().status_fixture.get() {
             return;
         }
+        let Some(client) = library::client() else {
+            self.imp().me_poll.borrow_mut().reset();
+            self.clear_me();
+            return;
+        };
+        let Some(request) = self.imp().me_poll.borrow_mut().begin() else {
+            return;
+        };
         glib::spawn_future_local(clone!(
             #[weak(rename_to = this)]
             self,
             async move {
                 let result = client.me().await;
-                this.imp().me_loading.set(false);
-                // Ignore replies from a node that stopped while we were waiting.
-                if !library::client().is_some_and(|current| current.origin() == client.origin()) {
+                let Some(pending) = this.imp().me_poll.borrow_mut().finish(request) else {
                     return;
-                }
-                match result {
-                    Ok(me) => this.update_me(me),
-                    Err(_) => {
-                        this.imp().me.replace(None);
-                        this.set_reach_status(None);
+                };
+                // An old node can share the replacement node's URL. Only the
+                // exact connection that began this request may update the UI.
+                if library::client().is_some_and(|current| current.same_connection(&client)) {
+                    match result {
+                        Ok(me) => this.update_me(me),
+                        Err(_) => this.clear_me(),
                     }
+                }
+                // A replacement connection may have queued this refresh while
+                // the old request was finishing. Discard its result, not the
+                // replacement's pending read.
+                if pending {
+                    this.refresh_me();
                 }
             }
         ));
     }
 
     fn update_me(&self, me: Me) {
-        self.set_reach_status(Some(me.reachability));
+        let reachability = me.reachability;
         self.imp().me.replace(Some(me));
+        self.imp()
+            .me_revision
+            .set(self.imp().me_revision.get().wrapping_add(1));
+        self.set_reach_status(Some(reachability));
+    }
+
+    fn clear_me(&self) {
+        self.imp().me.replace(None);
+        self.imp()
+            .me_revision
+            .set(self.imp().me_revision.get().wrapping_add(1));
+        self.set_reach_status(None);
+    }
+
+    /// Android reports the IME independently of focus: dismissing it with Back
+    /// must restore the banner even while the search entry still owns focus.
+    #[cfg(target_os = "android")]
+    pub(crate) fn set_keyboard_visible(&self, visible: bool) {
+        self.imp().keyboard_visible.set(Some(visible));
+        self.refresh_mobile_status_visibility();
+    }
+
+    pub(crate) fn refresh_mobile_status_visibility(&self) {
+        let imp = self.imp();
+        let android = cfg!(target_os = "android");
+        #[cfg(test)]
+        let android = android || imp.android_layout.get();
+        imp.reach_status.set_visible(status_banner_visible(
+            android,
+            imp.keyboard_visible.get(),
+            imp.search_editing.get(),
+        ));
+    }
+
+    /// Run the Android presentation policy under the native GTK display test.
+    #[cfg(test)]
+    pub(crate) fn test_android_chrome_and_keyboard(&self, keyboard: bool) {
+        let imp = self.imp();
+        imp.android_layout.set(true);
+        imp.keyboard_visible.set(Some(keyboard));
+        if keyboard {
+            imp.search_editing.set(true);
+        }
+        imp.my_music_button.set_visible(true);
+        imp.close_library_button.set_visible(false);
+        self.refresh_mobile_status_visibility();
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_my_music_button(&self) -> gtk::Button {
+        self.imp().my_music_button.get()
     }
 
     fn set_reach_status(&self, reach: Option<Reachability>) {
@@ -345,30 +465,33 @@ impl LibraryPanel {
             reach,
             Some(Reachability::Direct | Reachability::Ipv6 | Reachability::Relay)
         );
-        let (title, summary, color) = match reach {
-            Some(Reachability::Direct | Reachability::Ipv6 | Reachability::Relay) =>
-                (i18n("Online"), String::new(), "success"),
-            Some(Reachability::Checking) if unconfirmed => (i18n("Connection Unconfirmed"),
-                i18n("No other listener has confirmed your connection yet. There may be no reachable listeners, or your network may block communication. Try searching, keep Hopea open on both devices, or see Connection Help."), "warning"),
-            Some(Reachability::Checking) => (i18n("Checking Connection…"),
-                i18n("Waiting for another listener to confirm your connection. You can already try searching."), "warning"),
-            Some(Reachability::Unreachable) => (i18n("Limited Connection"),
-                i18n("Other listeners cannot reach your music. Your router, provider or VPN may block incoming connections. Searching can still work."), "warning"),
-            None => (i18n("Offline"),
-                i18n("The sharing service is not responding. Hopea will retry automatically."), "error"),
+        let (title, color) = match reach {
+            Some(Reachability::Direct | Reachability::Ipv6 | Reachability::Relay) => {
+                (i18n("Online"), "success")
+            }
+            Some(Reachability::Checking) if unconfirmed => {
+                (i18n("Connection Unconfirmed"), "warning")
+            }
+            Some(Reachability::Checking) => (i18n("Checking Connection…"), "warning"),
+            Some(Reachability::Unreachable) => (i18n("Limited Connection"), "warning"),
+            None => (i18n("Offline"), "error"),
         };
         imp.reach_title.set_text(&title);
         for class in ["success", "warning", "error"] {
             imp.reach_indicator.remove_css_class(class);
         }
         imp.reach_indicator.add_css_class(color);
-        imp.reach_summary.set_text(&summary);
-        imp.reach_summary.set_visible(!online);
-        imp.reach_details.set_label(&if online {
+        imp.reach_details.set_tooltip_text(Some(&if online {
             i18n("Details")
         } else {
             i18n("Connection Help")
-        });
+        }));
+        if let Some(dialog) = imp.reach_dialog.upgrade() {
+            let (title, body) = sharing_status(reach);
+            dialog.set_heading(Some(&title));
+            dialog.set_body(&body);
+        }
+        self.refresh_mobile_status_visibility();
     }
 
     fn settings(&self) -> gio::Settings {
@@ -380,6 +503,37 @@ impl LibraryPanel {
 
     fn connect_signals(&self) {
         let imp = self.imp();
+
+        let mut reachability = library::reachability_changes();
+        let weak = self.downgrade();
+        imp.reach_updates
+            .replace(Some(glib::spawn_future_local(async move {
+                while reachability.changed().await.is_ok() {
+                    let Some(panel) = weak.upgrade() else {
+                        break;
+                    };
+                    panel.refresh_me();
+                }
+            })));
+
+        let search_focus = gtk::EventControllerFocus::new();
+        search_focus.connect_enter(clone!(
+            #[weak(rename_to = this)]
+            self,
+            move |_| {
+                this.imp().search_editing.set(true);
+                this.refresh_mobile_status_visibility();
+            }
+        ));
+        search_focus.connect_leave(clone!(
+            #[weak(rename_to = this)]
+            self,
+            move |_| {
+                this.imp().search_editing.set(false);
+                this.refresh_mobile_status_visibility();
+            }
+        ));
+        imp.search_entry.add_controller(search_focus);
 
         imp.reach_details.connect_clicked(clone!(
             #[weak(rename_to = this)]
@@ -409,6 +563,7 @@ impl LibraryPanel {
                 ));
                 dialog.add_response("close", &i18n("Close"));
                 dialog.set_close_response("close");
+                this.imp().reach_dialog.set(Some(&dialog));
                 dialog.present(Some(&this));
             }
         ));
@@ -678,6 +833,9 @@ impl LibraryPanel {
     /// Follows the node starting or stopping by itself, as when a VPN goes
     /// off or comes back.
     pub fn connection_changed(&self) {
+        self.imp().me_poll.borrow_mut().reset();
+        self.imp().checking_since.set(None);
+        self.clear_me();
         match library::client() {
             Some(client) => {
                 glib::spawn_future_local(clone!(
@@ -750,24 +908,36 @@ impl LibraryPanel {
     }
 
     async fn finish_joining(&self, client: LibraryClient) {
-        let me = match client.me().await {
+        let revision = self.imp().me_revision.get();
+        let result = client.me().await;
+        if !library::client().is_some_and(|current| current.same_connection(&client)) {
+            return;
+        }
+        let me = match result {
             Ok(me) => me,
             Err(err) => {
-                self.toast(&err.to_string());
-                self.show_welcome();
+                // A newer poll may already have read the confirmed status.
+                if revision == self.imp().me_revision.get() {
+                    self.toast(&err.to_string());
+                    self.show_welcome();
+                }
                 return;
             }
         };
         let imp = self.imp();
-        self.update_me(me);
+        if revision == imp.me_revision.get() {
+            self.update_me(me);
+        }
 
         imp.upload_bar.set_visible(false);
         imp.menu_button.set_visible(true);
         imp.title_label.set_visible(false);
         imp.stack.set_visible_child_name("library");
-        if self.is_mapped() {
+        // On touch devices joining should not immediately open the keyboard.
+        if self.is_mapped() && !cfg!(target_os = "android") {
             imp.search_entry.grab_focus();
         }
+        self.refresh_me();
         self.search();
 
         if let Some(window) = self.window() {
@@ -1344,8 +1514,7 @@ impl LibraryPanel {
         (!text.trim().is_empty()).then_some(text)
     }
 
-    /// The shared music settings: whether to join the network at startup,
-    /// speed limits, and what unstarring a song does.
+    /// General appearance, sharing and help settings.
     ///
     /// Sharing can be limited to at most seven times slower than
     /// downloading, which the dialog enforces as values change (and the
@@ -1603,9 +1772,28 @@ impl LibraryPanel {
         groups.append(&group);
         groups.append(&import_group);
         groups.append(&cache_group);
+        let help_group = adw::PreferencesGroup::builder().title(i18n("Help")).build();
+        #[cfg(not(target_os = "android"))]
+        {
+            let shortcuts = adw::ButtonRow::builder()
+                .title(i18n("Keyboard Shortcuts"))
+                .build();
+            shortcuts.set_widget_name("settings-shortcuts");
+            shortcuts.connect_activated(|row| {
+                let _ = row.activate_action("app.shortcuts", None);
+            });
+            help_group.add(&shortcuts);
+        }
+        let about = adw::ButtonRow::builder().title(i18n("About Hopea")).build();
+        about.set_widget_name("settings-about");
+        about.connect_activated(|row| {
+            let _ = row.activate_action("app.about", None);
+        });
+        help_group.add(&about);
+        groups.append(&help_group);
         if !crate::dialogs::confirm_form(
             self.window().as_ref(),
-            &i18n("Shared Music Settings"),
+            &i18n("Settings"),
             &groups,
             focus_privacy.then_some(protected_row.upcast_ref()),
         )
@@ -1668,7 +1856,7 @@ impl LibraryPanel {
         let alert = adw::AlertDialog::builder()
             .heading(i18n("Leave the Network?"))
             .body(i18n(
-                "The songs you share will no longer be available to others, and you won’t be able to search theirs. Everything stays on this computer for when you join again.",
+                "The songs you share will no longer be available to others, and you won’t be able to search theirs. Everything stays on this device for when you join again.",
             ))
             .close_response("cancel")
             .default_response("cancel")
@@ -1835,7 +2023,7 @@ impl LibraryPanel {
             if query.is_empty() {
                 imp.empty_page.set_title(&i18n("Search Everyone’s Music"));
                 imp.empty_page.set_description(Some(&i18n(
-                    "Find new songs and albums. Music already on this computer is hidden from search.",
+                    "Find new songs and albums. Music already on this device is hidden from search.",
                 )));
             } else {
                 imp.empty_page.set_title(&i18n("No Songs Found"));
@@ -1889,8 +2077,8 @@ impl LibraryPanel {
         // for the one more people have
         if track.sources > 1 {
             details.push(ni18n_f(
-                "on {} computer",
-                "on {} computers",
+                "on {} device",
+                "on {} devices",
                 track.sources,
                 &[&track.sources.to_string()],
             ));
@@ -2769,7 +2957,7 @@ const NETWORK_SEARCH_DELAY: std::time::Duration = std::time::Duration::from_mill
 fn search_problem(report: &SearchReport) -> Option<String> {
     if report.dht == DhtState::NoContact && report.nodes_answered == 0 {
         return Some(i18n(
-            "This computer can’t reach the BitTorrent network (DHT), which is how it finds others. Something blocks UDP traffic: a firewall, a VPN, or the network itself (as in some offices, schools and hotels). Try another network, or allow UDP for the app. Right after the app starts this can also take a minute.",
+            "This device can’t reach the BitTorrent network (DHT), which is how it finds others. Something blocks UDP traffic: a firewall, a VPN, or the network itself (as in some offices, schools and hotels). Try another network, or allow UDP for the app. Right after the app starts this can also take a minute.",
         ));
     }
     if report.nodes_asked > 0 && report.nodes_answered == 0 {
@@ -3094,6 +3282,10 @@ fn sharing_status_details_fit_mobile_panel() {
     let context = glib::MainContext::default();
     let _guard = context.acquire().unwrap();
     let panel: LibraryPanel = glib::Object::new();
+    // This layout test injects each reachability state without a running node.
+    // Keep the regular missing-client poll from replacing that fixture; live
+    // dialog updates and the explicit Offline transition remain under test.
+    panel.imp().status_fixture.set(true);
     let window = adw::Window::builder()
         .default_width(360)
         .default_height(740)
@@ -3120,14 +3312,20 @@ fn sharing_status_details_fit_mobile_panel() {
             Reachability::Direct | Reachability::Ipv6 | Reachability::Relay
         );
         assert_eq!(panel.imp().reach_indicator.has_css_class("success"), online);
-        assert_eq!(panel.imp().reach_summary.is_visible(), !online);
         let search_page = panel.imp().view_stack.child_by_name("search").unwrap();
         assert!(panel.imp().reach_status.is_ancestor(&search_page));
-        assert!(panel.imp().reach_summary.is_ancestor(&search_page));
+        assert_eq!(
+            panel.imp().reach_details.label().as_deref(),
+            Some("Details")
+        );
         if matches!(reach, Reachability::Checking | Reachability::Unreachable) {
             assert!(!panel.imp().reach_title.text().starts_with("Online"));
         }
         context.block_on(glib::timeout_future(std::time::Duration::from_millis(100)));
+        assert!(
+            panel.imp().reach_status.height() <= 56,
+            "connection status must remain one compact row"
+        );
         if let Some(directory) = std::env::var_os("HOPEA_TEST_STATUS_SCREENSHOTS") {
             let snapshot = gtk::Snapshot::new();
             snapshot.append_color(
@@ -3152,6 +3350,17 @@ fn sharing_status_details_fit_mobile_panel() {
             dialog.heading().as_deref(),
             Some(sharing_status(Some(reach)).0.as_str())
         );
+        if reach == Reachability::Checking {
+            let mut confirmed = panel.imp().me.borrow().clone().unwrap();
+            confirmed.reachability = Reachability::Direct;
+            panel.update_me(confirmed);
+            assert_eq!(panel.imp().reach_title.text(), i18n("Online"));
+            assert_eq!(
+                dialog.heading().as_deref(),
+                Some(sharing_status(Some(Reachability::Direct)).0.as_str()),
+                "an open Details dialog must follow the confirmed state"
+            );
+        }
         context.block_on(glib::timeout_future(std::time::Duration::from_millis(400)));
         assert!(panel.measure(gtk::Orientation::Horizontal, -1).0 <= 360);
         assert!(dialog.width() > 0 && dialog.width() <= window.width());
@@ -3171,7 +3380,6 @@ fn sharing_status_details_fit_mobile_panel() {
     panel.set_reach_status(None);
     assert!(panel.imp().reach_indicator.has_css_class("error"));
     assert!(!panel.imp().reach_indicator.has_css_class("success"));
-    assert!(panel.imp().reach_summary.is_visible());
     panel.imp().checking_since.set(Some(
         std::time::Instant::now() - std::time::Duration::from_secs(61),
     ));
@@ -3190,4 +3398,44 @@ fn sharing_status_details_fit_mobile_panel() {
 
 fn connection_recommendations() -> String {
     i18n("To improve the connection:\n\n• Make sure both devices have joined Hopea and the owner is sharing the song. Keep Hopea open and allow time for discovery.\n\n• If you require a VPN, check that it is connected. For incoming connections, the VPN must support port forwarding; an ordinary VPN may not.\n\n• On a network you manage, allow Hopea through the firewall. If you have two routers, incoming connections must pass through both. Ask your provider whether you have a public IP address.\n\n• If incoming connections are unavailable, a reachable Hopea relay is needed. Hopea looks for one automatically, but does not include an always-on public relay. You can also try another network.\n\nDo not disable your firewall, put the device in a router’s DMZ, or expose the local player API. No change to your router settings is required just to search reachable sources.")
+}
+
+#[cfg(test)]
+mod status_refresh_tests {
+    use super::{status_banner_visible, StatusPoll};
+
+    #[test]
+    fn confirmation_during_a_read_is_refreshed_after_that_read() {
+        let mut poll = StatusPoll::default();
+        let checking = poll.begin().unwrap();
+        assert_eq!(poll.begin(), None);
+        assert_eq!(poll.begin(), None);
+        assert_eq!(poll.finish(checking), Some(true));
+        let confirmed = poll.begin().unwrap();
+        assert_ne!(checking, confirmed);
+        assert_eq!(poll.finish(confirmed), Some(false));
+    }
+
+    #[test]
+    fn replaced_node_cannot_finish_the_new_nodes_status_read() {
+        let mut poll = StatusPoll::default();
+        let old = poll.begin().unwrap();
+        poll.reset();
+        let new = poll.begin().unwrap();
+        assert_eq!(poll.finish(old), None);
+        assert_eq!(poll.begin(), None, "the new request must remain in flight");
+        assert_eq!(poll.finish(new), Some(true));
+    }
+
+    #[test]
+    fn android_keyboard_visibility_overrides_search_focus() {
+        assert!(status_banner_visible(true, None, false));
+        assert!(!status_banner_visible(true, None, true));
+        assert!(!status_banner_visible(true, Some(true), false));
+        assert!(
+            status_banner_visible(true, Some(false), true),
+            "Back dismisses the IME without moving focus"
+        );
+        assert!(status_banner_visible(false, Some(true), true));
+    }
 }

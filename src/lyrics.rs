@@ -16,7 +16,12 @@ use std::path::PathBuf;
 use gtk::{gio, glib, prelude::*};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
+#[cfg(not(target_os = "android"))]
 use soup::prelude::*;
+
+#[cfg(target_os = "android")]
+#[path = "lyrics_https.rs"]
+mod https;
 
 use crate::{audio::Song, config::VERSION, i18n::i18n};
 
@@ -257,34 +262,9 @@ pub async fn look_up_online(song: &Song) -> Result<Option<Lyrics>, String> {
         url.push_str(&format!("&artist_name={}", encode(&artist)));
     }
 
-    let session = soup::Session::new();
-    session.set_user_agent(&format!("Hopea/{VERSION}"));
-    session.set_timeout(20);
-    let msg = soup::Message::new("GET", &url).map_err(|e| e.to_string())?;
-    let stream = session
-        .send_future(&msg, glib::Priority::DEFAULT)
-        .await
-        .map_err(|e| e.message().to_string())?;
-    if msg.status() == soup::Status::NotFound {
+    let Some(body) = fetch_online_body(url).await? else {
         return Ok(None);
-    }
-    if msg.status() != soup::Status::Ok {
-        return Err(i18n("The lyrics service didn’t answer properly"));
-    }
-    let mut body = Vec::new();
-    loop {
-        let chunk = stream
-            .read_bytes_future(64 * 1024, glib::Priority::DEFAULT)
-            .await
-            .map_err(|e| e.message().to_string())?;
-        if chunk.is_empty() {
-            break;
-        }
-        if body.len() + chunk.len() > 4 * MAX_BYTES {
-            return Err(i18n("The lyrics service sent too much"));
-        }
-        body.extend_from_slice(&chunk);
-    }
+    };
     let found: Vec<Found> = serde_json::from_slice(&body)
         .map_err(|_| i18n("The lyrics service sent something unexpected"))?;
 
@@ -321,6 +301,66 @@ pub async fn look_up_online(song: &Song) -> Result<Option<Lyrics>, String> {
         log::warn!("Lyrics saved locally; publication failed: {error}");
     }
     Ok(Some(lyrics))
+}
+
+#[cfg(not(target_os = "android"))]
+async fn fetch_online_body(url: String) -> Result<Option<Vec<u8>>, String> {
+    let session = soup::Session::new();
+    session.set_user_agent(&format!("Hopea/{VERSION}"));
+    session.set_timeout(20);
+    let msg = soup::Message::new("GET", &url).map_err(|e| e.to_string())?;
+    let stream = session
+        .send_future(&msg, glib::Priority::DEFAULT)
+        .await
+        .map_err(|e| e.message().to_string())?;
+    if msg.status() == soup::Status::NotFound {
+        return Ok(None);
+    }
+    if msg.status() != soup::Status::Ok {
+        return Err(i18n("The lyrics service didn’t answer properly"));
+    }
+    let mut body = Vec::new();
+    loop {
+        let chunk = stream
+            .read_bytes_future(64 * 1024, glib::Priority::DEFAULT)
+            .await
+            .map_err(|e| e.message().to_string())?;
+        if chunk.is_empty() {
+            break;
+        }
+        if body.len() + chunk.len() > 4 * MAX_BYTES {
+            return Err(i18n("The lyrics service sent too much"));
+        }
+        body.extend_from_slice(&chunk);
+    }
+    Ok(Some(body))
+}
+
+#[cfg(target_os = "android")]
+async fn fetch_online_body(url: String) -> Result<Option<Vec<u8>>, String> {
+    // GTK's main context is not a Tokio runtime. Keep DNS, TLS and the complete
+    // bounded response on a worker; no GTK objects cross the thread boundary.
+    gio::spawn_blocking(move || {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .map_err(|e| e.to_string())?;
+        runtime
+            .block_on(https::fetch(
+                &url,
+                &format!("Hopea/{VERSION}"),
+                4 * MAX_BYTES,
+            ))
+            .map_err(|error| match error {
+                https::FetchError::Transport(error) => error.to_string(),
+                https::FetchError::UnexpectedStatus => {
+                    i18n("The lyrics service didn’t answer properly")
+                }
+                https::FetchError::TooLarge => i18n("The lyrics service sent too much"),
+            })
+    })
+    .await
+    .map_err(|_| i18n("The lyrics service didn’t answer properly"))?
 }
 
 #[cfg(test)]

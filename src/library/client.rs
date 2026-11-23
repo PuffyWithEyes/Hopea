@@ -221,6 +221,11 @@ impl LibraryClient {
         &self.inner.origin
     }
 
+    /// Clones share one connection; a restarted node may reuse its old URL.
+    pub(crate) fn same_connection(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.inner, &other.inner)
+    }
+
     pub(super) fn authorization(&self) -> String {
         format!("Bearer {}", self.inner.token)
     }
@@ -646,6 +651,15 @@ async fn read_limited(stream: &gio::InputStream, limit: usize) -> Result<Vec<u8>
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn replaced_connection_is_distinct_even_when_the_origin_is_reused() {
+        let before = LibraryClient::new("http://127.0.0.1:47392", "old-test-token").unwrap();
+        let after = LibraryClient::new("http://127.0.0.1:47392", "new-test-token").unwrap();
+        assert_eq!(before.origin(), after.origin());
+        assert!(before.same_connection(&before.clone()));
+        assert!(!before.same_connection(&after));
+    }
 
     #[test]
     fn discovery_yields_local_results_before_network_finishes() {

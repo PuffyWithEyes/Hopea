@@ -520,7 +520,7 @@ impl Song {
             Err("Invalid song")
         } else {
             res.set_property("progress", 1.0_f64);
-            res.set_property("status", crate::i18n::i18n("On this computer"));
+            res.set_property("status", crate::i18n::i18n("On this device"));
             // A file shared from here is in the library
             if let Some(id) = crate::library::shared_files::id_for(uri) {
                 res.set_library(Some(id), true, false);
@@ -540,7 +540,7 @@ impl Song {
         crate::artwork::watch_song(&song);
         crate::song_edits::apply_cover(&song);
         song.set_property("progress", 1.0_f64);
-        song.set_property("status", i18n("On this computer"));
+        song.set_property("status", i18n("On this device"));
         if let Some(id) = crate::library::shared_files::id_for(&song.uri()) {
             song.set_library(Some(id), true, false);
         }
@@ -584,7 +584,7 @@ impl Song {
         song.set_property(
             "status",
             if track.local {
-                i18n("On this computer")
+                i18n("On this device")
             } else {
                 i18n("Available on the network")
             },

@@ -72,7 +72,10 @@ mod imp {
         fn constructed(&self) {
             self.parent_constructed();
 
-            self.menu_button.set_primary(true);
+            self.menu_button.set_primary(!cfg!(target_os = "android"));
+            // Android opens My Music from the top header, next to Settings.
+            self.playlist_button
+                .set_visible(!cfg!(target_os = "android"));
         }
     }
 

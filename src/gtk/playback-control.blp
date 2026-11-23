@@ -193,43 +193,7 @@ menu primary_menu {
     item {
       label: _("Open Directory");
       action: "win.open-directory";
-    }
-  }
-
-  section {
-    item {
-      label: _("Add _Song");
-      action: "queue.add-song";
-    }
-
-    item {
-      label: _("Add _Folder");
-      action: "queue.add-folder";
-    }
-
-    item {
-      label: _("Shared _Music");
-      action: "win.shared-library";
-    }
-
-    item {
-      label: _("Shared Music _Settings…");
-      action: "win.library-settings";
-    }
-
-    item {
-      label: _("_Bring Your Music Over…");
-      action: "win.import-music";
-    }
-
-    item {
-      label: _("My Albums…");
-      action: "win.my-albums";
-    }
-
-    item {
-      label: _("Clear");
-      action: "queue.clear";
+      hidden-when: "action-missing";
     }
   }
 
@@ -269,20 +233,4 @@ menu primary_menu {
     }
   }
 
-  section {
-    item {
-      label: _("_Keyboard Shortcuts");
-      action: "app.shortcuts";
-    }
-
-    item {
-      label: _("_About Hopea");
-      action: "app.about";
-    }
-
-    item {
-      label: _("_Quit");
-      action: "app.quit";
-    }
-  }
 }

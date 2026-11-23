@@ -209,25 +209,39 @@ finishes.
 
 ### Sharing status
 
-The network search page shows the node's last reachability result and a short
-explanation above the search field. A compact green Online indicator requires
-confirmed direct IPv4, IPv6 or relay reachability. Checking and limited incoming
-connectivity use an amber indicator; an unavailable local service is shown as
-Offline in red. Problems include an inline explanation and a Connection Help
-button. After one minute without confirmation, Checking becomes Connection
-Unconfirmed, explaining that no reachable helper may be available or networking
-may be blocked. This is an unknown result, not proof of being online or offline;
-background checks continue. Online details retain the connection type and its limitations. While
-visible, it refreshes the authenticated local `/me` response every two seconds,
-with at most one request in flight and stale replies from replaced nodes ignored.
-This does not trigger extra peer probes or change network admission limits.
-Reachability checks retain their existing schedule; a successful check is not a
-guarantee that every search will find a source.
+The network search page shows one compact status row above the search field;
+explanations and connection recommendations are in Details. A green Online
+indicator requires confirmed direct IPv4, IPv6 or relay reachability. Checking
+and limited incoming connectivity use amber; an unavailable local service is
+Offline in red. After one minute without confirmation, Checking becomes
+Connection Unconfirmed. This is an unknown result, not proof of being online
+or offline; background checks continue. An open Details dialog follows the
+same live status, retaining the connection type and its limitations.
+
+`reach::Status` publishes changes to the API-visible state through a coalescing
+watch channel. The embedded-node bridge wakes an authenticated local `/me` read
+when confirmation changes, even when the search panel is hidden. The visible
+panel also polls every two seconds. Status polls run one at a time; a change
+received during a request schedules another read after it finishes. A replaced
+client is identified by its connection instance, not just its URL, and an old
+join response cannot overwrite a newer status. These updates do not trigger
+extra peer probes or change network admission limits. Reachability checks keep
+their existing schedule; a successful check does not guarantee a search result.
+
+On Android, the row hides while the software keyboard is visible and returns
+when it is dismissed, including when Back leaves focus in the search entry.
+Search focus is a fallback only until Android supplies its keyboard state.
+Joining does not focus search automatically. The Android panel header exposes
+My Music; desktop keeps its existing sidebar-close action. General Settings
+includes About Hopea on every platform and Keyboard Shortcuts only on desktop.
 
 Bootstrap discovery still advertises a node optimistically when no peers are
 available to test it. The API reports that state as `checking`, never as confirmed
-direct reachability. No router settings or port mappings are changed by the UI. Its Details dialog
-includes connection recommendations without advising users to disable their
+direct reachability; transition logs compare that same public status.
+Confirmation after bootstrap is still a distinct notification even though both
+states permit announcements.
+No router settings or port mappings are changed by the UI. Details includes
+connection recommendations without advising users to disable their
 firewall or expose the authenticated local API. See `node/README.md` for discovery
 retry and relay limits. Public DHT endpoints are filtered before Hopea HTTP
 connections; explicit peers and LAN discovery retain their separate trust paths.

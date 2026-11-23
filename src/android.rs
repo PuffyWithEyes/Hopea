@@ -19,6 +19,7 @@ extern "C" {
         position: i64,
     );
     fn hopea_android_vpn() -> i32;
+    fn hopea_android_keyboard() -> i32;
     fn hopea_android_prepare_gaming();
     fn hopea_android_game_status() -> i32;
     fn hopea_android_open_usage_settings() -> i32;
@@ -39,6 +40,15 @@ pub extern "C" fn hopea_android_action(action: i32) {
 }
 pub fn vpn() -> i32 {
     unsafe { hopea_android_vpn() }
+}
+/// `None` until Android has supplied window insets. Search focus is a safe
+/// temporary fallback, but must not keep the status hidden after Back closes IME.
+pub fn keyboard_visible() -> Option<bool> {
+    match unsafe { hopea_android_keyboard() } {
+        0 => Some(false),
+        1 => Some(true),
+        _ => None,
+    }
 }
 pub fn prepare_gaming() {
     unsafe { hopea_android_prepare_gaming() }

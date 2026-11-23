@@ -1106,9 +1106,9 @@ msgid "No Songs Found"
 msgstr "Песни не найдены"
 
 #: src/gtk/library-panel.blp:369
-msgid "Choose music files on this computer to share with everyone"
+msgid "Choose music files on this device to share with everyone"
 msgstr ""
-"Выберите музыкальные файлы на этом компьютере, чтобы поделиться со всеми"
+"Выберите музыкальные файлы на этом устройстве, чтобы поделиться со всеми"
 
 #: src/gtk/library-panel.blp:373
 msgid "_Share Songs…"
@@ -2498,11 +2498,11 @@ msgstr "Покинуть сеть?"
 #: src/library_panel.rs:1671
 msgid ""
 "The songs you share will no longer be available to others, and you won’t be "
-"able to search theirs. Everything stays on this computer for when you join "
+"able to search theirs. Everything stays on this device for when you join "
 "again."
 msgstr ""
 "Песни, которыми вы делитесь, больше не будут доступны другим, и вы не "
-"сможете искать их. Всё останется на этом компьютере на случай повторного "
+"сможете искать их. Всё останется на этом устройстве на случай повторного "
 "подключения."
 
 #: src/library_panel.rs:1677
@@ -2527,10 +2527,10 @@ msgstr "Искать музыку всех"
 
 #: src/library_panel.rs:1838
 msgid ""
-"Find new songs and albums. Music already on this computer is hidden from "
+"Find new songs and albums. Music already on this device is hidden from "
 "search."
 msgstr ""
-"Находите новые песни и альбомы. Музыка, уже имеющаяся на этом компьютере, "
+"Находите новые песни и альбомы. Музыка, уже имеющаяся на этом устройстве, "
 "скрыта из поиска."
 
 #: src/library_panel.rs:1843
@@ -2550,11 +2550,11 @@ msgstr "опубликовано {name}"
 
 #: src/library_panel.rs:1892
 #, rust-format
-msgid "on {} computer"
-msgid_plural "on {} computers"
-msgstr[0] "на {} компьютере"
-msgstr[1] "на {} компьютерах"
-msgstr[2] "на {} компьютерах"
+msgid "on {} device"
+msgid_plural "on {} devices"
+msgstr[0] "на {} устройстве"
+msgstr[1] "на {} устройствах"
+msgstr[2] "на {} устройствах"
 
 #: src/library_panel.rs:1916
 msgid "Listen without adding to your playlist"
@@ -2820,13 +2820,13 @@ msgstr "VPN не включён: другие видят ваш адрес"
 
 #: src/library_panel.rs:2772
 msgid ""
-"This computer can’t reach the BitTorrent network (DHT), which is how it "
+"This device can’t reach the BitTorrent network (DHT), which is how it "
 "finds others. Something blocks UDP traffic: a firewall, a VPN, or the "
 "network itself (as in some offices, schools and hotels). Try another "
 "network, or allow UDP for the app. Right after the app starts this can also "
 "take a minute."
 msgstr ""
-"Этот компьютер не может связаться с сетью BitTorrent (DHT), через которую "
+"Это устройство не может связаться с сетью BitTorrent (DHT), через которую "
 "находит других. Что-то блокирует UDP-трафик: брандмауэр, VPN или сама сеть "
 "(как в некоторых офисах, школах и отелях). Попробуйте другую сеть или "
 "разрешите UDP для приложения. Сразу после запуска приложения это также может "
@@ -4548,3 +4548,33 @@ msgstr ""
 
 #~ msgid "Choose a folder"
 #~ msgstr "Выбрать папку"
+
+#: src/library_panel.rs
+msgid "Help"
+msgstr "Справка"
+
+#: src/library_panel.rs
+msgid "Keyboard Shortcuts"
+msgstr "Сочетания клавиш"
+
+#: src/library_panel.rs
+msgid "About Hopea"
+msgstr "О приложении Hopea"
+
+msgid "Add music from your device or find songs in Shared Music."
+msgstr "Добавьте музыку с устройства или найдите песни в «Общей музыке»."
+
+msgid "On this device · sharing ↑ {speed}"
+msgstr "На этом устройстве · раздача ↑ {speed}"
+
+msgid "On this device"
+msgstr "На этом устройстве"
+
+msgid "Saved on this device. Reconnect and save again to publish the cover and lyrics."
+msgstr "Сохранено на этом устройстве. Подключитесь к сети и сохраните ещё раз, чтобы опубликовать обложку и текст песни."
+
+msgid "Choose an image on this device"
+msgstr "Выберите изображение на этом устройстве"
+
+msgid "Try another search. Songs already on this device and songs with no reachable sources are hidden."
+msgstr "Попробуйте другой запрос. Песни, которые уже есть на этом устройстве или для которых нет доступных источников, скрыты."

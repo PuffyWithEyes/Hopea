@@ -153,6 +153,11 @@ unversioned libsoup library name. Waveforms missing while a network track is
 being verified are requested once more from the local node after audio starts.
 No additional peer search is triggered by that retry.
 
+Online lyrics on Android use Rustls with bundled public root certificates,
+without requiring a GIO TLS module in the GTK bundle. The client verifies
+certificates and hostnames, accepts HTTPS only, and enforces request timeouts
+and response size limits.
+
 Private settings and music live outside GTK's replaceable resource directory.
 Existing files are moved before refreshing assets; a destination conflict stops
 startup without overwriting either copy. Keep application data when updating.

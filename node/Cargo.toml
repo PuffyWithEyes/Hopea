@@ -67,7 +67,6 @@ debug = false
 [patch.crates-io]
 quanta = { path = "../vendor/quanta" }
 if-addrs = { path = "../vendor/if-addrs" }
-dontfrag = { path = "../vendor/dontfrag" }
 librqbit = { path = "../vendor/librqbit" }
 librqbit-dualstack-sockets = { path = "../vendor/librqbit-dualstack-sockets" }
 lofty = { path = "../vendor/lofty" }

@@ -40,7 +40,7 @@ use log::debug;
 
 pub use client::{ClientError, LibraryClient, UploadCover};
 pub(crate) use node::set_gaming;
-pub(crate) use node::{catalog_changes, notify_catalog_changed};
+pub(crate) use node::{catalog_changes, notify_catalog_changed, reachability_changes};
 
 thread_local! {
     /// Whether the listener wants to be on the network in this session

@@ -3,6 +3,7 @@
 
 use adw::subclass::prelude::*;
 use gtk::{gio, glib, prelude::*, CompositeTemplate};
+use std::cell::{Cell, OnceCell, RefCell};
 
 mod imp {
     use super::*;
@@ -14,6 +15,18 @@ mod imp {
         pub navigation: TemplateChild<adw::NavigationView>,
         #[template_child]
         pub playlist_page: TemplateChild<adw::NavigationPage>,
+        #[template_child]
+        pub albums_scroll: TemplateChild<gtk::ScrolledWindow>,
+        #[template_child]
+        pub albums_list: TemplateChild<gtk::ListView>,
+        #[template_child]
+        pub new_album_button: TemplateChild<gtk::Button>,
+        #[template_child]
+        pub open_album_button: TemplateChild<gtk::Button>,
+        pub albums: OnceCell<gio::ListStore>,
+        pub albums_monitor: RefCell<Option<gio::FileMonitor>>,
+        pub album_revision: Cell<u64>,
+        pub album_refresh: RefCell<Option<glib::SourceId>>,
         #[template_child]
         pub playlist_overlay: TemplateChild<gtk::Overlay>,
         #[template_child]
@@ -61,6 +74,12 @@ mod imp {
 
     impl ObjectImpl for PlaylistView {
         fn dispose(&self) {
+            if let Some(monitor) = self.albums_monitor.borrow_mut().take() {
+                monitor.cancel();
+            }
+            if let Some(source) = self.album_refresh.borrow_mut().take() {
+                source.remove();
+            }
             while let Some(child) = self.obj().first_child() {
                 child.unparent();
             }
@@ -90,6 +109,61 @@ impl Default for PlaylistView {
 }
 
 impl PlaylistView {
+    pub fn albums(&self) -> gio::ListStore {
+        self.imp()
+            .albums
+            .get_or_init(gio::ListStore::new::<glib::BoxedAnyObject>)
+            .clone()
+    }
+
+    pub fn albums_list(&self) -> gtk::ListView {
+        self.imp().albums_list.get()
+    }
+
+    pub fn albums_scroll(&self) -> gtk::ScrolledWindow {
+        self.imp().albums_scroll.get()
+    }
+
+    pub fn new_album_button(&self) -> gtk::Button {
+        self.imp().new_album_button.get()
+    }
+
+    pub fn open_album_button(&self) -> gtk::Button {
+        self.imp().open_album_button.get()
+    }
+
+    pub fn monitor_albums(&self, monitor: gio::FileMonitor) {
+        if let Some(previous) = self.imp().albums_monitor.replace(Some(monitor)) {
+            previous.cancel();
+        }
+    }
+
+    pub fn next_album_revision(&self) -> u64 {
+        let revision = self.imp().album_revision.get().wrapping_add(1);
+        self.imp().album_revision.set(revision);
+        revision
+    }
+
+    pub fn album_revision(&self) -> u64 {
+        self.imp().album_revision.get()
+    }
+
+    pub fn queue_album_refresh(&self, refresh: impl FnOnce() + 'static) {
+        if let Some(source) = self.imp().album_refresh.borrow_mut().take() {
+            source.remove();
+        }
+        let weak = self.downgrade();
+        let source =
+            glib::timeout_add_local_once(std::time::Duration::from_millis(150), move || {
+                let Some(view) = weak.upgrade() else {
+                    return;
+                };
+                view.imp().album_refresh.borrow_mut().take();
+                refresh();
+            });
+        self.imp().album_refresh.replace(Some(source));
+    }
+
     #[cfg(test)]
     pub fn visible_page(&self) -> Option<adw::NavigationPage> {
         self.imp().navigation.visible_page()

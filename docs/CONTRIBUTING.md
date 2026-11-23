@@ -52,6 +52,26 @@ Keep testing proportional to the change. A regression test is useful for a bug
 fix; link and build checks are enough for a small file relocation. Do not clear
 working caches or the user's music library to run tests.
 
+### Android lyrics and keyboard checks
+
+Run these focused checks with Rust, OpenSSL and Python 3.11+ available; the
+keyboard check also needs a JDK:
+
+```sh
+bash tests/test_lyrics_https.sh
+python3 tests/test_android_keyboard.py
+```
+
+The lyrics harness runs the production Rustls transport against a local HTTPS
+server with temporary certificates. It checks trusted replies, certificate and
+hostname rejection, HTTPS downgrade rejection, status handling and response
+size limits without contacting a lyrics service. The keyboard harness compiles
+the production Java observer with Android API stand-ins and checks UI-thread
+access, show/hide updates, activity cleanup and the API 28 fallback.
+These host checks do not establish APK compatibility: verify lyrics lookup,
+keyboard dismissal with focus retained, rotation and activity resume on actual
+Android 9 and 14 devices or emulators.
+
 ## Further information
 
 ### Translating Hopea without a translation service
@@ -141,9 +161,21 @@ carry forward only fixes still needed. The librqbit 9.1.0 refresh still needs ou
 HTTP interface-binding guard on BSD. Quanta 0.12.6 carries the upstream 32-bit
 musl `timespec` fix because governor 0.10.4 still requires quanta 0.12; quanta 0.13
 already includes the fix. See [its patch notes](../vendor/quanta/HOPEA.md) before
-removing the override. Other vendored crates remain at their latest
-published stable versions as checked on November 17, 2026; their local fixes have
-not become removable merely by updating the lockfile.
+removing the override.
+
+The `dontfrag` override was removed after the BSD IPv4 fix was accepted in
+[upstream PR #1](https://github.com/nicbn/dontfrag-rs/pull/1) and published in
+`dontfrag` 1.0.2 on November 17, 2026. Both workspaces now use that registry
+release; their lockfiles pin its checksum
+`f949ddc2e911eaf995d2cabc132a478c73cacd1cc0a04c1f0636544b9586178d`.
+The published archive identifies upstream commit
+`3f2a6f5ba0ba36aeb1e7d4b457481c4902f2691a` and contains the same BSD socket
+implementation as the former Hopea patch, along with the upstream license notices.
+
+`if-addrs` 0.15.0, `librqbit-dualstack-sockets` 0.7.0 and `socket-pktinfo` 0.4.2
+still have no newer published versions as checked on November 23, 2026. Their
+local patches remain; a merged PR alone is not a reason to remove an override
+before the release used by the lockfile contains the required fix.
 
 Run the player, Spotify, common and node checks separately as described above.
 Network and ingest regression tests must continue to enforce authentication,

@@ -14,6 +14,7 @@ python3 "$root/tests/test_android_app_links.py"
 python3 "$root/tests/test_android_storage.py"
 python3 "$root/tests/test_android_crash_report.py"
 python3 "$root/tests/test_android_language.py"
+python3 "$root/tests/test_android_keyboard.py"
 # These checks run before Pixiewood downloads GTK. Supply only its Application
 # superclass contract; Android APIs come from the real SDK. Gradle subsequently
 # compiles HopeaApplication together with the actual GTK Java sources.

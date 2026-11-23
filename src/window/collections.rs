@@ -134,76 +134,71 @@ impl Window {
         image
     }
 
-    pub(super) async fn show_collections(&self) {
-        self.switch_mode(WindowMode::MainView);
-        self.set_playlist_visible(true);
-        self.hide_library_if_overlaid();
-        let albums = match collections::list().await {
-            Ok(a) => a,
-            Err(e) => {
-                error(self, &e);
-                return;
-            }
-        };
-        let content = gtk::Box::new(gtk::Orientation::Vertical, 8);
-        let header = adw::HeaderBar::new();
-        header.set_show_title(false);
-        header.set_show_start_title_buttons(false);
-        header.set_show_end_title_buttons(false);
-        content.append(&header);
-        let page = self
-            .imp()
-            .playlist_view
-            .show_page(&i18n("My Albums"), &content);
-        self.set_playlist_visible(true);
-        let new = gtk::Button::with_label(&i18n("New Album"));
-        new.add_css_class("suggested-action");
-        header.pack_start(&new);
-        let open = gtk::Button::from_icon_name("hopea-document-open-symbolic");
-        open.set_tooltip_text(Some(&i18n("Open a shared Hopea album")));
-        header.pack_end(&open);
-        let model = gio::ListStore::new::<glib::BoxedAnyObject>();
-        for album in albums {
-            model.append(&glib::BoxedAnyObject::new(album));
-        }
-        let empty = gtk::Label::builder()
-            .label(i18n(
-                "Create an album, choose its songs and share it with friends.",
-            ))
-            .wrap(true)
-            .wrap_mode(gtk::pango::WrapMode::WordChar)
-            .build();
-        empty.set_visible(model.n_items() == 0);
-        content.append(&empty);
+    pub(super) fn setup_collection_shelf(&self) {
+        let view = self.imp().playlist_view.get();
+        let model = view.albums();
+        view.albums_list()
+            .set_model(Some(&gtk::NoSelection::new(Some(model.clone()))));
         model.connect_items_changed(clone!(
             #[weak]
-            empty,
-            move |m, _, _, _| empty.set_visible(m.n_items() == 0)
+            view,
+            move |m, _, _, _| view.albums_scroll().set_visible(m.n_items() > 0)
         ));
         let factory = gtk::SignalListItemFactory::new();
-        factory.connect_bind(move |_, obj| {
-            let item = obj.downcast_ref::<gtk::ListItem>().unwrap();
-            let album = item
-                .item()
+        factory.connect_bind(clone!(
+            #[weak(rename_to = win)]
+            self,
+            move |_, obj| {
+                let item = obj.downcast_ref::<gtk::ListItem>().unwrap();
+                let object = item
+                    .item()
+                    .unwrap()
+                    .downcast::<glib::BoxedAnyObject>()
+                    .unwrap();
+                let album = object.borrow::<Album>();
+                let card = gtk::Box::builder()
+                    .orientation(gtk::Orientation::Vertical)
+                    .spacing(4)
+                    .width_request(144)
+                    .margin_start(6)
+                    .margin_end(6)
+                    .margin_bottom(6)
+                    .build();
+                card.set_tooltip_text(Some(&album.name));
+                let picture = if album.cover.is_none() && !album.tracks.is_empty() {
+                    win.collection_thumbnail(&album.tracks[0])
+                } else {
+                    cover(&album)
+                };
+                picture.set_pixel_size(128);
+                picture.set_size_request(128, 128);
+                picture.add_css_class("track-thumbnail");
+                card.append(&picture);
+                for text in [
+                    album.name.clone(),
+                    i18n_f("{} songs", &[&album.tracks.len().to_string()]),
+                ] {
+                    card.append(
+                        &gtk::Label::builder()
+                            .label(text)
+                            .use_markup(false)
+                            .xalign(0.0)
+                            .max_width_chars(18)
+                            .ellipsize(gtk::pango::EllipsizeMode::End)
+                            .build(),
+                    );
+                }
+                item.set_child(Some(&card));
+            }
+        ));
+        factory.connect_unbind(|_, object| {
+            object
+                .downcast_ref::<gtk::ListItem>()
                 .unwrap()
-                .downcast::<glib::BoxedAnyObject>()
-                .unwrap()
-                .borrow::<Album>()
-                .clone();
-            let row = adw::ActionRow::builder()
-                .title(&album.name)
-                .subtitle(i18n_f("{} songs", &[&album.tracks.len().to_string()]))
-                .use_markup(false)
-                .activatable(false)
-                .build();
-            row.add_prefix(&cover(&album));
-            row.add_suffix(&gtk::Image::from_icon_name("hopea-go-next-symbolic"));
-            item.set_child(Some(&row));
+                .set_child(gtk::Widget::NONE);
         });
-        let scroll = list_view(&model, &factory);
-        let list = scroll.child().unwrap().downcast::<gtk::ListView>().unwrap();
-        list.set_single_click_activate(true);
-        list.connect_activate(clone!(
+        view.albums_list().set_factory(Some(&factory));
+        view.albums_list().connect_activate(clone!(
             #[weak(rename_to=win)]
             self,
             #[weak]
@@ -215,31 +210,24 @@ impl Window {
                 win.open_collection(item.borrow::<Album>().clone(), model.clone());
             }
         ));
-        content.append(&scroll);
-        new.connect_clicked(clone!(
+        view.new_album_button().connect_clicked(clone!(
             #[weak(rename_to=win)]
             self,
-            #[weak]
-            page,
             #[weak]
             model,
             move |_| {
-                win.edit_collection(&page, Album::new(), model.clone());
+                win.edit_collection(&win, Album::new(), model.clone());
             }
         ));
-        open.connect_clicked(clone!(
+        view.open_album_button().connect_clicked(clone!(
             #[weak(rename_to=win)]
             self,
-            #[weak]
-            page,
             #[weak]
             model,
             move |_| {
                 glib::spawn_future_local(clone!(
                     #[strong]
                     win,
-                    #[strong]
-                    page,
                     #[strong]
                     model,
                     async move {
@@ -249,7 +237,7 @@ impl Window {
                         if let Ok(file) = chooser.open_future(Some(&win)).await {
                             if let Some(path) = file.path() {
                                 match collections::open(path).await {
-                                    Ok(album) => win.edit_collection(&page, album, model),
+                                    Ok(album) => win.edit_collection(&win, album, model),
                                     Err(e) => error(&win, &e),
                                 }
                             }
@@ -258,6 +246,87 @@ impl Window {
                 ));
             }
         ));
+        view.connect_map(clone!(
+            #[weak(rename_to = win)]
+            self,
+            move |_| win.queue_collection_refresh()
+        ));
+        // Imports save through the same directory as the editor. Watch their
+        // atomic renames too, so a visible shelf updates without reopening it.
+        glib::spawn_future_local(clone!(
+            #[weak(rename_to = win)]
+            self,
+            async move {
+                let directory = gio::spawn_blocking(|| {
+                    let path = crate::paths::data_dir().join("collections");
+                    std::fs::create_dir_all(&path).map(|_| path)
+                })
+                .await;
+                if let Ok(Ok(path)) = directory {
+                    let file = gio::File::for_path(path);
+                    match file.monitor_directory(
+                        gio::FileMonitorFlags::WATCH_MOVES,
+                        None::<&gio::Cancellable>,
+                    ) {
+                        Ok(monitor) => {
+                            monitor.connect_changed(clone!(
+                                #[weak]
+                                win,
+                                move |_, file, other, _| {
+                                    let manifest = |file: &gio::File| {
+                                        file.path().is_some_and(|path| {
+                                            path.extension().and_then(|ext| ext.to_str())
+                                                == Some("json")
+                                        })
+                                    };
+                                    if manifest(file) || other.is_some_and(manifest) {
+                                        win.queue_collection_refresh();
+                                    }
+                                }
+                            ));
+                            win.imp().playlist_view.monitor_albums(monitor);
+                        }
+                        Err(reason) => log::warn!("Unable to watch personal albums: {reason}"),
+                    }
+                }
+                win.queue_collection_refresh();
+            }
+        ));
+    }
+
+    fn queue_collection_refresh(&self) {
+        let weak = self.downgrade();
+        self.imp().playlist_view.queue_album_refresh(move || {
+            if let Some(win) = weak.upgrade() {
+                glib::spawn_future_local(async move {
+                    if let Err(reason) = win.refresh_collection_shelf().await {
+                        log::warn!("Unable to refresh personal albums: {reason}");
+                    }
+                });
+            }
+        });
+    }
+
+    async fn refresh_collection_shelf(&self) -> Result<(), String> {
+        let view = self.imp().playlist_view.get();
+        let revision = view.next_album_revision();
+        let albums = collections::list().await?;
+        if view.album_revision() == revision {
+            let items: Vec<_> = albums.into_iter().map(glib::BoxedAnyObject::new).collect();
+            let model = view.albums();
+            model.splice(0, model.n_items(), &items);
+        }
+        Ok(())
+    }
+
+    pub(super) async fn show_collections(&self) {
+        self.switch_mode(WindowMode::MainView);
+        self.imp().playlist_view.show_playlist();
+        self.set_playlist_visible(true);
+        self.hide_library_if_overlaid();
+        if let Err(reason) = self.refresh_collection_shelf().await {
+            error(self, &reason);
+        }
     }
 
     fn open_collection(&self, album: Album, albums: gio::ListStore) {
@@ -294,7 +363,7 @@ impl Window {
             page,
             #[weak]
             model,
-            #[strong]
+            #[weak]
             album,
             move |albums, _, _, _| {
                 let id = album.borrow().id.clone();
@@ -1342,10 +1411,13 @@ impl Window {
         wait().await;
         assert!(
             self.visible_dialog().is_none(),
-            "album browser must replace the playlist, not open a dialog"
+            "browsing albums must keep the playlist visible"
         );
         let manager = self.imp().playlist_view.visible_page().unwrap();
-        assert_eq!(manager.title(), "My Albums");
+        assert_eq!(manager.tag().as_deref(), Some("playlist"));
+        let list = self.imp().playlist_view.albums_list();
+        assert_eq!(list.orientation(), gtk::Orientation::Horizontal);
+        assert!(list.is_single_click_activate());
         click(&manager, "New Album");
         wait().await;
         let editor = self.visible_dialog().unwrap();
@@ -1422,11 +1494,7 @@ impl Window {
         assert_eq!(saved.len(), 1);
         assert_eq!(saved[0].name, "Evening <mix>");
         assert!(!saved[0].tracks.is_empty());
-        let list = widgets(manager.upcast_ref())
-            .into_iter()
-            .find_map(|w| w.downcast::<gtk::ListView>().ok())
-            .unwrap();
-        assert!(list.is_single_click_activate());
+        assert!(self.imp().playlist_view.albums_scroll().is_visible());
         list.emit_by_name::<()>("activate", &[&0u32]);
         wait().await;
         assert!(self.visible_dialog().is_none());
@@ -1518,5 +1586,69 @@ impl Window {
             Some("playlist")
         );
         wait().await;
+        assert!(!self.imp().playlist_view.albums_scroll().is_visible());
+
+        // Account imports and other collection writers do not hold this view's
+        // model. Their saved albums must appear while the playlist stays open.
+        let mut imported = Vec::new();
+        for n in 0..12 {
+            let mut album = Album::new();
+            album.name = format!("Imported album {n:02}");
+            collections::save(album.clone()).await.unwrap();
+            imported.push(album);
+        }
+        for _ in 0..40 {
+            if list.model().unwrap().n_items() == imported.len() as u32 {
+                break;
+            }
+            glib::timeout_future(std::time::Duration::from_millis(100)).await;
+        }
+        assert_eq!(
+            list.model().unwrap().n_items(),
+            imported.len() as u32,
+            "saving imported albums must update the visible shelf"
+        );
+        wait().await;
+        let horizontal = self.imp().playlist_view.albums_scroll().hadjustment();
+        assert!(
+            horizontal.upper() > horizontal.page_size(),
+            "personal album cards must scroll horizontally"
+        );
+        assert_eq!(
+            self.imp()
+                .playlist_view
+                .visible_page()
+                .unwrap()
+                .tag()
+                .as_deref(),
+            Some("playlist"),
+            "refreshing albums must not replace the song list"
+        );
+        if let Some(path) = std::env::var_os("HOPEA_TEST_ALBUMS_SCREENSHOT") {
+            let paintable = gtk::WidgetPaintable::new(Some(self));
+            self.queue_draw();
+            glib::timeout_future(std::time::Duration::from_millis(150)).await;
+            let snapshot = gtk::Snapshot::new();
+            paintable.snapshot(&snapshot, self.width() as f64, self.height() as f64);
+            self.renderer()
+                .unwrap()
+                .render_texture(
+                    &snapshot.to_node().expect("mapped album shelf must render"),
+                    None,
+                )
+                .save_to_png(path)
+                .unwrap();
+        }
+        for album in imported {
+            collections::remove(album.id).await.unwrap();
+        }
+        for _ in 0..40 {
+            if list.model().unwrap().n_items() == 0 {
+                break;
+            }
+            glib::timeout_future(std::time::Duration::from_millis(100)).await;
+        }
+        assert_eq!(list.model().unwrap().n_items(), 0);
+        assert!(!self.imp().playlist_view.albums_scroll().is_visible());
     }
 }

@@ -138,7 +138,7 @@ pub async fn choose(parent: Option<&gtk::Window>) -> Result<Option<glib::Bytes>,
     };
     let path = file
         .path()
-        .ok_or_else(|| i18n("Choose an image on this computer"))?;
+        .ok_or_else(|| i18n("Choose an image on this device"))?;
     let bytes = gio::spawn_blocking(move || {
         let mut bytes = Vec::new();
         std::fs::File::open(path)

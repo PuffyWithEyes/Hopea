@@ -494,6 +494,11 @@ fn navigation_preserves_playback_and_settings_open_without_search() {
         window.imp().player_stack.visible_child_name().as_deref(),
         Some("for-you")
     );
+    gtk::prelude::WidgetExt::activate_action(&window, "win.show-my-music", None).unwrap();
+    unchanged();
+    assert!(window.imp().split_view.shows_sidebar());
+    assert!(window.imp().my_music_button.is_active());
+    window.imp().split_view.set_show_sidebar(false);
     window.imp().for_you_button.set_active(false);
     unchanged();
     assert_eq!(
@@ -872,7 +877,6 @@ fn navigation_preserves_playback_and_settings_open_without_search() {
     context.block_on(panel.test_welcome_layout(&list_window));
     context.block_on(panel.test_scroll_loading_and_recycling(&window));
     list_window.close();
-    context.block_on(window.test_collection_editor());
     context.block_on(crate::library::import_albums::ImportedAlbums::test_persistence());
     let editor_window = Window::new(&app);
     GtkWindowExt::present(&editor_window);
@@ -941,6 +945,165 @@ fn navigation_preserves_playback_and_settings_open_without_search() {
             .save_to_png(path)
             .unwrap();
     }
+    window.close();
+}
+
+/// A focused phone-layout gate, independent of service-import dialogs and jobs.
+#[test]
+#[ignore = "requires a GTK display and isolated XDG directories; see docs/IMPORTING.md"]
+fn mobile_library_navigation_albums_and_keyboard_viewport() {
+    assert_eq!(std::env::var("GSETTINGS_BACKEND").as_deref(), Ok("memory"));
+    assert!(glib::user_data_dir().starts_with("/tmp"));
+    adw::init().unwrap();
+    gtk::Settings::default()
+        .unwrap()
+        .set_gtk_enable_animations(false);
+    gst::init().unwrap();
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    gio::resources_register(
+        &gio::Resource::load(root.join("_builddir/src/hopea.gresource")).unwrap(),
+    );
+    let context = glib::MainContext::default();
+    let _guard = context.acquire().unwrap();
+    let settings = utils::settings_manager();
+    settings.set_boolean("library-enabled", false).unwrap();
+    settings.set_boolean("library-rules-seen", true).unwrap();
+    settings.set_boolean("game-mode", false).unwrap();
+    let app = crate::application::Application::new();
+    app.set_flags(app.flags() | gio::ApplicationFlags::NON_UNIQUE);
+    app.register(gio::Cancellable::NONE).unwrap();
+    assert!(!app.is_remote());
+    let window = Window::new(&app);
+    let imp = window.imp();
+    let panel = window.import_panel();
+    imp.my_music_header_start.set_visible(true);
+    imp.my_music_header.set_visible(true);
+    imp.my_music_button.set_visible(false);
+    imp.playback_control
+        .imp()
+        .playlist_button
+        .set_visible(false);
+    panel.test_android_chrome_and_keyboard(false);
+    // The desktop minimum is deliberately absent in Android's viewport.
+    window.set_height_request(1);
+    window.set_default_size(390, 780);
+    GtkWindowExt::present(&window);
+    context.block_on(glib::timeout_future(std::time::Duration::from_millis(350)));
+
+    assert!(app.player().queue().is_empty());
+    assert!(imp.my_music_header.is_mapped());
+    imp.my_music_header.emit_clicked();
+    context.block_on(glib::timeout_future(std::time::Duration::from_millis(150)));
+    assert!(imp.split_view.shows_sidebar());
+    let back = imp.playlist_view.back_button();
+    assert!(back.is_mapped() && back.is_sensitive());
+    back.emit_clicked();
+    assert!(
+        !imp.split_view.shows_sidebar(),
+        "the actual Back button must close My Music with an empty queue"
+    );
+
+    let player = app.player();
+    player.set_volume(0.0);
+    let song =
+        Song::from_uri(&gio::File::for_path(root.join("node/tests/fixtures/tone.wav")).uri())
+            .unwrap();
+    player.queue().add_song(&song);
+    panel.test_show_search_with_albums();
+    imp.library_sheet.set_open(true);
+    context.block_on(glib::timeout_future(std::time::Duration::from_millis(350)));
+    // Snapshot playback state without depending on audio hardware or timing.
+    player.state().set_current_song(Some(song.clone()));
+    player.state().set_playback_state(&PlaybackState::Playing);
+    player.state().set_position(42);
+    let unchanged = || {
+        assert_eq!(player.queue().n_songs(), 1);
+        assert_eq!(player.state().current_song(), Some(song.clone()));
+        assert_eq!(player.state().position(), 42);
+        assert!(player.state().playing());
+        assert!(!window.in_for_you());
+    };
+    imp.for_you_button.set_active(true);
+    let header = panel.test_my_music_button();
+    assert!(header.is_mapped() && header.is_sensitive());
+    header.emit_clicked();
+    unchanged();
+    assert!(!imp.library_sheet.is_open());
+    assert!(imp.my_music_button.is_active());
+    assert!(imp.split_view.shows_sidebar());
+    back.emit_clicked();
+    unchanged();
+    assert!(!imp.split_view.shows_sidebar());
+    imp.my_music_header.emit_clicked();
+    unchanged();
+    assert!(imp.split_view.shows_sidebar());
+    back.emit_clicked();
+    player.pause();
+
+    // Joined search contains real album cards and song rows. Simulate the
+    // Android IME policy as well as its smaller viewport, then rotate twice.
+    for (width, height) in [(390, 780), (390, 420), (390, 780), (800, 520), (390, 780)] {
+        panel.test_android_chrome_and_keyboard(height == 420);
+        window.set_default_size(width, height);
+        context.block_on(glib::timeout_future(std::time::Duration::from_millis(350)));
+        if width <= 560 {
+            assert!(window.library_in_sheet());
+            imp.library_sheet.set_open(true);
+            context.block_on(glib::timeout_future(std::time::Duration::from_millis(350)));
+            let available = imp.library_sheet.height();
+            let sheet = imp
+                .sheet_content
+                .compute_bounds(&imp.library_sheet.get())
+                .unwrap();
+            assert!(
+                sheet.height() >= available as f32 * 0.85,
+                "Shared Music must expand near the top: sheet={}, available={}",
+                sheet.height(),
+                available
+            );
+            assert!(
+                sheet.y() >= -1.0 && sheet.y() + sheet.height() <= available as f32 + 1.0,
+                "the sheet must remain inside the viewport when it shrinks"
+            );
+            assert!(
+                window.height() <= height,
+                "sheet natural height must not become a minimum that blocks keyboard resizing"
+            );
+            panel.test_search_with_albums_fits();
+            if let Some(path) = std::env::var_os("HOPEA_TEST_SHEET_SCREENSHOT") {
+                let mut path = std::path::PathBuf::from(path);
+                if height == 420 {
+                    path.set_file_name("shared-music-keyboard.png");
+                }
+                let paintable = gtk::WidgetPaintable::new(Some(&window));
+                let mut node = None;
+                for _ in 0..8 {
+                    window.queue_draw();
+                    context.block_on(glib::timeout_future(std::time::Duration::from_millis(100)));
+                    let snapshot = gtk::Snapshot::new();
+                    paintable.snapshot(&snapshot, window.width() as f64, window.height() as f64);
+                    node = snapshot.to_node();
+                    if node.is_some() {
+                        break;
+                    }
+                }
+                window
+                    .renderer()
+                    .unwrap()
+                    .render_texture(&node.expect("mapped sheet must render after a frame"), None)
+                    .save_to_png(path)
+                    .unwrap();
+            }
+        } else {
+            assert!(!window.library_in_sheet());
+            assert_eq!(imp.library_split.sidebar(), Some(panel.clone().upcast()));
+            panel.test_search_with_albums_fits();
+        }
+    }
+    panel.test_my_music_button().emit_clicked();
+    assert!(!imp.library_sheet.is_open());
+    assert!(imp.split_view.shows_sidebar());
+    context.block_on(window.test_collection_editor());
     window.close();
 }
 

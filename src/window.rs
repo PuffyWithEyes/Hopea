@@ -7,6 +7,7 @@ mod tests;
 mod collections;
 mod import_audition;
 mod metadata;
+mod sheet_content;
 mod song_drag;
 mod song_editor;
 
@@ -86,6 +87,8 @@ mod imp {
         pub library_split: TemplateChild<adw::OverlaySplitView>,
         #[template_child]
         pub library_sheet: TemplateChild<adw::BottomSheet>,
+        pub sheet_content: sheet_content::SheetContent,
+        pub mobile_library_opened: Cell<bool>,
         #[template_child]
         pub narrow_breakpoint: TemplateChild<adw::Breakpoint>,
         #[template_child]
@@ -94,6 +97,10 @@ mod imp {
         pub import_progress_start: TemplateChild<gtk::Button>,
         #[template_child]
         pub import_progress_main: TemplateChild<gtk::Button>,
+        #[template_child]
+        pub my_music_header_start: TemplateChild<gtk::Button>,
+        #[template_child]
+        pub my_music_header: TemplateChild<gtk::Button>,
         #[template_child]
         pub for_you_button: TemplateChild<gtk::ToggleButton>,
         #[template_child]
@@ -297,6 +304,7 @@ mod imp {
                     win.review_metadata(song, false).await;
                 }
             });
+            #[cfg(not(target_os = "android"))]
             klass.install_action_async("win.open-directory", None, async move |win, _, _| {
                 debug!("Window::win.open-directory()");
                 win.open_song_directory().await
@@ -304,6 +312,16 @@ mod imp {
             klass.install_action("win.shared-library", None, move |win, _, _| {
                 debug!("Window::win.shared-library()");
                 win.toggle_library();
+            });
+            klass.install_action("win.show-my-music", None, |win, _, _| {
+                if win.is_import_audition() {
+                    return;
+                }
+                win.hide_library_if_overlaid();
+                win.imp().my_music_button.set_active(true);
+                win.set_for_you(false);
+                win.imp().main_stack.set_visible_child_name("main-view");
+                win.set_playlist_visible(true);
             });
             // The shared music settings, also before joining and with the
             // panel hidden
@@ -358,10 +376,14 @@ mod imp {
                 split_view: TemplateChild::default(),
                 library_split: TemplateChild::default(),
                 library_sheet: TemplateChild::default(),
+                sheet_content: sheet_content::SheetContent::default(),
+                mobile_library_opened: Cell::default(),
                 narrow_breakpoint: TemplateChild::default(),
                 library_panel: TemplateChild::default(),
                 import_progress_start: TemplateChild::default(),
                 import_progress_main: TemplateChild::default(),
+                my_music_header_start: TemplateChild::default(),
+                my_music_header: TemplateChild::default(),
                 for_you_button: TemplateChild::default(),
                 my_music_button: TemplateChild::default(),
                 player_header: TemplateChild::default(),
@@ -506,12 +528,14 @@ impl Window {
         win.setup_waveform();
         win.setup_actions();
         win.setup_playlist();
+        win.setup_collection_shelf();
         win.setup_drop_target();
         win.setup_provider();
         win.bind_state();
         win.bind_queue();
         win.connect_signals();
         win.setup_library_sheet();
+        win.setup_mobile_layout();
         win.setup_for_you();
         win.setup_lyrics();
         win.restore_window_state();
@@ -792,10 +816,20 @@ impl Window {
             move |_| {
                 let imp = win.imp();
                 let panel = imp.library_panel.get();
+                let was_open = imp.library_split.shows_sidebar();
                 imp.library_split.set_show_sidebar(false);
                 imp.library_split.set_sidebar(gtk::Widget::NONE);
                 panel.add_css_class("in-sheet");
-                imp.library_sheet.set_sheet(Some(&panel));
+                imp.sheet_content.set_child(Some(panel.upcast_ref()));
+                imp.sheet_content
+                    .set_available_height(imp.library_sheet.height());
+                imp.library_sheet.set_sheet(Some(&imp.sheet_content));
+                if was_open
+                    || cfg!(target_os = "android") && !imp.mobile_library_opened.replace(true)
+                {
+                    // Open discovery at startup without opening the keyboard.
+                    imp.library_sheet.set_open(true);
+                }
                 imp.player_header.set_title_widget(gtk::Widget::NONE);
                 imp.mode_switch_narrow.append(&imp.mode_switch.get());
                 imp.player_header.set_show_title(false);
@@ -812,6 +846,7 @@ impl Window {
                 let was_open = imp.library_sheet.is_open();
                 imp.library_sheet.set_open(false);
                 imp.library_sheet.set_sheet(gtk::Widget::NONE);
+                imp.sheet_content.set_child(None);
                 panel.remove_css_class("in-sheet");
                 imp.library_split.set_sidebar(Some(&panel));
                 imp.library_split.set_show_sidebar(was_open);
@@ -822,6 +857,64 @@ impl Window {
                 win.enforce_import_audition();
             }
         ));
+    }
+
+    fn setup_mobile_layout(&self) {
+        let imp = self.imp();
+        imp.my_music_header.set_visible(cfg!(target_os = "android"));
+        imp.my_music_header_start
+            .set_visible(cfg!(target_os = "android"));
+        // The Android header replaces the old My Music tab as the entry point.
+        // Keep the grouped toggle for its view state, without a second button.
+        imp.my_music_button
+            .set_visible(!cfg!(target_os = "android"));
+        #[cfg(target_os = "android")]
+        {
+            // Android supplies the viewport, including keyboard/landscape
+            // changes. A desktop minimum height can exceed that viewport.
+            // AdwApplicationWindow requires an explicit positive minimum.
+            self.set_height_request(1);
+            imp.status_page.set_description(Some(&i18n(
+                "Add music from your device or find songs in Shared Music.",
+            )));
+            self.connect_map(clone!(
+                #[weak(rename_to = win)]
+                self,
+                move |_| {
+                    let imp = win.imp();
+                    if !imp.mobile_library_opened.replace(true) {
+                        if win.library_in_sheet() {
+                            imp.library_sheet.set_open(true);
+                        } else {
+                            imp.library_split.set_show_sidebar(true);
+                        }
+                    }
+                }
+            ));
+        }
+        glib::timeout_add_local(
+            std::time::Duration::from_millis(150),
+            clone!(
+                #[weak(rename_to = win)]
+                self,
+                #[upgrade_or]
+                glib::ControlFlow::Break,
+                move || {
+                    if win.is_mapped() {
+                        let imp = win.imp();
+                        if win.library_in_sheet() {
+                            imp.sheet_content
+                                .set_available_height(imp.library_sheet.height());
+                        }
+                        #[cfg(target_os = "android")]
+                        if let Some(visible) = crate::android::keyboard_visible() {
+                            imp.library_panel.set_keyboard_visible(visible);
+                        }
+                    }
+                    glib::ControlFlow::Continue
+                }
+            ),
+        );
     }
 
     fn queue_songs(&self, queue: Vec<gio::File>) {
@@ -1418,7 +1511,9 @@ impl Window {
             self.action_set_enabled("win.previous", !queue.is_empty());
             self.action_set_enabled("win.next", !queue.is_last_song());
 
-            self.action_set_enabled("queue.toggle", !queue.is_empty());
+            // Albums remain accessible with no queued songs, and the playlist
+            // must always be closable after opening it from the mobile header.
+            self.action_set_enabled("queue.toggle", true);
             self.action_set_enabled("queue.shuffle", queue.n_songs() > 1);
             self.action_set_enabled("win.replaygain", player.replaygain_available());
 
@@ -3034,7 +3129,9 @@ impl Window {
             imp.library_sheet.set_open(open);
             if open {
                 imp.library_panel.refresh_protection_notice();
-                imp.library_panel.focus_search();
+                if !cfg!(target_os = "android") {
+                    imp.library_panel.focus_search();
+                }
             }
             return;
         }
@@ -3042,7 +3139,9 @@ impl Window {
         imp.library_split.set_show_sidebar(show);
         if show {
             imp.library_panel.refresh_protection_notice();
-            imp.library_panel.focus_search();
+            if !cfg!(target_os = "android") {
+                imp.library_panel.focus_search();
+            }
         }
     }
 
@@ -3293,11 +3392,11 @@ fn transfer_text(transfer: &hopea_common::api::Transfer) -> String {
         if transfer.upload_bps > 0 {
             i18n_k(
                 // Translators: `{speed}` is a speed, such as "1.2 MB/s"
-                "On this computer · sharing ↑ {speed}",
+                "On this device · sharing ↑ {speed}",
                 &[("speed", &speed(transfer.upload_bps))],
             )
         } else {
-            i18n("On this computer")
+            i18n("On this device")
         }
     } else if transfer.peers == 0 {
         i18n_k(

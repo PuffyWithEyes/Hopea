@@ -39,6 +39,12 @@ async-channel = "2.5.0"
 futures = "0.3.34"
 libc = "0.2.191"
 
+[target.'cfg(target_os = "android")'.dependencies]
+# Android's GTK bundle has no GIO TLS backend. Lyrics use Rustls with bundled
+# public roots, without depending on a Java platform-verifier bootstrap.
+reqwest = { version = "0.13.5", default-features = false, features = ["rustls"] }
+webpki-root-certs = "1.0.12"
+
 [target.'cfg(target_os = "windows")'.dependencies]
 windows-sys = { version = "0.61.2", features = ["Win32_Globalization", "Win32_NetworkManagement_IpHelper", "Win32_NetworkManagement_Ndis", "Win32_Networking_WinSock", "Win32_UI_Shell"] }
 
@@ -88,13 +94,12 @@ debug = false
 [workspace]
 resolver = "2"
 members = ["spotify"]
-exclude = ["common", "node", "vendor/lofty", "vendor/socket-pktinfo", "vendor/librqbit-dualstack-sockets", "vendor/librqbit", "vendor/dontfrag", "vendor/if-addrs", "vendor/quanta"]
+exclude = ["common", "node", "vendor/lofty", "vendor/socket-pktinfo", "vendor/librqbit-dualstack-sockets", "vendor/librqbit", "vendor/if-addrs", "vendor/quanta"]
 default-members = ["."]
 
 [patch.crates-io]
 quanta = { path = "vendor/quanta" }
 if-addrs = { path = "vendor/if-addrs" }
-dontfrag = { path = "vendor/dontfrag" }
 librqbit = { path = "vendor/librqbit" }
 librqbit-dualstack-sockets = { path = "vendor/librqbit-dualstack-sockets" }
 # Pinned upstream source with the no-compression build fix (see node/README.md).

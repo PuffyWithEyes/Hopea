@@ -1147,12 +1147,14 @@ dependencies = [
 
 [[package]]
 name = "dontfrag"
-version = "1.0.1"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f949ddc2e911eaf995d2cabc132a478c73cacd1cc0a04c1f0636544b9586178d"
 dependencies = [
  "cfg-if",
  "libc",
  "tokio",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -2247,6 +2249,7 @@ dependencies = [
  "pretty_env_logger",
  "rand 0.10.4",
  "regex",
+ "reqwest 0.13.5",
  "serde",
  "serde_json",
  "sha2 0.11.1",
@@ -2256,6 +2259,7 @@ dependencies = [
  "tracing",
  "tray-icon",
  "unicode-normalization",
+ "webpki-root-certs",
  "windows-sys 0.61.2",
 ]
 

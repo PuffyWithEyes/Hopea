@@ -26,9 +26,15 @@ static RUNNING: Mutex<Option<Running>> = Mutex::new(None);
 
 static CATALOG_CHANGES: std::sync::LazyLock<tokio::sync::watch::Sender<u64>> =
     std::sync::LazyLock::new(|| tokio::sync::watch::Sender::new(0));
+static REACHABILITY_CHANGES: std::sync::LazyLock<tokio::sync::watch::Sender<u64>> =
+    std::sync::LazyLock::new(|| tokio::sync::watch::Sender::new(0));
 
 pub(crate) fn catalog_changes() -> tokio::sync::watch::Receiver<u64> {
     CATALOG_CHANGES.subscribe()
+}
+
+pub(crate) fn reachability_changes() -> tokio::sync::watch::Receiver<u64> {
+    REACHABILITY_CHANGES.subscribe()
 }
 
 pub(crate) fn notify_catalog_changed() {
@@ -90,6 +96,7 @@ pub async fn start(
                     };
                     let url = format!("http://{}", node.api_addr);
                     let mut changes = node.state.changes.subscribe();
+                    let mut reachability = node.state.reach.subscribe();
                     node.state
                         .torrents
                         .set_gaming(*gaming_rx.borrow_and_update());
@@ -101,6 +108,10 @@ pub async fn start(
                             changed = changes.changed() => {
                                 if changed.is_err() { break; }
                                 notify_catalog_changed();
+                            }
+                            changed = reachability.changed() => {
+                                if changed.is_err() { break; }
+                                REACHABILITY_CHANGES.send_modify(|revision| *revision = revision.wrapping_add(1));
                             }
                             changed = gaming_rx.changed() => {
                                 if changed.is_err() { break; }

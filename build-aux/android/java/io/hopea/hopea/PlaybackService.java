@@ -47,6 +47,7 @@ public final class PlaybackService extends Service {
         GameDetection.initialize(activity);
     }
     public static int gameStatus() { return GameDetection.status(); }
+    public static int keyboardVisible() { return KeyboardVisibility.current(); }
     public static boolean openUsageAccess() { return GameDetection.openUsageAccess(); }
     public static void update(boolean active, String song, String performer, long length, long elapsed) {
         MAIN.post(() -> {

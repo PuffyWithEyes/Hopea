@@ -111,23 +111,25 @@ mod imp {
             obj.setup_gactions();
             obj.setup_settings();
 
-            obj.set_accels_for_action("app.quit", &["<primary>q"]);
-
-            obj.set_accels_for_action("queue.add-song", &["<primary>s"]);
-            // Ctrl+A belongs to the focused text editor, including search.
-            obj.set_accels_for_action("queue.add-folder", &["<primary><shift>o"]);
-            obj.set_accels_for_action("queue.clear", &["<primary>L"]);
-            obj.set_accels_for_action("queue.toggle", &["F9"]);
-            obj.set_accels_for_action("queue.search", &["<primary>F"]);
-            obj.set_accels_for_action("queue.shuffle", &["<primary>r"]);
-            obj.set_accels_for_action("win.shared-library", &["<primary>u"]);
-
-            obj.set_accels_for_action("win.seek-backwards", &["<primary>Left"]);
-            obj.set_accels_for_action("win.seek-forward", &["<primary>Right"]);
-            obj.set_accels_for_action("win.previous", &["<primary>b"]);
-            obj.set_accels_for_action("win.next", &["<primary>n"]);
-            obj.set_accels_for_action("win.play", &["<primary>p"]);
-            obj.set_accels_for_action("win.copy", &["<primary>c"]);
+            // GTK also displays these accelerators in menus. Touch-only
+            // Android menus should not advertise desktop keyboard commands.
+            #[cfg(not(target_os = "android"))]
+            {
+                obj.set_accels_for_action("queue.add-song", &["<primary>s"]);
+                // Ctrl+A belongs to the focused text editor, including search.
+                obj.set_accels_for_action("queue.add-folder", &["<primary><shift>o"]);
+                obj.set_accels_for_action("queue.clear", &["<primary>L"]);
+                obj.set_accels_for_action("queue.toggle", &["F9"]);
+                obj.set_accels_for_action("queue.search", &["<primary>F"]);
+                obj.set_accels_for_action("queue.shuffle", &["<primary>r"]);
+                obj.set_accels_for_action("win.shared-library", &["<primary>u"]);
+                obj.set_accels_for_action("win.seek-backwards", &["<primary>Left"]);
+                obj.set_accels_for_action("win.seek-forward", &["<primary>Right"]);
+                obj.set_accels_for_action("win.previous", &["<primary>b"]);
+                obj.set_accels_for_action("win.next", &["<primary>n"]);
+                obj.set_accels_for_action("win.play", &["<primary>p"]);
+                obj.set_accels_for_action("win.copy", &["<primary>c"]);
+            }
         }
     }
 

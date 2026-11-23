@@ -8,7 +8,7 @@
 extern void hopea_android_action(int action);
 
 static jclass service;
-static jmethodID update_method, vpn_method, game_method, usage_method;
+static jmethodID update_method, vpn_method, game_method, usage_method, keyboard_method;
 static JavaVM *game_vm;
 static void media_action(JNIEnv *env, jclass klass, jint action) {
   hopea_android_action(action);
@@ -45,7 +45,8 @@ static JNIEnv *bridge(void) {
   vpn_method = (*env)->GetStaticMethodID(env, klass, "vpn", "()I");
   game_method = (*env)->GetStaticMethodID(env, klass, "gameStatus", "()I");
   usage_method = (*env)->GetStaticMethodID(env, klass, "openUsageAccess", "()Z");
-  if ((*env)->ExceptionCheck(env) || !init || !update_method || !vpn_method || !game_method || !usage_method) goto failed;
+  keyboard_method = (*env)->GetStaticMethodID(env, klass, "keyboardVisible", "()I");
+  if ((*env)->ExceptionCheck(env) || !init || !update_method || !vpn_method || !game_method || !usage_method || !keyboard_method) goto failed;
   (*env)->CallStaticVoidMethod(env, klass, init, activity);
   if ((*env)->ExceptionCheck(env)) goto failed;
   service = (*env)->NewGlobalRef(env, klass);
@@ -81,6 +82,13 @@ int hopea_android_vpn(void) {
   if (!env) return 0;
   int result = (*env)->CallStaticIntMethod(env, service, vpn_method);
   if ((*env)->ExceptionCheck(env)) { (*env)->ExceptionClear(env); return 0; }
+  return result;
+}
+int hopea_android_keyboard(void) {
+  JNIEnv *env = bridge();
+  if (!env) return -1;
+  int result = (*env)->CallStaticIntMethod(env, service, keyboard_method);
+  if ((*env)->ExceptionCheck(env)) { (*env)->ExceptionClear(env); return -1; }
   return result;
 }
 // Called on GTK's thread before starting the worker. The worker must never

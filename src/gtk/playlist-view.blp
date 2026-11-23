@@ -61,18 +61,44 @@ template $HopeaPlaylistView: Widget {
     }
 
     [top]
-    Box {
+    Box albums_section {
+      orientation: vertical;
+      spacing: 6;
       margin-start: 12;
       margin-end: 12;
       margin-bottom: 6;
 
-      Button {
-        hexpand: true;
-        action-name: "win.my-albums";
-        tooltip-text: _("Create, edit and share albums");
-        child: Adw.ButtonContent {
-          icon-name: "hopea-media-optical-symbolic";
-          label: _("My Albums");
+      Box {
+        spacing: 6;
+        Label {
+          label: _("Albums");
+          xalign: 0;
+          hexpand: true;
+          styles [ "heading" ]
+        }
+        Button new_album_button {
+          label: _("New Album");
+          styles [ "flat" ]
+        }
+        Button open_album_button {
+          icon-name: "hopea-document-open-symbolic";
+          tooltip-text: _("Open a shared Hopea album");
+          styles [ "flat" ]
+        }
+      }
+
+      ScrolledWindow albums_scroll {
+        visible: false;
+        hscrollbar-policy: automatic;
+        vscrollbar-policy: never;
+        min-content-height: 192;
+        max-content-height: 208;
+        propagate-natural-height: true;
+        overlay-scrolling: false;
+        child: ListView albums_list {
+          orientation: horizontal;
+          single-click-activate: true;
+          styles [ "background", "album-results" ]
         };
       }
     }
