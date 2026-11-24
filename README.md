@@ -25,7 +25,7 @@ Built with Rust, GTK 4 and libadwaita, based on **Amberol**.
   <img src="docs/screenshots/mobile-search.png" alt="Mobile search for Гражданская Оборона" width="280">
 </p>
 
-The English interface with a demo library and simulated playback/network state.
+The English interface with downloaded tracks and their album artwork.
 Mobile images show the adaptive layout. [Screenshot details](docs/SCREENSHOTS.md).
 
 ## Get Hopea

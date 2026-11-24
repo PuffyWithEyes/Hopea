@@ -38,6 +38,17 @@ pub fn cached(id: i64) -> Option<gdk::Texture> {
     CACHE.with(|c| c.borrow().textures.get(&id).cloned())
 }
 
+/// Documentation captures replay a local catalog without a peer connection.
+#[cfg(test)]
+pub(crate) fn test_cache_cover(id: i64, bytes: &gtk::glib::Bytes) {
+    let texture = gdk::Texture::from_bytes(bytes).expect("valid local cover");
+    CACHE.with(|cache| {
+        let mut cache = cache.borrow_mut();
+        assert!(cache.textures.len() < MAX_CACHED);
+        cache.textures.insert(id, texture);
+    });
+}
+
 pub fn invalidate(id: i64) {
     CACHE.with(|cache| {
         let mut cache = cache.borrow_mut();

@@ -1,0 +1,9 @@
+Hopea documentation screenshots
+
+The Hopea interface shown in these screenshots is licensed under
+GPL-3.0-or-later. See GPL-3.0-or-later.txt.
+
+The screenshots also depict third-party album artwork from a local music
+library. That artwork remains the property of its respective rights holders.
+The Hopea project does not grant a license to that artwork under the GPL or
+any other license. These screenshots document the application's interface.

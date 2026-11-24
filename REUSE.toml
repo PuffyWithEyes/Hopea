@@ -232,5 +232,5 @@ SPDX-License-Identifier = "CC0-1.0"
 [[annotations]]
 path = "docs/screenshots/*.png"
 precedence = "aggregate"
-SPDX-FileCopyrightText = ["2022 Emmanuele Bassi", "2026 Daniil Klimov"]
-SPDX-License-Identifier = "GPL-3.0-or-later"
+SPDX-FileCopyrightText = ["2022 Emmanuele Bassi", "2026 Daniil Klimov", "Album artwork: respective rights holders"]
+SPDX-License-Identifier = "LicenseRef-Hopea-Screenshots"

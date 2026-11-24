@@ -3,6 +3,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 set -euo pipefail
 cd "$(dirname "$0")/.."
+: "${HOPEA_README_CATALOG:?Set HOPEA_README_CATALOG to a local screenshot catalog with artwork}"
+test -f "$HOPEA_README_CATALOG"
 : "${HOPEA_XVFB:=Xvfb}"
 command -v "$HOPEA_XVFB" >/dev/null
 capture_root=$(mktemp -d /tmp/hopea-screenshots.XXXXXXXX)

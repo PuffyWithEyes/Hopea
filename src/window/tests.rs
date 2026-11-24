@@ -1301,8 +1301,8 @@ fn progressive_playlist_and_shuffle_start_at_top() {
 }
 
 /// Reproducible README images and the narrow import-dialog regression.
-/// All catalog entries and waveform samples are presentation fixtures, not
-/// downloaded recordings or evidence of live peer availability.
+/// Optional local recordings supply artwork and cached waveforms. Search and
+/// reachability remain presentation fixtures, not evidence of live peers.
 #[test]
 #[ignore = "requires a GTK display and isolated XDG directories"]
 fn documentation_screenshots_and_import_layout() {
@@ -1356,7 +1356,7 @@ fn documentation_screenshots_and_import_layout() {
         favorite: false,
         sources: 1,
     };
-    let tracks = [
+    let mut tracks = vec![
         make_track(1, "Numb", "Linkin Park", "Meteora"),
         make_track(2, "На чёрный день", "Янка Дягилева", "Продано!"),
         make_track(3, "Demo recording", "Великие Октябри", "Demo collection"),
@@ -1368,15 +1368,42 @@ fn documentation_screenshots_and_import_layout() {
             "Всё идёт по плану",
         ),
     ];
-    for track in &tracks {
+    #[derive(serde::Deserialize)]
+    struct LocalCapture {
+        track: Track,
+        audio: std::path::PathBuf,
+        cover: std::path::PathBuf,
+        peaks: Option<Vec<(f64, f64)>>,
+    }
+    let catalog: Vec<LocalCapture> = std::env::var_os("HOPEA_README_CATALOG")
+        .map(|path| serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap())
+        .unwrap_or_default();
+    if !catalog.is_empty() {
+        assert!(catalog.len() >= 5 && catalog.len() < 100);
+        tracks = catalog.iter().map(|item| item.track.clone()).collect();
+        for item in &catalog {
+            let bytes = glib::Bytes::from_owned(std::fs::read(&item.cover).unwrap());
+            crate::library::thumbnails::test_cache_cover(item.track.id, &bytes);
+        }
+        player.test_audio_sink(
+            &gst::ElementFactory::make("fakesink")
+                .property("sync", true)
+                .build()
+                .unwrap(),
+        );
+    }
+    for (index, track) in tracks.iter().take(5).enumerate() {
         let mut track = track.clone();
         track.local = true;
         track.favorite = true;
-        let song = Song::from_remote(
-            &track,
-            &format!("file:///nonexistent/demo-{}.flac", track.id),
-            None,
-        );
+        let cover = catalog
+            .get(index)
+            .map(|item| glib::Bytes::from_owned(std::fs::read(&item.cover).unwrap()));
+        let uri = catalog
+            .get(index)
+            .map(|item| gio::File::for_path(&item.audio).uri().to_string())
+            .unwrap_or_else(|| format!("file:///nonexistent/demo-{}.flac", track.id));
+        let song = Song::from_remote(&track, &uri, cover.as_ref());
         player.queue().add_song(&song);
     }
     let output = std::env::var_os("HOPEA_README_SCREENSHOTS").map(std::path::PathBuf::from);
@@ -1401,32 +1428,60 @@ fn documentation_screenshots_and_import_layout() {
                 .unwrap();
         }
     };
+    if !catalog.is_empty() {
+        player.skip_to(0);
+        player.play();
+        wait();
+        player.seek_position_rel(62_000.0 / tracks[0].duration_ms as f64);
+        player.pause();
+        wait();
+    }
     player.state().set_current_song(player.queue().song_at(0));
     player.state().set_playback_state(&PlaybackState::Playing);
     player.state().set_position(62);
-    // A stable synthetic envelope illustrates the waveform without copyrighted audio.
+    // Use cached samples for supplied recordings; synthetic data is only for tests.
     window.unbind_waveform();
     imp.waveform_view.set_peaks(Some(
-        (0..200)
-            .map(|i| {
-                let amplitude = 0.15
-                    + (i as f64 * 0.23).sin().abs() * (0.3 + (i as f64 * 0.043).sin().abs() * 0.55);
-                (amplitude, amplitude * 0.8)
-            })
-            .collect(),
+        catalog
+            .first()
+            .and_then(|item| item.peaks.clone())
+            .unwrap_or_else(|| {
+                (0..200)
+                    .map(|i| {
+                        let amplitude = 0.15
+                            + (i as f64 * 0.23).sin().abs()
+                                * (0.3 + (i as f64 * 0.043).sin().abs() * 0.55);
+                        (amplitude, amplitude * 0.8)
+                    })
+                    .collect()
+            }),
     ));
-    imp.waveform_view.set_position(62.0 / 210.0);
+    imp.waveform_view
+        .set_position(62_000.0 / tracks[0].duration_ms as f64);
     window.set_default_size(1100, 760);
     imp.main_stack.set_visible_child_name("main-view");
     imp.library_split.set_show_sidebar(false);
     imp.split_view.set_show_sidebar(true);
     GtkWindowExt::present(&window);
     capture("desktop-playback.png");
-    let results = [
+    let mut results = vec![
         tracks[0].clone(),
         make_track(6, "Somewhere I Belong", "Linkin Park", "Meteora"),
         make_track(7, "In the End", "Linkin Park", "Hybrid Theory"),
     ];
+    if !catalog.is_empty() {
+        results = tracks
+            .iter()
+            .filter(|track| {
+                track
+                    .artist
+                    .as_deref()
+                    .unwrap_or_default()
+                    .eq_ignore_ascii_case("Linkin Park")
+            })
+            .cloned()
+            .collect();
+    }
     imp.split_view.set_show_sidebar(false);
     imp.library_split.set_show_sidebar(true);
     panel.test_documentation_search("Linkin Park", &results);
@@ -1447,20 +1502,41 @@ fn documentation_screenshots_and_import_layout() {
     wait();
     imp.split_view.set_show_sidebar(false);
     imp.library_sheet.set_open(false);
+    if !catalog.is_empty() {
+        player.skip_to(1);
+        wait();
+        player.seek_position_rel(62_000.0 / tracks[1].duration_ms as f64);
+        player.pause();
+        wait();
+        imp.waveform_view.set_peaks(catalog[1].peaks.clone());
+        imp.waveform_view
+            .set_position(62_000.0 / tracks[1].duration_ms as f64);
+    }
     player.state().set_current_song(player.queue().song_at(1));
     player.state().set_playback_state(&PlaybackState::Playing);
     player.state().set_position(62);
     capture("mobile-playback.png");
-    panel.test_documentation_search(
-        "Гражданская Оборона",
-        &[
+    let mobile_results = if catalog.is_empty() {
+        vec![
             tracks[4].clone(),
             make_track(8, "Моя оборона", "Гражданская Оборона", "Прыг-скок"),
-        ],
-    );
+        ]
+    } else {
+        tracks
+            .iter()
+            .filter(|track| {
+                track.artist.as_deref().unwrap_or_default().to_lowercase() == "гражданская оборона"
+            })
+            .cloned()
+            .collect()
+    };
+    panel.test_documentation_search("Гражданская Оборона", &mobile_results);
     imp.library_sheet.set_open(true);
     capture("mobile-search.png");
     imp.library_sheet.set_open(false);
+    if !catalog.is_empty() {
+        player.stop();
+    }
     player.state().set_playback_state(&PlaybackState::Stopped);
     let task = glib::spawn_future_local(clone!(
         #[strong]
