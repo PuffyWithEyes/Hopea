@@ -16,7 +16,7 @@ use std::{
 use adw::subclass::prelude::*;
 use glib::clone;
 use gtk::{gdk, glib, graphene, prelude::*};
-use log::{debug, warn};
+use log::debug;
 
 #[derive(Debug, PartialEq)]
 pub struct PeakPair {
@@ -49,7 +49,6 @@ mod imp {
         pub hover_position: Cell<Option<f64>>,
         // left and right channel peaks, normalised between 0 and 1
         pub peaks: RefCell<Option<Vec<PeakPair>>>,
-        pub next_peaks: RefCell<Option<Vec<PeakPair>>>,
         pub tick_id: RefCell<Option<gtk::TickCallbackId>>,
         pub first_frame_time: Cell<Option<i64>>,
         pub factor: Cell<Option<f64>>,
@@ -368,6 +367,64 @@ impl Default for WaveformView {
 
 const ANIMATION_USECS: f64 = 250_000.0;
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    #[ignore = "requires a GTK display and temporary XDG directories"]
+    fn waveform_updates_do_not_restart_reveal() {
+        gtk::init().unwrap();
+        let view = WaveformView::new();
+        view.settings().set_gtk_enable_animations(true);
+        let peaks = vec![(0.25, 0.5), (0.5, 0.0)];
+        view.set_peaks(Some(peaks.clone()));
+        assert_eq!(view.imp().factor.get(), Some(0.0));
+        assert_eq!(view.animate_frame(1_000_000), glib::ControlFlow::Continue);
+        view.animate_frame(1_125_000);
+        let factor = view.imp().factor.get();
+        for _ in 0..100 {
+            view.set_peaks(Some(peaks.clone()));
+            view.set_position(0.5);
+            assert_eq!(view.imp().factor.get(), factor);
+            assert_eq!(view.imp().first_frame_time.get(), Some(1_000_000));
+        }
+        // Removing the callback here substitutes for GTK consuming Break.
+        view.imp().tick_id.take().unwrap().remove();
+        assert_eq!(view.animate_frame(1_250_000), glib::ControlFlow::Break);
+        for _ in 0..100 {
+            view.set_peaks(Some(peaks.clone()));
+            assert!(view.imp().tick_id.borrow().is_none());
+            assert!(view.imp().factor.get().is_none());
+        }
+        // Improved data for the current song also remains fully visible.
+        view.set_peaks(Some(vec![(0.1, 0.2), (0.5, 0.5)]));
+        assert!(view.imp().tick_id.borrow().is_none());
+        assert!(view.imp().factor.get().is_none());
+        // A different song can clear the drawing and reveal it once again.
+        view.set_peaks(None);
+        assert!(view.imp().peaks.borrow().is_none());
+        view.set_peaks(Some(peaks));
+        assert_eq!(view.imp().factor.get(), Some(0.0));
+        view.animate_frame(2_000_000);
+        view.imp().tick_id.take().unwrap().remove();
+        assert_eq!(view.animate_frame(1_999_999), glib::ControlFlow::Break);
+        assert!(view.imp().factor.get().is_none());
+        // Silent/invalid channels must never introduce NaN drawing coordinates.
+        let normalized = view.normalize_peaks(vec![(0.0, 1.0), (f64::NAN, 0.5)]);
+        assert_eq!(
+            normalized,
+            vec![PeakPair::new(0.0, 1.0), PeakPair::new(0.0, 0.5)]
+        );
+        view.set_peaks(Some(Vec::new()));
+        assert!(view.imp().peaks.borrow().is_none());
+        view.settings().set_gtk_enable_animations(false);
+        view.set_peaks(Some(vec![(1.0, 1.0)]));
+        assert!(view.imp().tick_id.borrow().is_none());
+        assert!(view.imp().factor.get().is_none());
+    }
+}
+
 impl WaveformView {
     pub fn new() -> Self {
         Self::default()
@@ -456,21 +513,32 @@ impl WaveformView {
     }
 
     fn normalize_peaks(&self, peaks: Vec<(f64, f64)>) -> Vec<PeakPair> {
-        let right_channel: Vec<f64> = peaks.iter().map(|p| p.0).collect();
-        let left_channel: Vec<f64> = peaks.iter().map(|p| p.1).collect();
-
-        let max_left: f64 = left_channel
-            .iter()
-            .copied()
-            .fold(f64::NEG_INFINITY, f64::max);
-        let max_right: f64 = right_channel
-            .iter()
-            .copied()
-            .fold(f64::NEG_INFINITY, f64::max);
+        let amplitude = |value: f64| {
+            if value.is_finite() {
+                value.max(0.0)
+            } else {
+                0.0
+            }
+        };
+        let max_left = peaks.iter().map(|p| amplitude(p.0)).fold(0.0, f64::max);
+        let max_right = peaks.iter().map(|p| amplitude(p.1)).fold(0.0, f64::max);
 
         let normalized: Vec<PeakPair> = peaks
             .iter()
-            .map(|p| PeakPair::new(p.0 / max_left, p.1 / max_right))
+            .map(|p| {
+                PeakPair::new(
+                    if max_left > 0.0 {
+                        amplitude(p.0) / max_left
+                    } else {
+                        0.0
+                    },
+                    if max_right > 0.0 {
+                        amplitude(p.1) / max_right
+                    } else {
+                        0.0
+                    },
+                )
+            })
             .collect();
 
         debug!("Peaks: {}", normalized.len());
@@ -478,86 +546,58 @@ impl WaveformView {
     }
 
     pub fn set_peaks(&self, peaks: Option<Vec<(f64, f64)>>) {
+        let peak_pairs = peaks
+            .filter(|p| !p.is_empty())
+            .map(|p| self.normalize_peaks(p));
+        // Catalog/cache notifications may repeat the same waveform. In
+        // particular, do not restart an in-progress reveal on those updates.
+        if *self.imp().peaks.borrow() == peak_pairs {
+            return;
+        }
+        let reveal = self.imp().peaks.borrow().is_none() && peak_pairs.is_some();
         if let Some(tick_id) = self.imp().tick_id.replace(None) {
             tick_id.remove();
         }
-
-        let peak_pairs = peaks.map(|p| self.normalize_peaks(p));
-        let enable_animations = self.settings().is_gtk_enable_animations();
-        if !enable_animations {
-            self.imp().peaks.replace(peak_pairs);
-            self.queue_resize();
-            return;
-        }
-
-        self.imp().next_peaks.replace(peak_pairs);
+        self.imp().peaks.replace(peak_pairs);
         self.imp().factor.set(None);
         self.imp().first_frame_time.set(None);
+        // A refreshed waveform replaces the drawing in place. Collapsing an
+        // already available waveform makes background updates look like blinking.
+        if !reveal || !self.settings().is_gtk_enable_animations() {
+            self.queue_resize();
+            self.queue_draw();
+            return;
+        }
+        self.imp().factor.set(Some(0.0));
 
         let tick_id = self.add_tick_callback(clone!(
             #[strong(rename_to = this)]
             self,
-            move |_, clock| {
-                let frame_time = clock.frame_time();
-                if let Some(first_frame_time) = this.imp().first_frame_time.get() {
-                    if frame_time < first_frame_time {
-                        warn!("Frame clock going backwards");
-                        return glib::ControlFlow::Continue;
-                    }
-
-                    let has_peaks = this.imp().peaks.borrow().is_some();
-                    let has_next_peaks = this.imp().next_peaks.borrow().is_some();
-
-                    if has_peaks && has_next_peaks {
-                        // Animate the existing peaks to zero
-                        let progress =
-                            1.0 - ((frame_time - first_frame_time) as f64 / ANIMATION_USECS);
-                        let delta = ease_out_cubic(progress);
-                        if delta < 0.0 {
-                            this.imp().peaks.replace(None);
-                            this.imp().factor.replace(None);
-                        } else {
-                            this.imp().factor.replace(Some(delta));
-                            this.queue_draw();
-                        }
-                    } else if has_peaks && !has_next_peaks {
-                        // Animate the peaks from zero
-                        let progress = (frame_time - first_frame_time) as f64 / ANIMATION_USECS;
-                        let delta = ease_out_cubic(progress);
-                        if delta > 1.0 {
-                            // Animation complete
-                            this.imp().factor.replace(None);
-                            this.imp().first_frame_time.replace(None);
-                            this.imp().tick_id.replace(None);
-                            this.queue_resize();
-                            return glib::ControlFlow::Break;
-                        } else {
-                            this.imp().factor.replace(Some(delta));
-                            this.queue_draw();
-                        }
-                    } else if !has_peaks && has_next_peaks {
-                        // Swap peaks
-                        let next_peaks = this.imp().next_peaks.take();
-                        this.imp().peaks.replace(next_peaks);
-                        this.imp().factor.replace(None);
-                        this.imp().first_frame_time.replace(None);
-                        this.queue_resize();
-                    } else {
-                        // No peaks
-                        this.imp().factor.replace(None);
-                        this.imp().tick_id.replace(None);
-                        this.queue_resize();
-                        return glib::ControlFlow::Break;
-                    }
-                } else {
-                    this.imp().first_frame_time.replace(Some(frame_time));
-                }
-                glib::ControlFlow::Continue
-            }
+            move |_, clock| this.animate_frame(clock.frame_time())
         ));
 
         self.imp().tick_id.replace(Some(tick_id));
         self.queue_resize();
+    }
+
+    fn animate_frame(&self, frame_time: i64) -> glib::ControlFlow {
+        let first = self.imp().first_frame_time.get().unwrap_or(frame_time);
+        self.imp().first_frame_time.set(Some(first));
+        let elapsed = frame_time.saturating_sub(first);
+        // Finish on elapsed time, not an easing value exceeding its range.
+        // A discontinuous platform clock must not leave a permanent callback.
+        if elapsed < 0 || elapsed as f64 >= ANIMATION_USECS {
+            self.imp().factor.set(None);
+            self.imp().first_frame_time.set(None);
+            self.imp().tick_id.take();
+            self.queue_draw();
+            return glib::ControlFlow::Break;
+        }
+        self.imp()
+            .factor
+            .set(Some(ease_out_cubic(elapsed as f64 / ANIMATION_USECS)));
+        self.queue_draw();
+        glib::ControlFlow::Continue
     }
 
     pub fn set_position(&self, position: f64) {
