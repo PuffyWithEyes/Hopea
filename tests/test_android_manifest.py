@@ -79,5 +79,7 @@ with tempfile.TemporaryDirectory() as directory:
         assert gradle.count('details.useVersion("3.11.18-hopea1")') == 1
         assert gradle.count('includeModule("com.chaquo.python", "target")') == 1
         assert '../../.android-python-runtime/maven' in gradle
-        assert int(re.search(r'versionCode (\d+)', gradle).group(1)) > 20261117
+        assert int(re.search(r'versionCode (\d+)', gradle).group(1)) > 20261121
+        version = re.search(r"version: '([^']+)'", (source / 'meson.build').read_text()).group(1)
+        assert f'versionName "{version}-android-preview"' in gradle
 print("Android usage-access manifest: passed")

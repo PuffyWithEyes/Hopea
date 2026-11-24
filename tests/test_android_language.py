@@ -15,7 +15,10 @@ while depth:
     depth += (source[end] == "{") - (source[end] == "}")
     end += 1
 method = source[start:end]
-assert source.index("prepareLanguages();") < source.index("        super.onCreate();")
+# The private import process returns before GTK starts. Check the main-process
+# superclass call, not the more deeply indented import-process early return.
+lines = source.splitlines()
+assert lines.index("        prepareLanguages();") < lines.index("        super.onCreate();")
 test = r'''
 import java.io.File;
 class android {

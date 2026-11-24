@@ -93,8 +93,8 @@ if 'useLegacyPackaging' not in text:
     text = text.replace('android {', 'android {\n    packaging { jniLibs { useLegacyPackaging = true } }', 1)
 text = re.sub(r'minSdk \d+', 'minSdk 28', text)
 # Keep upgrades installable over the previous audio and diagnostic previews.
-text = re.sub(r'versionCode \d+', 'versionCode 20261121', text)
-text = re.sub(r'versionName "[^"]*"', 'versionName "2026.3.2-android-preview"', text)
+text = re.sub(r'versionCode \d+', 'versionCode 20261124', text)
+text = re.sub(r'versionName "[^"]*"', 'versionName "2026.3.5-android-preview"', text)
 path.write_text(text)
 
 # The published Chaquopy target still contains CPython 3.11.17. Only resolve our

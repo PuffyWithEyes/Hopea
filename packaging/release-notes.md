@@ -1,26 +1,30 @@
-# Hopea 2026.3.3 Alpha
+# Hopea 2026.3.5 Alpha
 
-This alpha connects the updated Russian translation, makes PO files the single source for shipped languages, and improves Android input and waveform recovery.
+This alpha adds an experimental Android service importer, improves library startup and album editing, and expands peer discovery and relay recovery.
 
 ## Changes
 
-- Place a translation at `po/<locale>.po` and reconfigure Meson. Catalogs, desktop metadata and the language picker discover it automatically; no Rust language whitelist or manually maintained LINGUAS file is required.
-- System language detection uses native preferences on Windows/macOS, Android configuration (including per-app language settings), and the message locale environment on Linux/BSD. Manual selection takes priority; unavailable languages fall back to English. Language changes still require restarting Hopea.
-- Android loads compiled translations from the extracted app assets. The updated Russian catalog includes “On this computer” and “For You”; some final editor messages remain untranslated.
-- Android touch events retain the same GTK sequence during a drag, and copied event objects are released after processing. Tapping a search result no longer gives the surrounding list row focus before activation.
-- Missing remote waveforms can recover after late download verification, including while paused and after the six initial retries. Catalog notifications are coalesced into bounded local API requests without downloading audio again.
-- Network search uses a compact status indicator. After a minute of inconclusive checks, it explains that connectivity remains unconfirmed instead of showing an indefinite checking state. Green Online requires confirmed direct, IPv6 or relayed reachability.
+- Android now includes the service import adapters and a private import worker. Sign in, choose a collection, then select what to import. VK uses a separate sign-in window; Yandex Music supports device authorization. Spotify requires a registered public Client ID and imports catalog entries for network matching. YouTube Music supports manual headers or exported playlists.
+- The Android importer uses a source-built CPython 3.11.18 runtime on ARM64, ARMv7 and x86-64. Packaging checks reject unexpected permissions, exported components and stale Python runtime files. Import libraries do not request access to the photo library, contacts, camera or microphone.
+- Update the Rust URL parser to 2.5.9 to address its nested-origin stack overflow advisory.
+- Show saved music progressively during startup and simplify album editing, including changing artwork by selecting the cover.
+- Keep completed waveforms visible during repeated playback updates.
+- Reuse bounded public peer history, forward searches through connected users and maintain redundant reverse relay connections. Existing validation and resource limits remain in place.
+- Add a background-running preference: when disabled, closing Hopea also removes its tray icon and stops background operation.
+- Refresh the README and document service-import testing status and security boundaries.
+- Improve Android packaging, DragonFly FFmpeg package selection and ALT repository retry handling.
 
 ## Known limitations
 
-- Hopea has no permanently available public relay. Restrictive NATs still require a reachable source or relay; these changes do not guarantee connectivity between every pair of networks.
-- The Redmi 7A / Android 10 keyboard crash has not been confirmed fixed on the device. The Android touch-sequence fix is regression-tested, but the reported Android 14 volume freeze still needs confirmation on the affected device.
-- Opening VK or Yandex Music on Android does not complete account sign-in or import. Full Android account import is not implemented.
-- Android APKs support API 28 (Android 9) and later and use the persistent preview signing key. They are alpha previews, not production-signed store releases.
+- Android account import is experimental. Automated and build checks do not confirm successful sign-in or import with real accounts. Linux VK and Yandex Music import were manually tested; Android VK previously failed and needs retesting. Other service/platform combinations remain untested.
+- Android cannot reuse another app's private login session, including Sova, Kate Mobile or the official VK client. VK requires signing in within Hopea's dedicated window. Android Spotify imports catalog metadata, not audio through the desktop Spotify helper.
+- Devices with restrictive NAT or blocked transports still need a reachable user device or user relay. Hopea has no permanently available public relay and cannot guarantee that every track or peer is reachable.
+- Previously reported Android device-specific keyboard crashes and volume freezes still need confirmation on affected phones. This release does not claim they are all resolved.
+- Dependency scans are not a guarantee of safety. Remaining Rust advisories and their reviewed usage paths are documented in `docs/IMPORTING.md`; the desktop importer runs with the current user's permissions.
 
 ## Downloads
 
-Choose the package for your OS and architecture. Android: ARM64 for most current phones, ARMv7 for 32-bit ARM devices, x86-64 for compatible emulators/devices. Alpine `.apk` files are Linux packages, not Android apps.
+Choose the package for your OS and architecture. Android previews require Android 9 or later: ARM64 for most current phones, ARMv7 for 32-bit ARM devices, x86-64 for compatible emulators/devices. APK updates use the existing preview signing key. Alpine `.apk` files are Linux packages, not Android apps.
 
 Linux native packages require GTK 4.20+ and libadwaita 1.8+; older distributions can use the Flatpak bundle. Windows Setup EXE and portable ZIP include their runtime; the per-user installer is unsigned. macOS bottles use Homebrew dependencies. BSD packages remain experimental.
 
