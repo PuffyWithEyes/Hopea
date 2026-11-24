@@ -33,7 +33,9 @@ cp "$repo/build-aux/android/android.cross" "$stage/hopea-rust.cross"
 cp "$repo/build-aux/android/hopea.xml" "$stage/hopea-android.xml"
 sed -i "s/aarch64/$arch/g" "$stage/hopea-android.xml"
 chmod +x "$stage/android-cargo.sh"
-if [[ "${HOPEA_ANDROID_REBUILD_TOOLCHAIN:-0}" == 1 ]] || ! docker image inspect hopea-android-toolchain >/dev/null 2>&1; then
+if [[ "${HOPEA_ANDROID_REBUILD_TOOLCHAIN:-0}" == 1 ]] \
+  || ! docker image inspect hopea-android-toolchain >/dev/null 2>&1 \
+  || ! docker run --rm hopea-android-toolchain bash -c 'command -v zip >/dev/null && python3.11 --version' >/dev/null 2>&1; then
   docker build -t hopea-android-toolchain "$repo/build-aux/android"
 fi
 docker run --init --rm --env "HOPEA_ANDROID_ARCH=$arch" --mount "type=bind,src=$stage,dst=/work" --workdir /work \

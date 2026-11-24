@@ -24,6 +24,10 @@ public final class HopeaApplication extends org.gtk.android.RuntimeApplication {
 
     @Override
     public void onCreate() {
+        if (Application.getProcessName().endsWith(":import")) {
+            super.onCreate();
+            return;
+        }
         // Resources includes Android's per-app language override. Export it
         // before super.onCreate starts GTK; Android has no desktop LANG setup.
         prepareLanguages();

@@ -11,7 +11,7 @@ required = {
     "libgstcoreelements.so", "libgstplayback.so", "libgsttypefindfunctions.so",
     "libgstaudioconvert.so", "libgstaudioresample.so", "libgstautodetect.so",
     "libgstopensles.so", "libgstlibav.so", "libgstsoup.so", "libsoup-3.0.so",
-    "libgstlevel.so", "libgstisomp4.so", "libgstaudioparsers.so",
+    "libgstlevel.so", "libgstisomp4.so", "libgstaudioparsers.so", "libgstflac.so",
 }
 libraries = {path.name: path for path in root.glob("*.so")}
 missing = required - libraries.keys()

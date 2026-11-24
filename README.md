@@ -39,6 +39,19 @@ recipes. Availability and runtime testing differ between platforms; see
 [platform notes](docs/PLATFORMS.md) and the [package guide](packaging/README.md).
 For NixOS and Home Manager, use the [Nix guide](nix/README.md).
 
+## Service import testing
+
+This table records manual testing, not just whether an adapter exists.
+
+| Platform | VK | Yandex Music | Spotify | YouTube Music |
+| --- | --- | --- | --- | --- |
+| Linux | Tested | Tested | Not tested | Not tested |
+| Android | Tested; currently not working | Not tested | Not tested | Not tested |
+| Other platforms | Not tested | Not tested | Not tested | Not tested |
+
+Android import is being implemented. Automated checks do not establish that
+sign-in and music import work with a real account on a device.
+
 ## Build and run
 
 With Nix installed, from the project directory:

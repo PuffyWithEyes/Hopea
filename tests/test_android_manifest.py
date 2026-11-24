@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Build configuration check; never reads a device or user profile."""
 import subprocess
+import importlib.util
 import os
 import re
 import sys
@@ -10,6 +11,9 @@ from pathlib import Path
 from xml.etree import ElementTree as ET
 
 source = Path(__file__).resolve().parents[1]
+spec = importlib.util.spec_from_file_location("privacy", source / "build-aux/android/check-privacy.py")
+privacy = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(privacy)
 with tempfile.TemporaryDirectory() as directory:
     root = Path(directory)
     app = root / ".pixiewood/android/app"
@@ -31,7 +35,36 @@ with tempfile.TemporaryDirectory() as directory:
                           "android.intent.category.BROWSABLE"]
     assert [node.get("{http://schemas.android.com/apk/res/android}scheme")
             for node in xml.findall("queries/intent/data")] == ["https"]
-    assert len(xml.findall("application/service")) == 1
+    assert len(xml.findall("application/service")) == 2
+    importer = next(s for s in xml.findall("application/service") if s.get(name).endswith('.ImportService'))
+    assert importer.get('{http://schemas.android.com/apk/res/android}exported') == 'false'
+    assert importer.get('{http://schemas.android.com/apk/res/android}process') == ':import'
+    login = next(s for s in xml.findall("application/activity") if s.get(name).endswith('.VkSignInActivity'))
+    assert login.get('{http://schemas.android.com/apk/res/android}exported') == 'false'
+    privacy.check(xml)
+    # A dependency may add these during manifest merging. Never silently ship it.
+    for tag, attributes in [
+        ("uses-permission", {name: "android.permission.READ_MEDIA_IMAGES"}),
+        ("uses-permission-sdk-23", {name: "android.permission.READ_EXTERNAL_STORAGE"}),
+    ]:
+        added = ET.SubElement(xml, tag, attributes)
+        try:
+            privacy.check(xml)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("Unreviewed media permission accepted")
+        xml.remove(added)
+    app_xml = xml.find("application")
+    added = ET.SubElement(app_xml, "provider", {name: "untrusted.ExportedProvider",
+        '{http://schemas.android.com/apk/res/android}exported': 'true'})
+    try:
+        privacy.check(xml)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("Exported provider accepted")
+    app_xml.remove(added)
     required = "{http://schemas.android.com/apk/res/android}required"
     features = {node.get(name): node.get(required) for node in xml.findall("uses-feature")}
     assert features == {"android.hardware.touchscreen": "false", "android.hardware.faketouch": "false"}
@@ -43,5 +76,8 @@ with tempfile.TemporaryDirectory() as directory:
                        cwd=root, check=True, env={**os.environ, 'HOPEA_ANDROID_ARCH': architecture})
         assert f'minSdk {minimum}\n' in (app / 'build.gradle').read_text()
         gradle = (app / 'build.gradle').read_text()
+        assert gradle.count('details.useVersion("3.11.18-hopea1")') == 1
+        assert gradle.count('includeModule("com.chaquo.python", "target")') == 1
+        assert '../../.android-python-runtime/maven' in gradle
         assert int(re.search(r'versionCode (\d+)', gradle).group(1)) > 20261117
 print("Android usage-access manifest: passed")

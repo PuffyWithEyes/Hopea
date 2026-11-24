@@ -26,7 +26,7 @@ struct ImportJob {
     paused_for_game: Cell<bool>,
     cancelled: Cell<bool>,
     finished: Cell<bool>,
-    processes: RefCell<Vec<gio::Subprocess>>,
+    processes: RefCell<Vec<library::service_import::Process>>,
 }
 
 impl ImportJob {
@@ -349,7 +349,9 @@ impl LibraryPanel {
             let audio =
                 library::spotify_audio::SpotifyAudio::start(&request.secret, &request.directory)
                     .await?;
-            job.processes.borrow_mut().push(audio.process.clone());
+            job.processes
+                .borrow_mut()
+                .push(audio.process.clone().into());
             Some(audio)
         } else {
             None
@@ -1338,7 +1340,7 @@ impl LibraryPanel {
         preparing
             .processes
             .borrow_mut()
-            .push(preparation_process.clone());
+            .push(preparation_process.clone().into());
         AdwDialogExt::present(&preparing.dialog, Some(&window));
         preparing
             .dialog
@@ -1406,7 +1408,7 @@ impl LibraryPanel {
                 gio::SubprocessFlags::NONE,
             )
             .unwrap();
-            job.processes.borrow_mut().push(process);
+            job.processes.borrow_mut().push(process.into());
         }
         AdwDialogExt::present(&job.dialog, Some(&window));
         job.hide_preparation();

@@ -38,6 +38,9 @@ fi
 if ! grep -q 'hopeaPreserveUserFiles' subprojects/gtk/gdk/android/glue/java/org/gtk/android/RuntimeApplication.java; then
   patch --batch --fuzz=0 -d subprojects/gtk -p1 < build-aux/android/storage-preservation.patch
 fi
+if ! grep -q 'Hopea: the disposable importer' subprojects/gtk/gdk/android/glue/java/org/gtk/android/RuntimeApplication.java; then
+  patch --batch --fuzz=0 -d subprojects/gtk -p1 < build-aux/android/import-runtime.patch
+fi
 if ! grep -q 'Hopea: dynamic system colors' subprojects/gtk/gdk/android/gdkandroidinit.c; then
   patch --batch --fuzz=0 -d subprojects/gtk -p1 < build-aux/android/gtk-compat.patch
 fi
@@ -79,6 +82,7 @@ meson setup --reconfigure "$build_dir" \
   -Dgstreamer:tests=disabled -Dgstreamer:examples=disabled \
   -Dgst-plugins-base:tests=disabled -Dgst-plugins-base:examples=disabled \
   -Dgst-plugins-good:tests=disabled -Dgst-plugins-good:examples=disabled \
+  -Dgst-plugins-good:flac=enabled \
   -Dgst-plugins-bad:tests=disabled -Dgst-plugins-bad:examples=disabled \
   -Dgstreamer-full:libav=enabled \
   -Dgst-plugins-ugly:tests=disabled

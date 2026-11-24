@@ -64,6 +64,11 @@ if import_test_python.found()
     suite: ['import'],
     timeout: 30,
   )
+  test('Android service import protocol', import_test_python,
+    args: ['-I', files('tests/test_android_import.py')],
+    suite: ['import'],
+    timeout: 30,
+  )
 endif
 if reuse.found()
   test('license',

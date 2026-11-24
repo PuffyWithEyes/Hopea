@@ -11,6 +11,66 @@ use serde::{Deserialize, Serialize};
 
 use crate::i18n::i18n;
 
+#[cfg(target_os = "android")]
+#[path = "service_import_android.rs"]
+mod android;
+#[cfg(any(target_os = "android", test))]
+#[path = "service_import_audio.rs"]
+mod audio;
+
+/// Desktop child process or Android's private bound service. Both expose the
+/// same bounded pipe protocol and keep credentials out of intents and logs.
+#[derive(Clone)]
+pub enum Process {
+    Desktop(gio::Subprocess),
+    #[cfg(target_os = "android")]
+    Android(std::rc::Rc<android::Process>),
+}
+
+impl From<gio::Subprocess> for Process {
+    fn from(process: gio::Subprocess) -> Self {
+        Self::Desktop(process)
+    }
+}
+
+impl Process {
+    pub fn identifier(&self) -> Option<String> {
+        match self {
+            Self::Desktop(p) => p.identifier().map(|s| s.to_string()),
+            #[cfg(target_os = "android")]
+            Self::Android(p) => p.running().then(|| "android-import".into()),
+        }
+    }
+    pub fn force_exit(&self) {
+        match self {
+            Self::Desktop(p) => p.force_exit(),
+            #[cfg(target_os = "android")]
+            Self::Android(p) => p.cancel(),
+        }
+    }
+    pub async fn wait_future(&self) -> Result<(), glib::Error> {
+        match self {
+            Self::Desktop(p) => p.wait_future().await,
+            #[cfg(target_os = "android")]
+            Self::Android(p) => p.wait().await,
+        }
+    }
+    fn stdin_pipe(&self) -> Option<gio::OutputStream> {
+        match self {
+            Self::Desktop(p) => p.stdin_pipe(),
+            #[cfg(target_os = "android")]
+            Self::Android(p) => Some(p.connection.output_stream()),
+        }
+    }
+    fn stdout_pipe(&self) -> Option<gio::InputStream> {
+        match self {
+            Self::Desktop(p) => p.stdout_pipe(),
+            #[cfg(target_os = "android")]
+            Self::Android(p) => Some(p.connection.input_stream()),
+        }
+    }
+}
+
 #[derive(Serialize)]
 pub struct Request {
     pub service: String,
@@ -65,7 +125,7 @@ pub enum Event {
 
 #[derive(Clone)]
 pub struct Worker {
-    pub process: gio::Subprocess,
+    pub process: Process,
     output: gio::DataInputStream,
     directory: PathBuf,
     _lifetime: std::rc::Rc<ProcessLifetime>,
@@ -83,7 +143,6 @@ impl Worker {
         .await
     }
 
-    #[cfg(not(target_os = "android"))]
     pub async fn authenticate(service: &str, client_id: &str) -> Result<Self, String> {
         Self::start_script(
             serde_json::json!({"service": service, "client_id": client_id}),
@@ -100,13 +159,26 @@ impl Worker {
         keep_stdin: bool,
         script: &str,
     ) -> Result<Self, String> {
-        let python = std::env::var_os("HOPEA_IMPORT_PYTHON")
-            .or_else(|| std::env::var_os("ANYSIK_IMPORT_PYTHON"))
-            .or_else(|| {
-                crate::beside_program("lib/hopea-import/bin/python3").map(|p| p.into_os_string())
-            })
-            .unwrap_or_else(|| "python3".into());
-        let process = gio::Subprocess::newv(
+        #[cfg(target_os = "android")]
+        let process = android::Process::start(if script == include_str!("service_auth.py") {
+            if request["service"] == "vk" {
+                2
+            } else {
+                1
+            }
+        } else {
+            0
+        })?;
+        #[cfg(not(target_os = "android"))]
+        let process = {
+            let python = std::env::var_os("HOPEA_IMPORT_PYTHON")
+                .or_else(|| std::env::var_os("ANYSIK_IMPORT_PYTHON"))
+                .or_else(|| {
+                    crate::beside_program("lib/hopea-import/bin/python3")
+                        .map(|p| p.into_os_string())
+                })
+                .unwrap_or_else(|| "python3".into());
+            let process = gio::Subprocess::newv(
             &[
                 python.as_os_str(),
                 OsStr::new("-I"),
@@ -119,6 +191,8 @@ impl Worker {
                 | gio::SubprocessFlags::STDERR_SILENCE,
         )
         .map_err(|_| i18n("Unable to start the service importer. Install its dependencies as described in IMPORTING.md."))?;
+            Process::Desktop(process)
+        };
         let worker = Self::from_process(process, directory);
         let mut input = serde_json::to_vec(&request).map_err(|e| e.to_string())?;
         input.push(b'\n');
@@ -142,7 +216,7 @@ impl Worker {
         Ok(worker)
     }
 
-    fn from_process(process: gio::Subprocess, directory: PathBuf) -> Self {
+    fn from_process(process: Process, directory: PathBuf) -> Self {
         Self {
             output: gio::DataInputStream::new(&process.stdout_pipe().unwrap()),
             _lifetime: ProcessLifetime::new(&process),
@@ -153,7 +227,7 @@ impl Worker {
 
     #[cfg(test)]
     pub(crate) fn test_process(process: gio::Subprocess, directory: PathBuf) -> Self {
-        Self::from_process(process, directory)
+        Self::from_process(process.into(), directory)
     }
 
     pub async fn command(&self, command: serde_json::Value) -> Result<(), String> {
@@ -179,9 +253,11 @@ impl Worker {
         else {
             return Ok(None);
         };
-        serde_json::from_slice(&line)
-            .map(Some)
-            .map_err(|_| i18n("The service importer returned an invalid result"))
+        let event: Event = serde_json::from_slice(&line)
+            .map_err(|_| i18n("The service importer returned an invalid result"))?;
+        #[cfg(target_os = "android")]
+        let event = android::prepare_download(event, &self.directory, &self.process).await?;
+        Ok(Some(event))
     }
 
     /// Only accept completed files from this job's download directory.
@@ -290,18 +366,24 @@ pub async fn browser_session(service: &str, browser: &str) -> Result<(String, St
     result
 }
 
-pub fn cancel(process: &gio::Subprocess) {
-    #[cfg(unix)]
-    process.send_signal(15);
-    #[cfg(not(unix))]
-    process.force_exit();
+pub fn cancel(process: &Process) {
+    match process {
+        Process::Desktop(p) => {
+            #[cfg(unix)]
+            p.send_signal(15);
+            #[cfg(not(unix))]
+            p.force_exit();
+        }
+        #[cfg(target_os = "android")]
+        Process::Android(p) => p.cancel(),
+    }
 }
 
 // Preview and background import share a process. Only the last owner may
 // stop it; dropping a preview must not kill the active import.
-pub(super) struct ProcessLifetime(gio::Subprocess);
+pub(super) struct ProcessLifetime(Process);
 impl ProcessLifetime {
-    pub(super) fn new(process: &gio::Subprocess) -> std::rc::Rc<Self> {
+    pub(super) fn new(process: &Process) -> std::rc::Rc<Self> {
         std::rc::Rc::new(Self(process.clone()))
     }
 }
@@ -399,7 +481,7 @@ mod lifetime_tests {
                 gio::SubprocessFlags::STDIN_PIPE | gio::SubprocessFlags::STDOUT_PIPE
                     | gio::SubprocessFlags::STDERR_SILENCE,
             ).unwrap();
-                    let worker = Worker::from_process(process.clone(), std::env::temp_dir());
+                    let worker = Worker::from_process(process.clone().into(), std::env::temp_dir());
                     let preview = worker.clone();
                     preview
                         .command(serde_json::json!({"preview":true}))

@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: 2026  Daniil Klimov
 # SPDX-License-Identifier: GPL-3.0-or-later
-# Transitive versions checked with pip-audit on 2026-11-12.
+# Desktop and Android import versions checked with pip-audit on 2026-11-24.
 # Re-audit and run the import tests when updating these pins.
 certifi==2026.10.23
 cffi==2.1.1

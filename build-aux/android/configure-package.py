@@ -65,9 +65,30 @@ name = 'io.hopea.hopea.PlaybackService'
 if not any(s.get(key('name')) == name for s in application.findall('service')):
     ET.SubElement(application, 'service', {key('name'): name,
         key('exported'): 'false', key('foregroundServiceType'): 'mediaPlayback'})
+name = 'io.hopea.hopea.ImportService'
+if not any(s.get(key('name')) == name for s in application.findall('service')):
+    ET.SubElement(application, 'service', {key('name'): name,
+        key('exported'): 'false', key('process'): ':import', key('stopWithTask'): 'true'})
+name = 'io.hopea.hopea.VkSignInActivity'
+if not any(s.get(key('name')) == name for s in application.findall('activity')):
+    ET.SubElement(application, 'activity', {key('name'): name,
+        key('exported'): 'false', key('excludeFromRecents'): 'true',
+        key('theme'): '@android:style/Theme.Material.NoActionBar',
+        key('configChanges'): 'orientation|screenSize|keyboardHidden'})
 tree.write(path, encoding='utf-8', xml_declaration=True)
 path = app / 'build.gradle'
 text = path.read_text()
+if 'com.chaquo.python' not in text:
+    text = text.replace('plugins {', 'plugins {\n    id "com.chaquo.python" version "17.2.0"', 1)
+    text += '''
+chaquopy {
+    defaultConfig {
+        // Python 3.11 retains ARMv7 support on Android 9.
+        version = "3.11"
+        pip { install("-r", "import-requirements.txt") }
+    }
+}
+'''
 if 'useLegacyPackaging' not in text:
     text = text.replace('android {', 'android {\n    packaging { jniLibs { useLegacyPackaging = true } }', 1)
 text = re.sub(r'minSdk \d+', 'minSdk 28', text)
@@ -75,3 +96,32 @@ text = re.sub(r'minSdk \d+', 'minSdk 28', text)
 text = re.sub(r'versionCode \d+', 'versionCode 20261121', text)
 text = re.sub(r'versionName "[^"]*"', 'versionName "2026.3.2-android-preview"', text)
 path.write_text(text)
+
+# The published Chaquopy target still contains CPython 3.11.17. Only resolve our
+# source-built security update; never silently fall back to the older runtime.
+text = text.split('\n// Hopea CPython security update\n', 1)[0]
+text += '''
+// Hopea CPython security update
+buildscript.repositories {
+    maven {
+        url = rootProject.file("../../.android-python-runtime/maven").toURI()
+        content { includeModule("com.chaquo.python", "target") }
+    }
+}
+// Chaquopy 17.2 uses detached buildscript configurations: the project's
+// configurations.configureEach does not reach them.
+afterEvaluate {
+    plugins.getPlugin("com.chaquo.python").configs.values().each { config ->
+        config.resolutionStrategy.eachDependency { details ->
+            if (details.requested.group == "com.chaquo.python" && details.requested.name == "target") {
+                details.useVersion("3.11.18-hopea1")
+            }
+        }
+    }
+}
+'''
+path.write_text(text)
+settings = app.parent / 'settings.gradle'
+if settings.exists():
+    text = settings.read_text().split('\n// Hopea CPython security update\n', 1)[0]
+    settings.write_text(text)

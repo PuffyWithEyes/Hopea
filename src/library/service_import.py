@@ -237,7 +237,7 @@ def vk(request):
     from vk_api.audio import VkAudio, scrap_ids, scrap_tracks
     from vk_api.vk_api import DEFAULT_USERAGENT
     owner = request.get("account", "").strip()
-    if not re.fullmatch(r"[1-9][0-9]*", owner):
+    if owner and not re.fullmatch(r"[1-9][0-9]*", owner):
         raise ImportFailure("Enter your numeric VK user ID")
     session = requests.Session()
     credential = request["secret"].strip()
@@ -265,6 +265,8 @@ def vk(request):
         viewer, user_agent = vk_browser_identity(list(session.cookies))
         if user_agent:
             session.headers["User-Agent"] = user_agent
+    if not owner:
+        owner = viewer
     original_request = session.request
     reloaded_covers = {}
 
@@ -583,6 +585,8 @@ def browser_session(request):
 
 def download(track, request, directory):
     """Only final FLAC files become checkpoints; failed partials are retried."""
+    if callable(request.get("_download")):
+        return request["_download"](track, request, directory)
     from yt_dlp import YoutubeDL
     key = hashlib.sha256((request["service"] + ":" + track["key"]).encode()).hexdigest()
     target = directory / f"{key}.flac"
@@ -699,7 +703,7 @@ def run(request, emit):
 
 def browse(request, emit, commands):
     """Keep provider download callbacks in memory until Rust requests a selected track."""
-    if request.get("download") and request["service"] != "spotify":
+    if request.get("download") and request["service"] != "spotify" and not callable(request.get("_download")):
         import shutil
         import yt_dlp
         if not shutil.which("ffmpeg"):

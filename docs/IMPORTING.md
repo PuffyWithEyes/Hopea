@@ -12,7 +12,8 @@ does not grant permission to redistribute music. Share only music you have
 permission to share. This notice does not perform subscription verification.
 
 The **Import** button becomes available after you enter session data or a token;
-VK also requires a positive numeric profile ID. The button is disabled during
+VK also requires a positive numeric profile ID on desktop; on Android, leaving
+it empty selects the signed-in account. The button is disabled during
 sign-in, and missing information is listed below the form. Empty links and lists
 cannot be submitted either. Startup errors appear in a separate dialog even when
 the search panel is closed.
@@ -255,8 +256,11 @@ quality.
 A `cargo-audit 0.22.1` check on November 12, 2026 found outdated TLS dependencies
 in the original Rustls configuration. It was replaced with `native-tls`, using
 system TLS and normal certificate verification. The old rustls 0.22 and
-rustls-webpki 0.102 dependencies were removed. Auditing the shared lockfile still
-reports:
+rustls-webpki 0.102 dependencies were removed. A repeat audit on November 24,
+2026 found `RUSTSEC-2026-0592` in `url 2.5.8`. The root and node lockfiles were
+updated to `url 2.5.9`, which fixes the nested `blob:` URL stack overflow
+([RustSec advisory](https://rustsec.org/advisories/RUSTSEC-2026-0592.html)).
+After that update, the root lockfile still reports four advisories:
 
 - `RUSTSEC-2026-0194/0195`, quick-xml 0.38.4: librespot uses the ordinary `Reader`
   and does not iterate attributes. The vulnerable `NsReader` and duplicate
@@ -264,12 +268,19 @@ reports:
 - `RUSTSEC-2023-0071`, rsa 0.9.10: librespot verifies the server signature using a
   public key. The vulnerable private-key operation is not used in this path.
 - `RUSTSEC-2026-0293`, ringbuf 0.4.8: an existing P2P node dependency that is not
-  part of the separate Spotify process. This warning was not fixed here.
+  part of the separate Spotify process. The inspected librqbit-utp 0.7.0 path
+  stores `u8` in `SharedRb<Heap<u8>>`; bytes have no destructor that can panic,
+  which is the advisory's trigger. The dependency is still affected in general
+  and has not been upgraded here. This is the only vulnerability advisory in
+  the separately audited node lockfile.
 
 This is an assessment of known warnings' applicability, not a clean audit result
 or a guarantee that no other issues exist. No warnings were added to an ignore
 list. Repeat the audit and call-path inspection when updating librespot.
-To repeat the audit, run `cargo audit --json`. Worker tests:
+The audit also reports maintenance notices for chrono, humantime, paste,
+zbus_names, zvariant and zvariant_derive. They have not been hidden or treated as
+proof of data theft. To repeat the audits, run `cargo audit --json` and
+`cargo audit --file node/Cargo.lock --json`. Worker tests:
 `cargo test -p hopea-spotify --target-dir _builddir/src -- --include-ignored`
 inside `nix-shell`.
 
@@ -280,8 +291,13 @@ vulnerabilities and skipped no packages. This checks published vulnerabilities;
 it is not a complete source audit or a safety guarantee.
 Direct versions are pinned in `build-aux/import-requirements.txt`, transitive
 versions in `build-aux/import-constraints.txt`. Updates require repeat checks.
+The November 24 requirement audits found no known vulnerabilities among the
+21 desktop and 15 Android import packages. The result and permission boundaries
+are described in [the sign-in guide](SERVICE_SIGN_IN.md#data-access-and-dependency-checks).
 
-Passwords are entered on the service's website in a browser. The application does
+Passwords are entered on the service's website in a browser (or the dedicated
+VK sign-in WebView on Android). See [Android data access and dependency checks](SERVICE_SIGN_IN.md#data-access-and-dependency-checks)
+for the embedded runtime's permissions and limitations. The application does
 not retain cookies for later sign-ins or write them to settings or logs. Cookies
 from other sites are not passed to the player. When reading a regular profile,
 yt-dlp creates a temporary copy of the cookie database and removes it after

@@ -46,6 +46,8 @@ jobs:
         run: |
           bash tests/test_android_build.sh
           python3 tests/test_android_manifest.py
+          python3 tests/test_android_import.py
+          python3 tests/test_android_import_runtime.py
           python3 tests/test_android_crash_report.py
           python3 tests/test_android_language.py
           python3 tests/test_android_keyboard.py

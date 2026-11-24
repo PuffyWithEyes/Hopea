@@ -7,7 +7,6 @@ mod import_preview;
 mod import_review;
 mod import_warnings;
 mod search_results;
-#[cfg(not(target_os = "android"))]
 mod service_sign_in;
 mod sign_in_help;
 
@@ -105,6 +104,7 @@ fn account_import_problem(
     }
     let account = account.trim();
     if service == 0
+        && !(cfg!(target_os = "android") && account.is_empty())
         && !(account.starts_with(|c: char| matches!(c, '1'..='9'))
             && account.bytes().all(|c| c.is_ascii_digit()))
     {
@@ -1168,20 +1168,10 @@ impl LibraryPanel {
         &self,
         service: &str,
     ) -> Result<Option<(String, String)>, String> {
-        let url = match service {
-            // Older Android clients commonly register vk.com, not vk.ru.
-            "vk" => "https://vk.com/audio",
-            "yandex" => "https://music.yandex.ru/",
-            "spotify" => "https://open.spotify.com/",
-            _ => "https://music.youtube.com/library",
-        };
-        // The Android activity tries a non-browser handler before falling back
-        // to the browser. Other apps' private sessions cannot be read here.
-        gtk::UriLauncher::new(url)
-            .launch_future(self.window().as_ref())
-            .await
-            .map_err(|_| i18n("Unable to open the music service"))?;
-        Ok(None)
+        if service == "youtube" {
+            return Err(i18n("YouTube Music sign-in cannot return a music session to Hopea on Android. Use exported session headers or import an exported playlist."));
+        }
+        self.sign_in_service(service).await
     }
 
     #[cfg(not(target_os = "android"))]
@@ -1262,18 +1252,22 @@ impl LibraryPanel {
             .title(i18n("Session Cookie or Access Token"))
             .build();
         let account = adw::EntryRow::builder()
-            .title(i18n("VK Profile ID to Import"))
+            .title(if cfg!(target_os = "android") {
+                i18n("VK Profile ID (optional)")
+            } else {
+                i18n("VK Profile ID to Import")
+            })
             .build();
         let default_browser_button = adw::ButtonRow::builder()
             .title(if cfg!(target_os = "android") {
-                i18n("Open Service App…")
+                i18n("Sign In…")
             } else {
                 i18n("Sign In with Default Browser…")
             })
             .start_icon_name("hopea-web-browser-symbolic")
             .build();
         if cfg!(target_os = "android") {
-            default_browser_button.set_tooltip_text(Some(&i18n("Opens the installed service app, or your browser if it is unavailable. This does not grant Hopea access to the account.")));
+            default_browser_button.set_tooltip_text(Some(&i18n("Authorize access to your music. Hopea receives sign-in data automatically when the service supports it.")));
         }
         default_browser_button.connect_activated(clone!(
             #[weak(rename_to = panel)]
@@ -1366,12 +1360,26 @@ impl LibraryPanel {
                 secret.set_text("");
                 download.set_sensitive(true);
                 download.set_active(true);
+                if cfg!(target_os = "android") && service.selected() == 2 {
+                    // The desktop librespot executable is not part of the APK.
+                    download.set_active(false);
+                    download.set_sensitive(false);
+                }
                 hint.set_text(&match service.selected() {
                     0 => i18n("Sign in with your browser, then enter the profile ID whose music you want to import. This can be your own profile or another profile whose audio you can access. Signing in keeps the ID you entered."),
                     1 => i18n("Sign in with your browser and confirm the displayed device code, or enter a Yandex Music OAuth token. The importer reads liked songs, playlists and saved albums. Audio availability depends on your account."),
                     2 => i18n("Sign in with your browser using your Spotify application’s public Client ID, or enter an OAuth access token with user-library-read, playlist-read-private, playlist-read-collaborative and streaming permissions. Direct audio import uses librespot and requires Premium; some accounts are incompatible with Spotify's current audio access. Turn off audio download to import song names only."),
                     _ => i18n("Sign in with your browser, or paste the JSON session headers used by ytmusicapi. The importer reads library songs, likes, playlists and albums."),
                 });
+                if cfg!(target_os = "android") {
+                    hint.set_text(&match service.selected() {
+                        0 => i18n("Sign in to VK in Hopea's sign-in window. Sessions from installed VK clients cannot be transferred. Your session is used only for this import."),
+                        1 => i18n("Confirm the device code in Yandex Music or your browser. Return to Hopea to choose songs, playlists and albums."),
+                        2 => i18n("Authorize your Spotify application in the browser. On Android, selected songs are imported as names to find on the network; direct Spotify audio download is unavailable."),
+                        _ => i18n("Automatic YouTube Music sign-in is unavailable on Android. Paste exported ytmusicapi session headers, or import an exported playlist instead."),
+                    });
+                    default_browser_button.set_visible(service.selected() != 3);
+                }
             }
         );
         update(&service);
@@ -1411,8 +1419,6 @@ impl LibraryPanel {
             .extra_child(&content)
             .close_response("cancel")
             .build();
-        #[cfg(target_os = "android")]
-        dialog.set_body(&i18n("Account import is not available in this experimental Android build. You can open the service app here, or add audio files using Share Songs."));
         dialog.add_response("cancel", &i18n("_Cancel"));
         dialog.add_response("import", &i18n("_Import"));
         dialog.set_response_appearance("import", adw::ResponseAppearance::Suggested);
@@ -1434,10 +1440,7 @@ impl LibraryPanel {
                     &account.text(),
                     !service.is_sensitive(),
                 );
-                dialog.set_response_enabled(
-                    "import",
-                    problem.is_none() && !cfg!(target_os = "android"),
-                );
+                dialog.set_response_enabled("import", problem.is_none());
                 validation.set_text(problem.as_deref().unwrap_or(""));
                 validation.set_visible(problem.is_some());
             }

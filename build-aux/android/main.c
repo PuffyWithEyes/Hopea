@@ -8,6 +8,8 @@
 extern void hopea_android_action(int action);
 
 static jclass service;
+static jclass import_service;
+static jmethodID import_start, import_running, import_cancel;
 static jmethodID update_method, vpn_method, game_method, usage_method, keyboard_method;
 static JavaVM *game_vm;
 static void media_action(JNIEnv *env, jclass klass, jint action) {
@@ -49,6 +51,17 @@ static JNIEnv *bridge(void) {
   if ((*env)->ExceptionCheck(env) || !init || !update_method || !vpn_method || !game_method || !usage_method || !keyboard_method) goto failed;
   (*env)->CallStaticVoidMethod(env, klass, init, activity);
   if ((*env)->ExceptionCheck(env)) goto failed;
+  jstring import_name = (*env)->NewStringUTF(env, "io.hopea.hopea.ImportBridge");
+  jclass importer = (*env)->CallObjectMethod(env, loader, load, import_name);
+  if ((*env)->ExceptionCheck(env) || !importer) goto failed;
+  jmethodID import_init = (*env)->GetStaticMethodID(env, importer, "initialize", "(Landroid/content/Context;)V");
+  import_start = (*env)->GetStaticMethodID(env, importer, "start", "(II)I");
+  import_running = (*env)->GetStaticMethodID(env, importer, "running", "(I)I");
+  import_cancel = (*env)->GetStaticMethodID(env, importer, "cancel", "(I)V");
+  if ((*env)->ExceptionCheck(env) || !import_init || !import_start || !import_running || !import_cancel) goto failed;
+  (*env)->CallStaticVoidMethod(env, importer, import_init, activity);
+  if ((*env)->ExceptionCheck(env)) goto failed;
+  import_service = (*env)->NewGlobalRef(env, importer);
   service = (*env)->NewGlobalRef(env, klass);
   if (!service || (*env)->GetJavaVM(env, &game_vm) != JNI_OK) goto failed;
   (*env)->PopLocalFrame(env, NULL);
@@ -56,10 +69,31 @@ static JNIEnv *bridge(void) {
 failed:
   (*env)->ExceptionClear(env);
   if (service) { (*env)->DeleteGlobalRef(env, service); service = NULL; }
+  if (import_service) { (*env)->DeleteGlobalRef(env, import_service); import_service = NULL; }
   game_vm = NULL;
   (*env)->PopLocalFrame(env, NULL);
   g_warning("Android media integration could not initialize");
   return NULL;
+}
+int hopea_android_import_start(int fd, int mode) {
+  JNIEnv *env = bridge();
+  if (!env || !import_service) return -1;
+  int result = (*env)->CallStaticIntMethod(env, import_service, import_start, fd, mode);
+  if ((*env)->ExceptionCheck(env)) { (*env)->ExceptionClear(env); return -1; }
+  return result;
+}
+int hopea_android_import_running(int id) {
+  JNIEnv *env = bridge();
+  if (!env || !import_service) return 0;
+  int result = (*env)->CallStaticIntMethod(env, import_service, import_running, id);
+  if ((*env)->ExceptionCheck(env)) { (*env)->ExceptionClear(env); return 0; }
+  return result;
+}
+void hopea_android_import_cancel(int id) {
+  JNIEnv *env = bridge();
+  if (!env || !import_service) return;
+  (*env)->CallStaticVoidMethod(env, import_service, import_cancel, id);
+  if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
 }
 static jstring java_string(JNIEnv *env, const char *text) {
   glong length = 0;

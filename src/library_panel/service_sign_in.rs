@@ -10,6 +10,7 @@ impl LibraryPanel {
         &self,
         service: &str,
     ) -> Result<Option<(String, String)>, String> {
+        #[cfg(not(target_os = "android"))]
         library::browser_import::require_browser_portal().await?;
         let client_id = if service == "spotify" {
             let entry = adw::EntryRow::builder().title("Client ID").build();
@@ -55,7 +56,7 @@ impl LibraryPanel {
         prompt.add_response("cancel", &i18n("_Cancel"));
         let result = {
             let flow = async {
-                let mut opened = false;
+                let mut opened = cfg!(target_os = "android") && service == "vk";
                 loop {
                     match worker.next().await? {
                         Some(Event::AuthPrompt { url, user_code }) if !opened => {
@@ -253,7 +254,7 @@ mod tests {
             "https://ya.ru/de\nvice",
             "https://ya.ru/device/extra",
         ] {
-            assert!(!valid_auth_url("yandex", url), "{url:?}");
+            assert!(!valid_auth_url("yandex", url), "{:?}", url);
         }
         for url in [
             "http://accounts.spotify.com/authorize",

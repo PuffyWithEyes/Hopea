@@ -39,7 +39,7 @@ impl SpotifyAudio {
         .map_err(|_| i18n("Unable to start the Spotify importer"))?;
         let worker = Self {
             output: gio::DataInputStream::new(&process.stdout_pipe().unwrap()),
-            _lifetime: service_import::ProcessLifetime::new(&process),
+            _lifetime: service_import::ProcessLifetime::new(&process.clone().into()),
             process,
         };
         worker

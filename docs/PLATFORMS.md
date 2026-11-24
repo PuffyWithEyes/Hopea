@@ -68,7 +68,7 @@ OS integration is checked separately.
 | FreeBSD | MPRIS, StatusNotifier tray, background handling, tun/tap/wg route detection; network dependency cross-check | Full desktop build/run |
 | NetBSD | Same desktop integration; fixed unsupported multicast API calls; network dependency cross-check | Full desktop build/run |
 | OpenBSD / DragonFly BSD | Same desktop integration; packet-info portability patch | Native compiler and runtime checks; these are not yet verified builds |
-| Android ARM64 / ARMv7 | APK builds, system media service/notification, shared-player controls, audio focus, headphone-disconnect pause, private document copies and per-app VPN detection | Physical-device tests; service-account imports and independent background P2P require a separate port |
+| Android ARM64 / ARMv7 | APK builds, system media service/notification, shared-player controls, audio focus, headphone-disconnect pause, private document copies and per-app VPN detection | Service-account import implementation needs real-account device testing; see [sign-in limits](SERVICE_SIGN_IN.md#android-sign-in-and-import). Independent background P2P remains experimental |
 | Redox OS | Common protocol/format/Lyrics crate cross-compiles for x86_64-unknown-redox | No verified GTK4/libadwaita/GStreamer application stack or full build; requires a dedicated dependency/backend port assessment |
 
 BSD derivatives use their base OS target (for example GhostBSD uses FreeBSD).
@@ -128,10 +128,13 @@ Private settings and music live outside GTK's replaceable resource directory.
 Existing files are moved before refreshing assets; a destination conflict stops
 startup without overwriting either copy. Keep application data when updating.
 
-It uses the same Rust/GTK player and sharing node. Account imports and the
-desktop browser-cookie reader are not available on Android. Service links
-try an installed app first, then fall back to the browser. Playback, file
-selection and background behavior still need testing on a physical device;
+It uses the same Rust/GTK player and sharing node. Account import now has an
+Android runtime; its real-account behavior still needs device testing. The
+desktop browser-cookie reader is not shipped on Android. See the
+[sign-in guide](SERVICE_SIGN_IN.md#android-sign-in-and-import) for the supported
+authorization flows and their limits. Service links try an installed app first,
+then fall back to the browser. Playback, file selection and background behavior
+still need testing on a physical device;
 this is a debug-signed preview, not a production release.
 
 After building desktop resources, `build-aux/android/build.sh` stages a separate
@@ -141,7 +144,10 @@ SDK/NDK and compiles GTK and GStreamer. Keep the staging directory, especially
 `.android-user` (the debug signing key), to update an existing installation.
 The complete incremental recipe has produced a signed APK with 16 KiB alignment
 checked. A clean toolchain rebuild and physical-device behavior remain unverified.
-Existing toolchains and build caches are reused; set
+Existing toolchains and build caches are reused. Images without Python 3.11
+or `zip` are rebuilt automatically for the embedded import runtime. Its first
+build compiles CPython 3.11.18 for the selected ABI, cached separately under
+`.android-python-runtime`; set
 `HOPEA_ANDROID_REBUILD_TOOLCHAIN=1` when deliberately updating the toolchain.
 After updating from the ARM64-only toolchain, rebuild it once for x86-64:
 
@@ -166,9 +172,10 @@ The media service uses Android's mediaPlayback foreground-service type rather
 than a separate audio engine. This is required for background audio on
 [Android 17](https://developer.android.com/about/versions/17/changes/bg-audio).
 Android can still stop background transfers; unlimited P2P seeding while idle
-is not promised. Account import is explicitly disabled in this preview: its
-desktop Python/FFmpeg and Spotify helper processes need an Android integration.
-Other apps' private browser cookies cannot be read by this application.
+is not promised. Python adapters run in a private disposable service and local
+audio conversion uses GStreamer. The desktop Spotify audio helper is not included;
+Spotify catalog entries can be matched on the network. Other apps' private
+browser cookies cannot be read by this application.
 
 For USB installation, enable Developer options on the phone (tap Build number
 seven times), enable USB debugging, connect a data-capable USB cable, unlock the

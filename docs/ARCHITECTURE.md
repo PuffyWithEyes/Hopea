@@ -212,6 +212,18 @@ The root workspace includes the player and `spotify/`, excluding the standalone 
 
 See `docs/IMPORTING.md` and `build-aux/import-requirements.txt` for optional runtime dependencies. `nix/shell.nix` supplies FFmpeg and Python, and selects `.venv-import/bin/python` through `HOPEA_IMPORT_PYTHON` if present. The Python portion is limited to adapting service libraries; keep product logic in Rust. Meson runs offline adapter tests with `meson test -C _builddir --suite import`. Set `HOPEA_TEST_DOWNLOAD=1` when invoking `tests/test_service_import.py` with the import environment to also test real yt-dlp/FFmpeg conversion against a local fixture server. Live account tests require explicit user authorization and remain ignored by default. The Zen/VK path has been checked through real catalogue reading, audio download, Rust HTTPS cover fetching and isolated GTK display; this does not verify other services.
 
+On Android, `service_import::Process` connects the same JSON protocol to a private
+bound Java service using an unnamed Unix socket pair and a duplicated file
+descriptor. The service embeds Python via Chaquopy in the `:import` process;
+GTK startup is explicitly skipped there. It is not exported, does not accept
+external intents, and is terminated on completion or cancellation. Only one
+authorization/import worker is active at once. The player owns selection,
+duplicate handling, validation and library changes as on desktop. Android audio
+conversion reads a local file through GStreamer on a worker thread, checks path,
+size, duration and deadline, and atomically publishes the completed FLAC. It does
+not feed network URLs to the decoder. See `SERVICE_SIGN_IN.md` for provider limits
+and `tests/test_android_import.py` for the isolated protocol checks.
+
 ### Local songs
 
 The file chooser, drag and drop, and `Application::open` all go through `Window::add_files_to_queue`. That calls `Window::queue_songs`, which builds `Song`s in an idle loop via `SongData::from_uri` (tags read with `lofty`), adds them, and saves `~/.cache/hopea/playlists/current.pls` (`utils::store_playlist`). `SongData::from_uri` returns the "invalid" default for non-local URIs, so they are skipped.

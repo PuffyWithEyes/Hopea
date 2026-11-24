@@ -1,0 +1,12 @@
+# SPDX-FileCopyrightText: 2026 Daniil Klimov
+# SPDX-License-Identifier: GPL-3.0-or-later
+# No desktop keyring/browser-database dependencies are used by the APK.
+-c import-constraints.txt
+vk-api==11.10.1
+beautifulsoup4==4.15.0
+yandex-music==3.2.2
+ytmusicapi==1.12.3
+yt-dlp==2026.10.26
+spotipy==2.26.0
+# HLS AES uses Android's javax.crypto provider through ImportService, so the
+# APK does not need an older third-party crypto wheel for ARMv7.

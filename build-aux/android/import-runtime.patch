@@ -1,0 +1,11 @@
+--- a/gdk/android/glue/java/org/gtk/android/RuntimeApplication.java
++++ b/gdk/android/glue/java/org/gtk/android/RuntimeApplication.java
+@@ -41,5 +41,8 @@
+ 	public void onCreate() {
+ 		super.onCreate();
++		// Hopea: the disposable importer must not start a second GTK/node runtime.
++		if (android.app.Application.getProcessName().endsWith(":import"))
++			return;
+ 		// Hopea uses private, writable Android locations for caches and settings.
+ 		try {
+ 			java.io.File home = getDir("hopea-home", MODE_PRIVATE);
