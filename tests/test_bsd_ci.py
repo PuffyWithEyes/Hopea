@@ -95,6 +95,8 @@ elif name == "pkg":
         packages = [args[-1].rstrip("*")] if "-g" in args else args[2:]
         for package in packages:
             if package == os.environ["TEST_MISSING"]: sys.exit(1)
+            if package == "ffmpeg" and os.environ["TEST_SYSTEM"] == "DragonFly":
+                package = "ffmpeg-nox11"
             print(f"{package}|1.2.3|fixture/{package}")
     elif args[0] == "create":
         if os.environ["TEST_SYSTEM"] == "DragonFly":
@@ -125,6 +127,7 @@ elif name == "pkg":
                     self.assertIn("gtk4", deps)
                     self.assertIn("py312-sqlite3", deps)
                     self.assertIn("python312", deps)
+                    self.assertIn("ffmpeg-nox11" if system == "DragonFly" else "ffmpeg", deps)
                     package = root / "dist" / f"hopea-1.2-{system}-amd64.pkg"
                     self.assertEqual(package.read_text(), system)
                     self.assertFalse((root / "dist/hopea-1.2.pkg").exists())
@@ -140,8 +143,16 @@ elif name == "pkg":
             self.assertEqual(list(root.iterdir()), [temporary])
 
     def test_package_bootstrap_and_python_sqlite_pair(self):
-        for system in ("FreeBSD", "DragonFly", "NetBSD"):
-            with self.subTest(system=system), tempfile.TemporaryDirectory() as directory:
+        cases = (
+            ("FreeBSD", "ffmpeg-nox11-9.0.2,1\nffmpeg-9.0.2,1", "ffmpeg-9.0.2,1"),
+            ("DragonFly", "ffmpeg-nox11-9.0.2,1", "ffmpeg-nox11-9.0.2,1"),
+            ("DragonFly", "ffmpeg-9.0.2,1\nffmpeg-nox11-9.0.2,1", "ffmpeg-9.0.2,1"),
+            ("DragonFly", "", None),
+            ("DragonFly", "ffmpeg6-6.1.6_1", None),
+            ("NetBSD", "", "ffmpeg7"),
+        )
+        for system, ffmpeg_packages, expected_ffmpeg in cases:
+            with self.subTest(system=system, ffmpeg=ffmpeg_packages), tempfile.TemporaryDirectory() as directory:
                 root = Path(directory)
                 binary = root / "bin"
                 binary.mkdir()
@@ -161,7 +172,12 @@ with open(os.environ["TEST_LOG"], "a") as log:
 if name == "uname":
     print(os.environ["TEST_OS"])
 elif name == "pkg" and sys.argv[1] == "search":
-    print("py311-pip-23.3.2_4\\npy312-pip-23.3.2_4")
+    if "ffmpeg" in sys.argv[-1]:
+        packages = os.environ["TEST_FFMPEG_PACKAGES"]
+        if not packages: sys.exit(1)
+        print(packages)
+    else:
+        print("py311-pip-23.3.2_4\\npy312-pip-23.3.2_4")
 elif name == "pkg_add":
     pathlib.Path(sys.argv[0]).with_name("pkgin").symlink_to("stub")
 elif name == "pkgin" and os.environ.get("TEST_PKG_FAILURE"):
@@ -190,11 +206,17 @@ elif name == "python3.13" and "venv" in sys.argv:
                 path = root / "deps.sh"
                 path.write_text(script)
                 env = dict(os.environ, PATH=f"{binary}:{os.environ['PATH']}",
-                           HOPEA_CI_CONTAINER="1", TEST_OS=system, TEST_LOG=str(log), TEST_BIN=str(binary))
+                           HOPEA_CI_CONTAINER="1", TEST_OS=system, TEST_LOG=str(log), TEST_BIN=str(binary),
+                           TEST_FFMPEG_PACKAGES=ffmpeg_packages)
                 env.pop("PKG_PATH", None)
                 result = subprocess.run(["sh", str(path)], cwd=root, env=env, capture_output=True, text=True)
-                self.assertEqual(result.returncode, 0, result.stderr)
                 calls = [json.loads(line) for line in log.read_text().splitlines()]
+                if expected_ffmpeg is None:
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn("No ffmpeg or ffmpeg-nox11 package", result.stderr)
+                    self.assertFalse(any(call[:2] == ["pkg", "install"] for call in calls))
+                    continue
+                self.assertEqual(result.returncode, 0, result.stderr)
                 if system == "NetBSD":
                     self.assertIn("fixture-x11", result.stdout)
                     self.assertIn(["pkg_add", "pkgin"], calls)
@@ -210,6 +232,8 @@ elif name == "python3.13" and "venv" in sys.argv:
                     install = next(call for call in calls if call[:2] == ["pkg", "install"])
                     self.assertIn("py312-pip-23.3.2_4", install)
                     self.assertIn("py312-sqlite3", install)
+                    self.assertIn(expected_ffmpeg, install)
+                    self.assertNotIn("ffmpeg", install)
                     self.assertLess(calls.index(["pkg", "upgrade", "-y"]), calls.index(install))
 
     def test_ci_uses_vendored_tree_and_preserves_failure_status(self):

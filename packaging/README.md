@@ -123,6 +123,9 @@ offline installation.
 FreeBSD and DragonFly install the SQLite module matching the chosen Python/pip
 version and record it as a runtime dependency. Disposable CI guests upgrade
 existing packages before adding dependencies to avoid mixing library versions.
+For FFmpeg, these guests prefer `ffmpeg` and fall back to `ffmpeg-nox11` when
+only that flavor is available. Both provide the standard `ffmpeg` and `ffprobe`
+commands; the selected package identity is recorded in the runtime dependencies.
 DragonFly explicitly uses `pkg create -f txz`: its system libarchive may lack
 built-in zstd support, causing the default compression to fail. Current pkg
 versions still name the resulting xz-compressed package `.pkg`; installation

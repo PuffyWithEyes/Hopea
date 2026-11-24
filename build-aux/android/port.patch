@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Daniil Klimov
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Applied only to the separate Android staging tree.
+# Keep the project-language hunk independent of the release version line.
 --- a/Cargo.toml
 +++ b/Cargo.toml
 @@ -87,3 +87,9 @@
@@ -15,18 +16,10 @@
 +doctest = false
 --- a/meson.build
 +++ b/meson.build
-@@ -1,21 +1,18 @@
- # SPDX-FileCopyrightText: 2022  Emmanuele Bassi
- # SPDX-License-Identifier: GPL-3.0-or-later
- 
+@@ -4 +4 @@
 -project('hopea', 'rust',
 +project('hopea', 'c',
-   version: '2026.3.3',
-   license: ['GPL-3.0'],
-   meson_version: '>= 0.59.0',
-   default_options: [ 'warning_level=2', ],
- )
- 
+@@ -11,11 +11,8 @@
 -dependency('gtk4', version: '>= 4.19.5')
 -dependency('libadwaita-1', version: '>= 1.8.rc')
 -dependency('gstreamer-1.0', version: '>= 1.20')

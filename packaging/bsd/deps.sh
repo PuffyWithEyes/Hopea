@@ -15,9 +15,22 @@ case "$(uname -s)" in
     pip_package=$(pkg search -q -x '^py3[0-9]+-pip-[0-9]' | awk -F- '
       { version=$1; sub(/^py/, "", version); if (version+0 > newest) {newest=version+0; package=$0} }
       END { if (package != "") print package; else exit 1 }')
+    # Avalon can publish only the no-X11 flavor. Both provide bin/ffmpeg and
+    # bin/ffprobe. Only consider the main flavors, not legacy ffmpegN ports.
+    ffmpeg_package=$(pkg search -q -x '^ffmpeg(-nox11)?-[0-9]' | awk '
+      /^ffmpeg-[0-9]/ { standard=$0 }
+      /^ffmpeg-nox11-[0-9]/ { headless=$0 }
+      END {
+        if (standard != "") print standard;
+        else if (headless != "") print headless;
+        else exit 1;
+      }') || {
+      echo 'No ffmpeg or ffmpeg-nox11 package in the configured repository.' >&2
+      exit 1
+    }
     pkg install -y bash rust meson ninja pkgconf blueprint-compiler gtk4 libadwaita \
       libsoup3 gstreamer1 gstreamer1-plugins gstreamer1-plugins-good \
-      gstreamer1-plugins-bad ffmpeg "$pip_package" "${pip_package%%-*}-sqlite3" gettext-tools \
+      gstreamer1-plugins-bad "$ffmpeg_package" "$pip_package" "${pip_package%%-*}-sqlite3" gettext-tools \
       desktop-file-utils coreutils jq
     pkg clean -ay
     ;;

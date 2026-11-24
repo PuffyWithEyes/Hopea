@@ -21,7 +21,10 @@ case ${1:-} in
   '') ;;
   *) echo 'Usage: test_android_build.sh [--staged]' >&2; exit 2 ;;
 esac
+# Release version bumps must not invalidate an otherwise unchanged Android port.
+sed -i "s/^  version: '[^']*',/  version: '2099.42.7',/" "$work/source/meson.build"
 patch --batch --fuzz=0 -d "$work/source" -p1 < "$root/build-aux/android/port.patch"
+grep -Fq "  version: '2099.42.7'," "$work/source/meson.build"
 grep -Fq "rust_archive = custom_target('hopea-rust'" "$work/source/src/meson.build"
 if grep -Fq 'cargo-build.py' "$work/source/src/meson.build"; then
   echo 'Desktop Cargo helper leaked into Android build' >&2; exit 1
