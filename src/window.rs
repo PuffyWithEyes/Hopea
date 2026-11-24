@@ -665,7 +665,19 @@ impl Window {
                     view.set_model(model.as_ref());
                 }
                 if shuffled && queue.n_songs() > 0 {
-                    view.scroll_to(0, gtk::ListScrollFlags::NONE, None);
+                    // Let GTK finish replacing its row widgets before moving
+                    // its internal focus/scroll anchor away from the old row.
+                    glib::idle_add_local_once(clone!(
+                        #[weak(rename_to = win)]
+                        self,
+                        #[weak]
+                        view,
+                        move || {
+                            if win.playlist_shuffled() {
+                                view.scroll_to(0, gtk::ListScrollFlags::FOCUS, None);
+                            }
+                        }
+                    ));
                 }
             }
 
@@ -981,6 +993,7 @@ impl Window {
             let mut duplicates = 0;
             let mut batch = Vec::new();
             let mut last_added = None;
+            let mut last_published = Instant::now();
             for (index, file) in queue.into_iter().enumerate() {
                 let loaded = Song::load_local(file.uri().to_string()).await;
                 let Some(win) = weak.upgrade() else {
@@ -1010,10 +1023,15 @@ impl Window {
                 win.imp()
                     .playlist_view
                     .update_loading(index as u32 + 1, n_files);
-                if added == 0 || batch.len() >= 8 || index as u32 + 1 == n_files {
+                if added == 0
+                    || batch.len() >= 8
+                    || last_published.elapsed().as_millis() >= 50
+                    || index as u32 + 1 == n_files
+                {
                     if !batch.is_empty() {
                         added += batch.len();
                         last_added = batch.last().cloned();
+                        last_published = Instant::now();
                         if win.in_for_you() {
                             win.imp().my_music_songs.borrow_mut().append(&mut batch);
                         } else {
@@ -1032,7 +1050,11 @@ impl Window {
                 }
                 win.imp().pending_playlist_songs.replace(batch.clone());
                 // Give GTK an idle cycle even if the next read hits a hot cache.
-                glib::timeout_future(std::time::Duration::from_millis(1)).await;
+                glib::timeout_future_with_priority(
+                    glib::Priority::DEFAULT_IDLE,
+                    std::time::Duration::from_millis(1),
+                )
+                .await;
             }
             let Some(win) = weak.upgrade() else {
                 return;
@@ -2176,7 +2198,11 @@ impl Window {
         for track in tracks.iter().filter(|track| track.favorite) {
             // The local-file branch used to have no await at all: importing
             // every favorite in one main-loop turn delayed input until the end.
-            glib::timeout_future(std::time::Duration::from_millis(1)).await;
+            glib::timeout_future_with_priority(
+                glib::Priority::DEFAULT_IDLE,
+                std::time::Duration::from_millis(1),
+            )
+            .await;
             let Some(uri) = library::shared_files::uri_for(track.id) else {
                 self.add_remote_track(track, false).await;
                 continue;

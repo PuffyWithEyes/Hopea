@@ -944,16 +944,34 @@ impl LibraryPanel {
             window.look_for_wanted();
         }
         if !imp.favorites_in_playlist.replace(true) {
+            // Display each saved page before fetching the next. Uploading or
+            // reconciling local files must not delay the initial playlist.
+            let mut offset = 0;
+            loop {
+                let page = match client.favorites(offset).await {
+                    Ok(page) => page,
+                    Err(err) => {
+                        warn!("Unable to load favorites: {err}");
+                        break;
+                    }
+                };
+                if !library::client().is_some_and(|current| current.same_connection(&client)) {
+                    return;
+                }
+                let n = page.tracks.len() as u32;
+                let total = page.total;
+                if let Some(window) = self.window() {
+                    window.show_favorites_in_playlist(page.tracks).await;
+                } else {
+                    return;
+                }
+                offset += n;
+                if n == 0 || u64::from(offset) >= total {
+                    break;
+                }
+            }
             if let Some(window) = self.window() {
                 window.sync_local_sharing().await;
-            }
-            match fetch_favorites(&client).await {
-                Ok(tracks) => {
-                    if let Some(window) = self.window() {
-                        window.show_favorites_in_playlist(tracks).await;
-                    }
-                }
-                Err(err) => warn!("Unable to load favorites: {err}"),
             }
         }
     }
@@ -3042,21 +3060,6 @@ const MAX_FOLDER_FILES: usize = 500;
 const MAX_FOLDER_DEPTH: usize = 3;
 /// How long a download may take before giving up on it
 const DOWNLOAD_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15 * 60);
-
-/// Every favorite, all pages of them.
-async fn fetch_favorites(client: &LibraryClient) -> Result<Vec<Track>, library::ClientError> {
-    let mut offset = 0;
-    let mut tracks = Vec::new();
-    loop {
-        let page = client.favorites(offset).await?;
-        let n = page.tracks.len() as u32;
-        tracks.extend(page.tracks);
-        offset += n;
-        if n == 0 || u64::from(offset) >= page.total {
-            return Ok(tracks);
-        }
-    }
-}
 
 /// Waits until the node has a song in full and verified.
 async fn wait_until_local(client: &LibraryClient, id: i64) -> Result<(), String> {

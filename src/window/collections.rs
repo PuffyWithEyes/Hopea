@@ -575,20 +575,22 @@ impl Window {
         picture.set_size_request(80, 80);
         picture.add_css_class("album-editor-cover");
         let cover_button = gtk::Button::builder()
-            .label(i18n("Change Cover…"))
+            .child(&picture)
             .tooltip_text(i18n("Choose album cover"))
             .halign(gtk::Align::Start)
+            .valign(gtk::Align::Center)
+            .css_classes(["flat"])
             .build();
-        let details = gtk::Box::new(gtk::Orientation::Vertical, 8);
-        details.set_hexpand(true);
-        details.append(&group);
-        details.append(&cover_button);
-        let identity = crate::dialogs::actions();
-        identity.set_max_children_per_line(2);
-        identity.append(&picture);
-        identity.append(&details);
+        cover_button.update_property(&[gtk::accessible::Property::Label(&i18n(
+            "Choose album cover",
+        ))]);
+        group.set_hexpand(true);
+        group.set_valign(gtk::Align::Center);
+        let identity = gtk::Box::new(gtk::Orientation::Horizontal, 12);
+        identity.append(&cover_button);
+        identity.append(&group);
         content.append(&identity);
-        let actions = crate::dialogs::actions();
+        let actions = gtk::Box::new(gtk::Orientation::Horizontal, 12);
         let heading = gtk::Label::builder()
             .label(i18n("Songs"))
             .xalign(0.0)
@@ -601,22 +603,24 @@ impl Window {
         let play = gtk::Button::with_label(&i18n("Play Album"));
         let share = gtk::Button::with_label(&i18n("Share Album…"));
         content.append(&actions);
-        let footer = gtk::FlowBox::builder()
-            .selection_mode(gtk::SelectionMode::None)
-            .min_children_per_line(1)
-            .max_children_per_line(2)
-            .column_spacing(8)
-            .row_spacing(8)
-            .css_classes(["action-wrap"])
-            .margin_start(18)
-            .margin_end(18)
-            .margin_top(12)
-            .margin_bottom(18)
+        let menu = gtk::MenuButton::builder()
+            .icon_name("hopea-view-more-symbolic")
+            .tooltip_text(i18n("Album Actions"))
             .build();
-        footer.append(&play);
-        footer.append(&share);
-        let bottom = gtk::Box::new(gtk::Orientation::Vertical, 0);
-        bottom.append(&footer);
+        let popover = gtk::Popover::new();
+        let bottom = gtk::Box::new(gtk::Orientation::Vertical, 4);
+        for button in [&play, &share] {
+            button.add_css_class("flat");
+            bottom.append(button);
+            button.connect_clicked(clone!(
+                #[weak]
+                popover,
+                move |_| popover.popdown()
+            ));
+        }
+        popover.set_child(Some(&bottom));
+        menu.set_popover(Some(&popover));
+        header.pack_end(&menu);
         let saved_id = album.borrow().id.clone();
         let is_saved = (0..albums.n_items()).any(|i| {
             albums
@@ -632,11 +636,14 @@ impl Window {
             let delete = gtk::Button::builder()
                 .label(i18n("Delete Album…"))
                 .visible(is_saved)
-                .halign(gtk::Align::Center)
-                .margin_bottom(12)
-                .css_classes(["destructive-action"])
+                .css_classes(["flat", "destructive-action"])
                 .build();
             bottom.append(&delete);
+            delete.connect_clicked(clone!(
+                #[weak]
+                popover,
+                move |_| popover.popdown()
+            ));
             albums.connect_items_changed(clone!(
                 #[weak]
                 delete,
@@ -709,12 +716,6 @@ impl Window {
                 }
             ));
         }
-        editor
-            .child()
-            .unwrap()
-            .downcast::<adw::ToolbarView>()
-            .unwrap()
-            .add_bottom_bar(&bottom);
         let status = gtk::Label::builder()
             .wrap(true)
             .wrap_mode(gtk::pango::WrapMode::WordChar)
@@ -1423,6 +1424,13 @@ impl Window {
         let editor = self.visible_dialog().unwrap();
         assert_eq!(editor.title(), "Edit Album");
         crate::dialogs::test_fit(self, &editor).await;
+        let cover_control = widgets(editor.upcast_ref())
+            .into_iter()
+            .filter_map(|w| w.downcast::<gtk::Button>().ok())
+            .find(|b| b.tooltip_text().as_deref() == Some("Choose album cover"))
+            .expect("the cover itself is an accessible button");
+        assert!(cover_control.child().unwrap().is::<gtk::Image>());
+        assert!(cover_control.label().is_none());
         let name = widgets(editor.upcast_ref())
             .into_iter()
             .find_map(|w| w.downcast::<adw::EntryRow>().ok())
@@ -1562,12 +1570,21 @@ impl Window {
         click(&album_page, "Edit Album");
         wait().await;
         let editor = self.visible_dialog().unwrap();
+        let menu = widgets(editor.upcast_ref())
+            .into_iter()
+            .filter_map(|w| w.downcast::<gtk::MenuButton>().ok())
+            .find(|b| b.tooltip_text().as_deref() == Some("Album Actions"))
+            .unwrap();
+        menu.popup();
+        wait().await;
         click(&editor, "Delete Album…");
         wait().await;
         let prompt = self.visible_dialog().unwrap();
         click(&prompt, "Cancel");
         wait().await;
         assert_eq!(collections::list().await.unwrap().len(), 1);
+        menu.popup();
+        wait().await;
         click(&editor, "Delete Album…");
         wait().await;
         let prompt = self.visible_dialog().unwrap();
