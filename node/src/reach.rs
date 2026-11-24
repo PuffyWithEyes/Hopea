@@ -234,13 +234,41 @@ pub async fn read_json<T: serde::de::DeserializeOwned>(
 }
 
 pub async fn fetch_hello(state: &AppState, addr: SocketAddr) -> anyhow::Result<Hello> {
-    let response = state
-        .http
-        .get(format!("http://{addr}{HELLO_PATH}"))
-        .timeout(DIALBACK_TIMEOUT)
-        .send()
-        .await?;
-    read_json(response, MAX_SMALL_RESPONSE).await
+    let result: anyhow::Result<Hello> = async {
+        let response = state
+            .http
+            .get(format!("http://{addr}{HELLO_PATH}"))
+            .timeout(DIALBACK_TIMEOUT)
+            .send()
+            .await?;
+        read_json(response, MAX_SMALL_RESPONSE).await
+    }
+    .await;
+    match &result {
+        Ok(hello) => remember_peer(state, addr, &hello.node).await,
+        Err(_) => peer_failed(state, addr).await,
+    }
+    result
+}
+
+/// A protocol reply is evidence of recent reachability, not trust in its sender.
+/// The cache stores only the contacted endpoint, never a remote-supplied URL.
+pub(crate) async fn remember_peer(state: &AppState, addr: SocketAddr, node: &str) {
+    if node == state.identity.public_hex()
+        || node.len() != 64
+        || !node.bytes().all(|b| b.is_ascii_hexdigit())
+        || !p2p::public_discovery_address(addr)
+        || (state.config.ipv4_only && addr.is_ipv6())
+    {
+        return;
+    }
+    let db = state.db.clone();
+    let _ = tokio::task::spawn_blocking(move || db.remember_peer(addr)).await;
+}
+
+pub(crate) async fn peer_failed(state: &AppState, addr: SocketAddr) {
+    let db = state.db.clone();
+    let _ = tokio::task::spawn_blocking(move || db.peer_failed(addr)).await;
 }
 
 /// Asks `helper` to connect back to this node's search port.
@@ -255,26 +283,40 @@ async fn dialback(state: &AppState, helper: SocketAddr, port: u16) -> anyhow::Re
     Ok(answer.node.as_deref() == Some(state.identity.public_hex().as_str()))
 }
 
-/// Other nodes: configured peers and relays, then reachable nodes from the
-/// DHT. Never this node itself.
+/// Other nodes: configured peers, live LAN neighbors, previously contacted
+/// public peers and the DHT. No permanent Hopea servers are required.
 pub async fn other_nodes(state: &AppState) -> Vec<SocketAddr> {
-    let mut nodes: Vec<SocketAddr> = state
+    let explicit: Vec<SocketAddr> = state
         .config
         .relays
         .iter()
         .chain(&state.config.peers)
         .copied()
+        .chain(state.reach.relay())
         .collect();
-    for addr in p2p::dht_lookup(state, nodes_key(), None, Duration::from_secs(5), 50).await {
-        if !nodes.contains(&addr) {
-            nodes.push(addr);
-        }
-    }
-    let own = state.p2p_addr();
-    let mut seen = std::collections::HashSet::new();
-    nodes.retain(|a| Some(*a) != own && seen.insert(*a));
-    nodes.truncate(64);
-    nodes
+    let db = state.db.clone();
+    let ipv4_only = state.config.ipv4_only;
+    let remembered = tokio::task::spawn_blocking(move || db.known_peers(ipv4_only))
+        .await
+        .ok()
+        .and_then(Result::ok)
+        .unwrap_or_default();
+    let discovered = p2p::dht_lookup(state, nodes_key(), None, Duration::from_secs(5), 50).await;
+    let lan = if ipv4_only {
+        Vec::new()
+    } else {
+        state.lan.addresses()
+    };
+    let round = state
+        .reach_round
+        .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    p2p::rotating_candidates(
+        vec![explicit, lan, remembered, discovered],
+        &[],
+        state.p2p_addr(),
+        64,
+        round,
+    )
 }
 
 /// Checks whether others can reach this node over IPv4 and over IPv6.

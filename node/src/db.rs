@@ -87,6 +87,13 @@ CREATE TABLE IF NOT EXISTS sources (
     PRIMARY KEY (entry_id, addr)
 );
 
+CREATE TABLE IF NOT EXISTS known_peers (
+    addr TEXT PRIMARY KEY,
+    seen_at INTEGER NOT NULL,
+    retry_at INTEGER NOT NULL DEFAULT 0,
+    failures INTEGER NOT NULL DEFAULT 0
+);
+
 CREATE VIRTUAL TABLE IF NOT EXISTS entries_fts USING fts5(
     title, artist, album, album_artist, genre,
     content = 'entries', content_rowid = 'id',
@@ -480,6 +487,57 @@ impl Db {
         self.conn()
             .execute("UPDATE entries SET has_cover = 0 WHERE id = ?1", [id])?;
         Ok(())
+    }
+
+    /// Retain only endpoints we contacted ourselves, never addresses advertised
+    /// by a remote peer. Private addresses must not survive a network change.
+    pub(crate) fn remember_peer(&self, addr: SocketAddr) -> rusqlite::Result<()> {
+        if !crate::p2p::public_discovery_address(addr) {
+            return Ok(());
+        }
+        let conn = self.conn();
+        conn.execute(
+            "INSERT INTO known_peers(addr, seen_at) VALUES (?1, ?2)
+             ON CONFLICT(addr) DO UPDATE SET seen_at=excluded.seen_at, retry_at=0, failures=0",
+            params![addr.to_string(), now()],
+        )?;
+        conn.execute(
+            "DELETE FROM known_peers WHERE seen_at < ?1 OR addr NOT IN
+             (SELECT addr FROM known_peers ORDER BY seen_at DESC, addr LIMIT 128)",
+            [now() - 7 * 24 * 60 * 60],
+        )?;
+        Ok(())
+    }
+
+    pub(crate) fn peer_failed(&self, addr: SocketAddr) -> rusqlite::Result<()> {
+        // Failed attempts never extend the seven-day lifetime. Back off from
+        // two minutes to at most thirty minutes, without creating new rows.
+        self.conn().execute(
+            "UPDATE known_peers SET retry_at=?2 + MIN(1800, 120 * (1 << MIN(failures, 4))),
+             failures=MIN(failures+1, 5) WHERE addr=?1",
+            params![addr.to_string(), now()],
+        )?;
+        Ok(())
+    }
+
+    pub(crate) fn known_peers(&self, ipv4_only: bool) -> rusqlite::Result<Vec<SocketAddr>> {
+        let conn = self.conn();
+        let mut stmt = conn.prepare(
+            "SELECT addr FROM known_peers WHERE seen_at >= ?1 AND seen_at <= ?2 AND retry_at <= ?2
+             ORDER BY seen_at DESC, addr LIMIT 128",
+        )?;
+        let rows = stmt.query_map(params![now() - 7 * 24 * 60 * 60, now()], |r| {
+            r.get::<_, String>(0)
+        })?;
+        let mut peers = Vec::new();
+        for row in rows {
+            if let Ok(addr) = row?.parse::<SocketAddr>() {
+                if crate::p2p::public_discovery_address(addr) && (!ipv4_only || addr.is_ipv4()) {
+                    peers.push(addr);
+                }
+            }
+        }
+        Ok(peers)
     }
 
     pub fn known_search_nodes(&self, query: &str) -> rusqlite::Result<Vec<SocketAddr>> {
@@ -1218,6 +1276,85 @@ pub fn fts_query(input: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn peer_cache_persists_expires_and_backs_off_without_private_addresses() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("db");
+        let db = Db::open(&path, "me").unwrap();
+        let public: SocketAddr = "8.8.8.8:47391".parse().unwrap();
+        let ipv6: SocketAddr = "[2606:4700::1111]:47391".parse().unwrap();
+        for addr in [
+            public,
+            ipv6,
+            "127.0.0.1:47391".parse().unwrap(),
+            "192.168.1.1:47391".parse().unwrap(),
+            "8.8.8.8:80".parse().unwrap(),
+        ] {
+            db.remember_peer(addr).unwrap();
+        }
+        assert_eq!(db.known_peers(false).unwrap().len(), 2);
+        assert_eq!(db.known_peers(true).unwrap(), vec![public]);
+        drop(db);
+        let db = Db::open(&path, "me").unwrap();
+        assert_eq!(db.known_peers(true).unwrap(), vec![public]);
+        db.peer_failed(public).unwrap();
+        assert!(db.known_peers(true).unwrap().is_empty());
+        let retry: i64 = db
+            .conn()
+            .query_row(
+                "SELECT retry_at FROM known_peers WHERE addr=?1",
+                [public.to_string()],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert!((119..=120).contains(&(retry - now())));
+        for _ in 0..10 {
+            db.peer_failed(public).unwrap();
+        }
+        let retry: i64 = db
+            .conn()
+            .query_row(
+                "SELECT retry_at FROM known_peers WHERE addr=?1",
+                [public.to_string()],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert!((1799..=1800).contains(&(retry - now())));
+        db.remember_peer(public).unwrap();
+        assert_eq!(db.known_peers(true).unwrap(), vec![public]);
+        db.conn()
+            .execute(
+                "UPDATE known_peers SET seen_at=?1",
+                [now() - 8 * 24 * 60 * 60],
+            )
+            .unwrap();
+        assert!(db.known_peers(false).unwrap().is_empty());
+        // Revalidate on read, even if an old or modified database contains a
+        // private destination or a timestamp from before a clock correction.
+        db.conn()
+            .execute(
+                "INSERT INTO known_peers(addr, seen_at) VALUES ('127.0.0.1:47391', ?1)",
+                [now()],
+            )
+            .unwrap();
+        db.conn()
+            .execute(
+                "UPDATE known_peers SET seen_at=?1 WHERE addr=?2",
+                params![now() + 3600, public.to_string()],
+            )
+            .unwrap();
+        assert!(db.known_peers(false).unwrap().is_empty());
+        for port in 2000..2200 {
+            db.remember_peer(SocketAddr::from(([8, 8, 8, 8], port)))
+                .unwrap();
+        }
+        let count: i64 = db
+            .conn()
+            .query_row("SELECT count(*) FROM known_peers", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(count, 128);
+    }
 
     #[test]
     fn discovery_filters_local_audio_before_pagination_and_stars_are_independent() {

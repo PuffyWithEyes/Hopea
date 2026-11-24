@@ -390,3 +390,28 @@ every discovery miss. There is no tested hundred-million-user guarantee. Existin
 wire messages and signatures remain compatible, but both publisher and searcher
 need the updated routing logic to benefit from overflow coverage. Older searchers
 can still use retained precise keys.
+
+### Remembered public peers
+
+Successful bounded search and hello replies retain the contacted public endpoint
+in SQLite, including replies with no matching tracks. This is independent of
+query-specific track sources: a new query and relay discovery can reuse these
+peers even after restart or when the DHT is unavailable. The cache holds at most
+128 endpoints for seven days. Failed requests delay reuse for two minutes,
+doubling up to thirty minutes; failures never extend the lifetime. A successful
+reply resets the delay. Endpoints are hints, not authenticated or trusted nodes.
+
+Only the endpoint actually contacted is retained, never an address supplied in
+a reply. The public-address filter rejects private, loopback, reserved and
+transition addresses and ports below 1024 both on insertion and retrieval.
+IPv4-only mode also excludes cached IPv6 addresses. Explicit configuration and
+live LAN discovery remain separate; their private addresses are not persisted
+in this cache. There is no peer-list exchange, recursive search or new listener.
+
+Candidate routes are deduplicated, interleaved and rotated between attempts.
+Search still asks at most 40 peers (at most 20 from non-DHT routes while DHT is
+enabled); reachability and relay discovery retain at most 64 candidates. The
+existing concurrency, timeout, relay and validation limits still apply. No
+permanent Hopea servers are introduced. A first-time client with no reachable
+bootstrap path, or a network blocking all available participants, still cannot
+connect. This fallback does not establish a 99% discovery guarantee.

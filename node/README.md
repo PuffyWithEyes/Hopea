@@ -132,6 +132,15 @@ larger private-network simulations and measurements of discovery and relay load.
 
 ## Behind a router
 
+Hopea remembers up to 128 previously contacted public peers for seven days.
+Searches for other tracks and relay discovery reuse them after restart, even
+when DHT discovery fails. Unresponsive cached peers receive a bounded retry
+delay; candidate selection rotates without increasing the per-search request
+limit. Private LAN addresses are not retained in this cache. Relays are other
+users' devices, not permanent Hopea servers. At least one reachable discovery
+path is still necessary; neither an arbitrary network nor every track can be
+guaranteed reachable.
+
 On the same network, nodes advertise and browse `_hopea._tcp.local.` with
 DNS-SD/mDNS (`src/lan.rs`). Search queries these local addresses alongside
 configured peers and DHT candidates; it does not require NAT hairpinning or

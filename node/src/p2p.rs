@@ -308,7 +308,7 @@ async fn collect_dht_peers<S: futures_util::Stream<Item = SocketAddr> + Unpin>(
 /// Public discovery must never turn an untrusted DHT answer into a request
 /// to loopback, the router, cloud metadata, or another private-network service.
 /// Explicit peers and LAN discovery have separate, local sources of authority.
-fn public_discovery_address(addr: SocketAddr) -> bool {
+pub(crate) fn public_discovery_address(addr: SocketAddr) -> bool {
     if addr.port() < 1024 {
         return false;
     }
@@ -353,28 +353,44 @@ pub async fn search(state: &AppState, query: &str) -> SearchReport {
     });
     let db = state.db.clone();
     let q = query.to_string();
-    let remembered = tokio::task::spawn_blocking(move || db.known_search_nodes(&q))
-        .await
-        .ok()
-        .and_then(Result::ok)
-        .unwrap_or_default();
-    let mut seen = HashSet::new();
-    let configured: Vec<SocketAddr> = state
+    let ipv4_only = state.config.ipv4_only;
+    let (remembered, peers) = tokio::task::spawn_blocking(move || {
+        (
+            db.known_search_nodes(&q).unwrap_or_default(),
+            db.known_peers(ipv4_only).unwrap_or_default(),
+        )
+    })
+    .await
+    .unwrap_or_default();
+    let round = state
+        .search_round
+        .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let explicit: Vec<SocketAddr> = state
         .config
         .relays
         .iter()
         .copied()
         .chain(state.reach.relay())
         .chain(state.config.peers.iter().copied())
-        .chain(state.lan.addresses().into_iter().take(MAX_NODES_PER_SEARCH))
+        .collect();
+    let local = state
+        .lan
+        .addresses()
+        .into_iter()
+        .take(MAX_NODES_PER_SEARCH)
         .chain(remembered)
-        .filter(|n| Some(*n) != own && seen.insert(*n))
-        .take(if state.config.dht {
+        .collect();
+    let configured = rotating_candidates(
+        vec![explicit, local, peers],
+        &[],
+        own,
+        if state.config.dht {
             MAX_NODES_PER_SEARCH / 2
         } else {
             MAX_NODES_PER_SEARCH
-        })
-        .collect();
+        },
+        round,
+    );
 
     // Configured nodes are asked right away, while the DHT finds others
     let from_dht = async {
@@ -417,7 +433,7 @@ pub async fn search(state: &AppState, query: &str) -> SearchReport {
         routes.sort_unstable_by_key(|(index, _)| *index);
         let routes = routes.into_iter().map(|(_, found)| found).collect();
         let remaining = MAX_NODES_PER_SEARCH.saturating_sub(configured.len());
-        let nodes = search_candidates(routes, &configured, own, remaining);
+        let nodes = rotating_candidates(routes, &configured, own, remaining, round);
         let asked = ask_all(state, nodes.into_iter(), query, &slots).await;
         (dht, asked)
     };
@@ -449,6 +465,24 @@ pub async fn search(state: &AppState, query: &str) -> SearchReport {
 
 /// Fairly interleave independent routes within the existing request budget.
 /// A broad prefix/group cannot consume every slot before an exact route.
+pub(crate) fn rotating_candidates(
+    mut routes: Vec<Vec<SocketAddr>>,
+    configured: &[SocketAddr],
+    own: Option<SocketAddr>,
+    limit: usize,
+    round: usize,
+) -> Vec<SocketAddr> {
+    for route in &mut routes {
+        let mut seen = HashSet::new();
+        route.retain(|addr| seen.insert(*addr));
+        if !route.is_empty() {
+            let offset = round % route.len();
+            route.rotate_left(offset);
+        }
+    }
+    search_candidates(routes, configured, own, limit)
+}
+
 fn search_candidates(
     routes: Vec<Vec<SocketAddr>>,
     configured: &[SocketAddr],
@@ -525,6 +559,8 @@ async fn ask_all(
     let deadline = tokio::time::Instant::now() + state.config.search_timeout;
     let nodes: Vec<SocketAddr> = nodes.take(MAX_NODES_PER_SEARCH).collect();
     let mut pending: HashSet<_> = nodes.iter().copied().collect();
+    let attempted = std::sync::Mutex::new(HashSet::new());
+    let attempted_ref = &attempted;
     let mut asked = Asked {
         asked: nodes.len() as u32,
         ..Asked::default()
@@ -532,6 +568,10 @@ async fn ask_all(
     let mut answers = stream::iter(nodes)
         .map(|node| async move {
             let _slot = slots.acquire().await.expect("search budget stays open");
+            attempted_ref
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .insert(node);
             (node, ask(state, node, query).await)
         })
         .buffer_unordered(PARALLEL_SEARCH_REQUESTS);
@@ -561,13 +601,21 @@ async fn ask_all(
             }
             Err(err) => {
                 tracing::debug!("No answer from {node}: {err:#}");
+                reach::peer_failed(state, node).await;
                 forget_failed_source(state, node).await;
                 *asked.failures.entry(classify(&err)).or_default() += 1;
             }
         }
     }
+    drop(answers);
+    let attempted = attempted.into_inner().unwrap_or_else(|e| e.into_inner());
     for node in pending {
-        forget_failed_source(state, node).await;
+        // A group deadline can expire before a queued node gets a slot. Only
+        // requests actually started provide evidence of a failed endpoint.
+        if attempted.contains(&node) {
+            reach::peer_failed(state, node).await;
+            forget_failed_source(state, node).await;
+        }
     }
     asked
 }
@@ -599,6 +647,7 @@ async fn ask(state: &AppState, node: SocketAddr, query: &str) -> anyhow::Result<
             && answer.relayed.len() <= 2 * MAX_RESULTS as usize,
         "too many search results"
     );
+    reach::remember_peer(state, node, &answer.node).await;
     Ok(answer)
 }
 
@@ -906,6 +955,26 @@ fn announce_jitter() -> Duration {
 #[cfg(test)]
 mod scaling_tests {
     use super::*;
+    #[test]
+    fn repeated_searches_rotate_candidates_without_growing_the_budget() {
+        let route: Vec<_> = (2000..2100)
+            .map(|port| SocketAddr::from(([8, 8, 8, 8], port)))
+            .collect();
+        let mut reached = HashSet::new();
+        for round in 0..100 {
+            let peers = rotating_candidates(
+                vec![route.clone(), route.clone()],
+                &[],
+                Some(route[0]),
+                40,
+                round,
+            );
+            assert_eq!(peers.len(), 40);
+            assert!(!peers.contains(&route[0]));
+            reached.extend(peers);
+        }
+        assert_eq!(reached.len(), 99);
+    }
     #[test]
     fn exact_and_overflow_routes_share_a_bounded_peer_budget() {
         let address = |n| SocketAddr::from(([127, 0, 0, 1], n));

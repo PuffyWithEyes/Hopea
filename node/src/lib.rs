@@ -68,6 +68,9 @@ pub struct AppState {
     pub uploads: Arc<Semaphore>,
     /// Bounds network searches running at once
     pub searches: Arc<Semaphore>,
+    /// Rotate bounded discovery candidates between attempts.
+    pub(crate) search_round: Arc<std::sync::atomic::AtomicUsize>,
+    pub(crate) reach_round: Arc<std::sync::atomic::AtomicUsize>,
     /// Wakes the DHT announcer when the set of tracks changed
     pub announce: Arc<tokio::sync::Notify>,
     pub token_hash: [u8; 32],
@@ -128,6 +131,8 @@ impl AppState {
             validations: Arc::new(Semaphore::new(config.max_parallel_validations)),
             uploads: Arc::new(Semaphore::new(2)),
             searches: Arc::new(Semaphore::new(p2p::PARALLEL_SEARCHES)),
+            search_round: Arc::default(),
+            reach_round: Arc::default(),
             config: Arc::new(config),
             db,
             storage,

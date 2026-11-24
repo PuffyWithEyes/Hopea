@@ -102,6 +102,92 @@ impl TestNode {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn remembered_public_peer_survives_restart_without_dht_or_configured_peers() {
+    use hopea_node::{p2p, reach, AppState};
+    let alice = TestNode::start("cached-alice", vec![]).await;
+    assert!(alice
+        .share("Night%20Drive.flac", fixture("tone.flac"))
+        .await
+        .status()
+        .is_success());
+    let dir = tempfile::tempdir().unwrap();
+    let config = Config::isolated(dir.path().join("bob"));
+    let token = generate_token();
+    // Start only the client state, so no background discovery task can use a
+    // different HTTP client and accidentally bypass the loopback test proxy.
+    let mut state = AppState::new(config.clone(), &token).await.unwrap();
+    // Test-only proxy routes the public endpoint to Alice's loopback server.
+    // No connection to this public IP is made, and production filtering is
+    // exercised without introducing a private-address exception for tests.
+    let endpoint: SocketAddr = "8.8.8.8:47391".parse().unwrap();
+    let client = reqwest::Client::builder()
+        .no_proxy()
+        .proxy(reqwest::Proxy::all(format!("http://{}", alice.node.p2p_addr)).unwrap())
+        .build()
+        .unwrap();
+    state.http = client.clone();
+    reach::fetch_hello(&state, alice.node.p2p_addr)
+        .await
+        .unwrap();
+    assert!(reach::other_nodes(&state).await.is_empty());
+    reach::fetch_hello(&state, endpoint).await.unwrap();
+    assert_eq!(reach::other_nodes(&state).await, vec![endpoint]);
+    state.torrents.stop().await;
+    drop(state);
+    let mut state = AppState::new(config, &token).await.unwrap();
+    state.http = client;
+    assert_eq!(reach::other_nodes(&state).await, vec![endpoint]);
+    let report = p2p::search(&state, "Night Drive").await;
+    assert_eq!(report.nodes_asked, 1);
+    assert_eq!(report.nodes_answered, 1);
+    let (tracks, _) = state
+        .db
+        .search(
+            "Night Drive",
+            50,
+            0,
+            hopea_common::api::SearchOrder::BestMatch,
+        )
+        .unwrap();
+    assert_eq!(tracks.len(), 1);
+    // A shared deadline must cool down only the eight contacted endpoints,
+    // not the ninth candidate still waiting for a concurrency slot.
+    for port in 48000..48008 {
+        reach::fetch_hello(&state, SocketAddr::from(([8, 8, 8, 8], port)))
+            .await
+            .unwrap();
+    }
+    let stalled = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let stalled_addr = stalled.local_addr().unwrap();
+    let hold_connections = tokio::spawn(async move {
+        let mut connections = Vec::new();
+        for _ in 0..8 {
+            connections.push(stalled.accept().await.unwrap().0);
+        }
+        std::future::pending::<()>().await;
+        drop(connections);
+    });
+    state.http = reqwest::Client::builder()
+        .no_proxy()
+        .proxy(reqwest::Proxy::all(format!("http://{stalled_addr}")).unwrap())
+        .build()
+        .unwrap();
+    let mut config = (*state.config).clone();
+    config.search_timeout = Duration::from_millis(200);
+    state.config = std::sync::Arc::new(config);
+    let report = p2p::search(&state, "unknown title").await;
+    assert!(report.timed_out);
+    assert_eq!(reach::other_nodes(&state).await.len(), 1);
+    hold_connections.abort();
+    let _ = hold_connections.await;
+    alice.node.shutdown().await;
+    let report = p2p::search(&state, "unknown title").await;
+    assert_eq!(report.nodes_answered, 0);
+    assert!(reach::other_nodes(&state).await.is_empty());
+    state.torrents.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 #[ignore = "requires LAN multicast; run explicitly on a host network"]
 async fn lan_discovers_searches_and_downloads_without_dht_or_configured_peers() {
     let configure = |c: &mut Config| {
