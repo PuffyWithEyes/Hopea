@@ -6,6 +6,7 @@ cd "$(dirname "$0")/.."
 for script in packaging/*.sh packaging/*/*.sh build-aux/make-dist.sh; do bash -n "$script"; done
 for recipe in packaging/arch/PKGBUILD.in packaging/alpine/APKBUILD.in packaging/gentoo/*.ebuild*; do bash -n "$recipe"; done
 sh -n build-aux/dist-vendor.sh
+bash tests/test_alt_apt.sh
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 printf 'test source artifact\n' > "$work/hopea-1.2-source.tar.gz"

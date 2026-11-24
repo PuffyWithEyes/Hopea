@@ -41,8 +41,9 @@ case ${1:-} in
     python3 -I -c 'import ssl, sqlite3, venv'
     ;;
   alt)
-    apt-get update
-    apt-get install -y ca-certificates git gcc gcc-c++ rust meson ninja-build pkg-config \
+    # shellcheck source=packaging/alt-apt.sh
+    source "$(dirname "$0")/alt-apt.sh"
+    alt_install_dependencies /etc/apt ca-certificates git gcc gcc-c++ rust meson ninja-build pkg-config \
       blueprint-compiler gettext-tools desktop-file-utils libgtk4-devel libadwaita-devel \
       libsoup3.0-devel libssl-devel gstreamer1.0-devel gst-plugins1.0-devel \
       gst-plugins-bad1.0-devel python3-base python3-module-pip python3-modules-sqlite3 rpm-build file shadow-utils util-linux

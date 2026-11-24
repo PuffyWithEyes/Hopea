@@ -11,6 +11,13 @@ preserves vendored Cargo files, ALT installs the build dependencies, Void glibc 
 musl bootstrap Bash, Alpine locates its generated signing key, and openSUSE provides
 Python's SQLite module. These checks do not constitute full application builds.
 
+ALT dependency installation retries each repository operation twice, then uses
+the Yandex ALT mirror if the image's primary server remains unavailable. Only
+the mirror URL changes; the image's architecture, branch and `[alt]` signature
+selector are preserved. Both mirrors use HTTP because the minimal image may not
+yet have CA certificates; APT repository authentication is never disabled.
+Failure on both mirrors stops the build before compilation.
+
 ## Available recipes
 
 | Platform | Recipe / output | Conditions |
