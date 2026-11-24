@@ -141,6 +141,7 @@ mod hostile_answers {
 #[derive(Debug, Deserialize)]
 struct SearchQuery {
     q: String,
+    mesh: Option<String>,
 }
 
 pub fn router(state: AppState) -> Router {
@@ -148,6 +149,7 @@ pub fn router(state: AppState) -> Router {
         .route(SEARCH_PATH, get(search_handler))
         .route(INFO_PATH, get(info_handler))
         .route(COVER_PATH, get(cover_handler))
+        .route(crate::mesh::MEDIA_PATH, get(crate::mesh::media))
         .route(crate::lyrics::PATH, get(crate::lyrics::serve))
         .route(crate::metadata::PATH, get(crate::metadata::serve))
         .route(crate::metadata::DATA_PATH, get(crate::metadata::serve_data))
@@ -214,10 +216,16 @@ pub async fn local_answer(state: &AppState, query: &str, with_info: bool) -> Sea
 async fn search_handler(
     State(state): State<AppState>,
     Query(query): Query<SearchQuery>,
-) -> Json<SearchResponse> {
+) -> Result<Json<SearchResponse>, axum::http::StatusCode> {
+    if let Some(encoded) = &query.mesh {
+        let request = crate::mesh::Request::decode(encoded, &query.q)
+            .ok_or(axum::http::StatusCode::BAD_REQUEST)?;
+        return Ok(Json(crate::mesh::search(&state, &query.q, request).await));
+    }
     // Bound the forwarded query too, not just the local database lookup.
     let query = SearchQuery {
         q: query.q.chars().take(200).collect(),
+        mesh: None,
     };
     let mut response = local_answer(&state, &query.q, false).await;
     if state.relay.clients() > 0 {
@@ -232,7 +240,7 @@ async fn search_handler(
             }
         }
     }
-    Json(response)
+    Ok(Json(response))
 }
 
 /// Collects addresses from a DHT lookup for `key` for at most `time`.
@@ -346,6 +354,10 @@ pub async fn search(state: &AppState, query: &str) -> SearchReport {
         return SearchReport::default();
     };
     let own = state.p2p_addr();
+    let mesh = (
+        crate::mesh::Request::new(state, query),
+        std::sync::atomic::AtomicUsize::new(0),
+    );
     let slots = tokio::sync::Semaphore::new(if state.torrents.gaming() {
         2
     } else {
@@ -371,6 +383,7 @@ pub async fn search(state: &AppState, query: &str) -> SearchReport {
         .iter()
         .copied()
         .chain(state.reach.relay())
+        .chain(state.relay.outgoing_peers())
         .chain(state.config.peers.iter().copied())
         .collect();
     let local = state
@@ -434,11 +447,17 @@ pub async fn search(state: &AppState, query: &str) -> SearchReport {
         let routes = routes.into_iter().map(|(_, found)| found).collect();
         let remaining = MAX_NODES_PER_SEARCH.saturating_sub(configured.len());
         let nodes = rotating_candidates(routes, &configured, own, remaining, round);
-        let asked = ask_all(state, nodes.into_iter(), query, &slots).await;
+        let asked = ask_all(state, nodes.into_iter(), query, &slots, Some(&mesh)).await;
         (dht, asked)
     };
     let (direct, (dht, found)) = tokio::join!(
-        ask_all(state, configured.iter().copied(), query, &slots),
+        ask_all(
+            state,
+            configured.iter().copied(),
+            query,
+            &slots,
+            Some(&mesh)
+        ),
         from_dht
     );
 
@@ -530,6 +549,7 @@ pub async fn refresh_sources(state: &AppState, query: &str) {
         nodes.into_iter().take(MAX_NODES_PER_SEARCH),
         query,
         &slots,
+        None,
     )
     .await;
 }
@@ -555,6 +575,7 @@ async fn ask_all(
     nodes: impl Iterator<Item = SocketAddr>,
     query: &str,
     slots: &tokio::sync::Semaphore,
+    mesh: Option<&(crate::mesh::Request, std::sync::atomic::AtomicUsize)>,
 ) -> Asked {
     let deadline = tokio::time::Instant::now() + state.config.search_timeout;
     let nodes: Vec<SocketAddr> = nodes.take(MAX_NODES_PER_SEARCH).collect();
@@ -568,14 +589,24 @@ async fn ask_all(
     let mut answers = stream::iter(nodes)
         .map(|node| async move {
             let _slot = slots.acquire().await.expect("search budget stays open");
+            if tokio::time::Instant::now() >= deadline {
+                return (node, None);
+            }
             attempted_ref
                 .lock()
                 .unwrap_or_else(|e| e.into_inner())
                 .insert(node);
-            (node, ask(state, node, query).await)
+            let request = mesh
+                .filter(|(_, count)| count.fetch_add(1, std::sync::atomic::Ordering::Relaxed) < 2)
+                .map(|(request, _)| request);
+            (node, Some(ask(state, node, query, request).await))
         })
         .buffer_unordered(PARALLEL_SEARCH_REQUESTS);
     loop {
+        if tokio::time::Instant::now() >= deadline {
+            asked.timed_out = true;
+            break;
+        }
         let (node, answer) = match tokio::time::timeout_at(deadline, answers.next()).await {
             Ok(Some(next)) => next,
             Ok(None) => break,
@@ -584,6 +615,10 @@ async fn ask_all(
                 asked.timed_out = true;
                 break;
             }
+        };
+        let Some(answer) = answer else {
+            asked.timed_out = true;
+            break;
         };
         pending.remove(&node);
         match answer {
@@ -630,11 +665,20 @@ fn classify(err: &anyhow::Error) -> SearchFailure {
     }
 }
 
-async fn ask(state: &AppState, node: SocketAddr, query: &str) -> anyhow::Result<SearchResponse> {
-    let url = format!(
+async fn ask(
+    state: &AppState,
+    node: SocketAddr,
+    query: &str,
+    mesh: Option<&crate::mesh::Request>,
+) -> anyhow::Result<SearchResponse> {
+    let mut url = format!(
         "http://{node}{SEARCH_PATH}?q={}",
         percent_encoding::utf8_percent_encode(query, percent_encoding::NON_ALPHANUMERIC)
     );
+    if let Some(request) = mesh {
+        url.push_str("&mesh=");
+        url.push_str(&request.encode());
+    }
     let response = state
         .http
         .get(url)

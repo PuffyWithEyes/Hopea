@@ -293,6 +293,7 @@ pub async fn other_nodes(state: &AppState) -> Vec<SocketAddr> {
         .chain(&state.config.peers)
         .copied()
         .chain(state.reach.relay())
+        .chain(state.relay.outgoing_peers())
         .collect();
     let db = state.db.clone();
     let ipv4_only = state.config.ipv4_only;
@@ -444,7 +445,10 @@ pub async fn run(state: AppState) {
         if now != before {
             state.announce.notify_one();
         }
-        tokio::time::sleep(next_check).await;
+        tokio::select! {
+            _ = tokio::time::sleep(next_check) => {},
+            _ = state.mesh.changed.notified() => {},
+        }
     }
 }
 

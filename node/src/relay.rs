@@ -86,7 +86,6 @@ const MAX_OFFERS: usize = 4096;
 /// When no relay is found, how long to wait before looking again
 const RETRY_INTERVAL: Duration = Duration::from_secs(2 * 60);
 const MAX_RELAY_CANDIDATES: usize = 64;
-const PARALLEL_RELAY_PROBES: usize = 4;
 const MAX_REGISTRATION_ATTEMPTS: usize = 4;
 const MAX_CLIENT_TASKS: usize = 2;
 // A hostile relay can reply immediately instead of long-polling. Do not let
@@ -177,6 +176,40 @@ pub struct Server {
     waiting: Mutex<HashMap<String, Vec<oneshot::Sender<bool>>>>,
     next_id: AtomicU64,
     search_round: AtomicU64,
+    outgoing: Outgoing,
+}
+
+struct Outgoing {
+    peers: Mutex<std::collections::BTreeMap<SocketAddr, bool>>,
+    tasks: Arc<tokio::sync::Semaphore>,
+}
+impl Default for Outgoing {
+    fn default() -> Self {
+        Self {
+            peers: Mutex::default(),
+            tasks: Arc::new(tokio::sync::Semaphore::new(MAX_CLIENT_TASKS)),
+        }
+    }
+}
+
+struct Connection<'a> {
+    state: &'a AppState,
+    peer: SocketAddr,
+}
+impl Drop for Connection<'_> {
+    fn drop(&mut self) {
+        let mut peers = lock(&self.state.relay.outgoing.peers);
+        peers.remove(&self.peer);
+        if let Some(peer) = peers
+            .iter()
+            .find_map(|(peer, active)| active.then_some(*peer))
+        {
+            self.state.reach.set(Reachability::Relay, Some(peer));
+        } else {
+            self.state.reach.set(Reachability::Unreachable, None);
+        }
+        self.state.announce.notify_one();
+    }
 }
 
 struct PendingAnswers<'a> {
@@ -197,6 +230,12 @@ fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
 }
 
 impl Server {
+    pub(crate) fn outgoing_peers(&self) -> Vec<SocketAddr> {
+        lock(&self.outgoing.peers)
+            .iter()
+            .filter_map(|(peer, active)| active.then_some(*peer))
+            .collect()
+    }
     /// Whether this node takes new clients right now.
     pub fn accepting(&self, state: &AppState) -> bool {
         state.config.relay
@@ -718,7 +757,22 @@ pub async fn upload_handler(
     }
 }
 
-async fn receive_upload(state: &AppState, info_hash: &str, body: Body) -> anyhow::Result<()> {
+pub(crate) async fn receive_upload(
+    state: &AppState,
+    info_hash: &str,
+    body: Body,
+) -> anyhow::Result<()> {
+    let _track =
+        tokio::time::timeout(Duration::from_secs(5), state.mesh.lock_track(info_hash)).await?;
+    receive_upload_locked(state, info_hash, body, _track).await
+}
+
+pub(crate) async fn receive_upload_locked(
+    state: &AppState,
+    info_hash: &str,
+    body: Body,
+    track: Arc<tokio::sync::OwnedMutexGuard<()>>,
+) -> anyhow::Result<()> {
     let _slot = state
         .uploads
         .clone()
@@ -737,6 +791,11 @@ async fn receive_upload(state: &AppState, info_hash: &str, body: Body) -> anyhow
     if row.state.has_file() {
         return Ok(());
     }
+    anyhow::ensure!(row.state != TrackState::Rejected, "rejected track");
+    anyhow::ensure!(
+        state.torrents.get(info_hash).is_none(),
+        "BitTorrent download already active"
+    );
     let expected_len = InfoDict::parse(&row.info, state.config.limits.max_upload_bytes)
         .map(|i| i.length)
         .ok_or_else(|| anyhow::anyhow!("bad info dictionary"))?;
@@ -768,6 +827,9 @@ async fn receive_upload(state: &AppState, info_hash: &str, body: Body) -> anyhow
     let state2 = state.clone();
     let row2 = row.clone();
     let ingested = tokio::task::spawn_blocking(move || -> anyhow::Result<ingest::Ingested> {
+        // Keep the write reservation even if the HTTP request is cancelled
+        // while this non-cancellable validation worker finishes.
+        let _track = track;
         let _permit = _permit;
         let _slot = _slot;
         let (state, row) = (state2, row2);
@@ -797,6 +859,7 @@ async fn receive_upload(state: &AppState, info_hash: &str, body: Body) -> anyhow
             .db
             .set_verified_duration(row.id, ingested.duration_ms)?;
         state.db.set_state(row.id, TrackState::Held)?;
+        state.tracks_changed();
         Ok(ingested)
     })
     .await?;
@@ -821,6 +884,11 @@ async fn receive_upload(state: &AppState, info_hash: &str, body: Body) -> anyhow
 #[derive(Deserialize)]
 pub struct FetchQuery {
     info_hash: String,
+    #[serde(default = "default_fetch_hops")]
+    hops: u8,
+}
+fn default_fetch_hops() -> u8 {
+    3
 }
 
 /// Has a relayed track uploaded here, waiting until it is validated and
@@ -855,7 +923,10 @@ pub async fn fetch_handler(
         .get(&info_hash)
         .map(|(node, _)| node.clone())
     else {
-        return StatusCode::NOT_FOUND;
+        return match crate::mesh::fetch(&state, &info_hash, query.hops).await {
+            Ok(()) => StatusCode::NO_CONTENT,
+            Err(_) => StatusCode::NOT_FOUND,
+        };
     };
     let (tx, rx) = oneshot::channel();
     let first = {
@@ -925,54 +996,58 @@ fn candidates_for_round(nodes: &[SocketAddr], round: usize) -> Vec<SocketAddr> {
 
 /// The client side: finds a relay among `nodes` (configured relays first on
 /// the initial round, then rotating so failed registrations cannot monopolize it)
-/// and serves through it until `duration` is over or it fails.
+/// and keeps up to two independent reverse connections. Both share the same
+/// task budget. Each worker retries its disjoint candidate half with backoff.
 pub async fn run_client(state: &AppState, nodes: &[SocketAddr], duration: Duration, round: usize) {
     let deadline = Instant::now() + duration;
-    let fallback = state.reach.reported();
+    let clients = async {
+        tokio::join!(
+            client_worker(state, nodes, deadline, round, 0),
+            client_worker(state, nodes, deadline, round, 1)
+        );
+    };
+    let _ = tokio::time::timeout(duration, clients).await;
+}
+
+async fn client_worker(
+    state: &AppState,
+    nodes: &[SocketAddr],
+    deadline: Instant,
+    mut round: usize,
+    worker: usize,
+) {
     let me = state.identity.public_hex();
-    let candidates = candidates_for_round(nodes, round);
-    let mut probes = futures_util::stream::iter(
-        candidates
+    let mut nodes = nodes.to_vec();
+    while Instant::now() < deadline {
+        let candidates = candidates_for_round(&nodes, round);
+        for candidate in candidates
             .into_iter()
-            .map(|candidate| async move { (candidate, fetch_hello(state, candidate).await) }),
-    )
-    .buffer_unordered(PARALLEL_RELAY_PROBES);
-    let mut attempts = 0;
-    while let Ok(Some((candidate, hello))) = tokio::time::timeout(
-        deadline.saturating_duration_since(Instant::now()),
-        probes.next(),
-    )
-    .await
-    {
-        if !matches!(hello, Ok(ref hello) if hello.relay && hello.node != me) {
-            continue;
+            .skip(worker)
+            .step_by(2)
+            .take(MAX_REGISTRATION_ATTEMPTS / 2)
+        {
+            if state.relay.outgoing_peers().contains(&candidate) {
+                continue;
+            }
+            let attempt = async {
+                let hello = fetch_hello(state, candidate).await?;
+                anyhow::ensure!(hello.relay && hello.node != me, "relay unavailable");
+                serve_through(state, candidate, deadline).await
+            };
+            match tokio::time::timeout(deadline.saturating_duration_since(Instant::now()), attempt)
+                .await
+            {
+                Ok(Ok(())) | Err(_) => return,
+                Ok(Err(err)) => tracing::info!("Relay {candidate} unavailable: {err:#}"),
+            }
         }
-        attempts += 1;
-        match serve_through(state, candidate, deadline).await {
-            Ok(()) => return,
-            Err(err) => tracing::info!("Relay {candidate} stopped working: {err:#}"),
-        }
-        // Do not keep displaying or searching through a failed relay while
-        // checking the remaining candidates.
-        if fallback == Reachability::Checking {
-            state.reach.bootstrap();
-        } else {
-            state.reach.set(Reachability::Unreachable, None);
-        }
-        state.announce.notify_one();
-        if attempts >= MAX_REGISTRATION_ATTEMPTS {
-            break;
+        round = round.wrapping_add(1);
+        let wait = RETRY_INTERVAL.min(deadline.saturating_duration_since(Instant::now()));
+        tokio::time::sleep(wait).await;
+        if Instant::now() < deadline {
+            nodes = crate::reach::other_nodes(state).await;
         }
     }
-    tracing::info!("No relay available; retrying discovery later");
-    if fallback == Reachability::Checking {
-        state.reach.bootstrap();
-    } else {
-        state.reach.set(Reachability::Unreachable, None);
-    }
-    state.announce.notify_one();
-    let wait = RETRY_INTERVAL.min(deadline.saturating_duration_since(Instant::now()));
-    tokio::time::sleep(wait).await;
 }
 
 async fn own_words(state: &AppState) -> Vec<String> {
@@ -1023,10 +1098,25 @@ async fn serve_through(
 ) -> anyhow::Result<()> {
     let mut changes = state.changes.subscribe();
     changes.mark_unchanged();
+    // Reserve before the handshake so concurrent recovery attempts cannot
+    // replace each other's registration on the same relay.
+    {
+        let mut peers = lock(&state.relay.outgoing.peers);
+        anyhow::ensure!(
+            peers.len() < 2 && !peers.contains_key(&relay),
+            "relay already in use"
+        );
+        peers.insert(relay, false);
+    }
+    let _connection = Connection { state, peer: relay };
     let mut session = register(state, relay, None).await?;
     let mut registered_at = Instant::now();
     tracing::info!("Others reach this node through the relay {relay}");
-    state.reach.set(Reachability::Relay, Some(relay));
+    {
+        let mut peers = lock(&state.relay.outgoing.peers);
+        peers.insert(relay, true);
+        state.reach.set(Reachability::Relay, Some(relay));
+    }
     state.announce.notify_one();
 
     let mut tasks = tokio::task::JoinSet::new();
@@ -1074,9 +1164,13 @@ async fn serve_through(
             tracing::debug!("Relay client busy; declining additional work");
             continue;
         }
+        let Ok(permit) = state.relay.outgoing.tasks.clone().try_acquire_owned() else {
+            continue;
+        };
         let state = state.clone();
         let session = session.clone();
         tasks.spawn(async move {
+            let _permit = permit;
             if let Err(err) = handle_task(&state, relay, &session, task).await {
                 tracing::debug!("Relay task failed: {err:#}");
             }

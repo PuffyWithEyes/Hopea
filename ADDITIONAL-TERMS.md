@@ -1,7 +1,7 @@
 # Additional terms for this fork's own code
 
 This program is free software under the GNU General Public License, version 3
-or any later version (see `COPYING`). Nothing here takes away any of the
+or any later version (see `LICENSES/GPL-3.0-or-later.txt`). Nothing here takes away any of the
 freedoms that license gives: anyone may run, study, change and share the
 program.
 
@@ -28,5 +28,5 @@ changing those rules, and doesn't try to. These terms only make sure that a
 changed program can't pass itself off as this one, so that other nodes can
 tell it apart and treat it as they choose.
 
-These terms don't cover the code of Hopea, on which this program is built,
+These terms don't cover the code of Amberol, on which this program is built,
 which is under the GPL alone.

@@ -167,21 +167,46 @@ tries, in order (`src/reach.rs`):
    check can't be used against anyone else. Passing over either family is
    enough: the search port listens on both, and the DHT announces both
    addresses.
-3. **A relay.** Otherwise, for example behind carrier-grade NAT, it picks a
-   reachable node that offers to relay and keeps polling it over a
-   connection it opens itself (`src/relay.rs`). The relay announces the
+3. **Relays.** Otherwise, for example behind carrier-grade NAT, it connects to
+   up to two reachable user nodes that offer to relay and keeps polling them
+   over connections it opens itself (`src/relay.rs`). Each relay announces the
    node's words under its own address and forwards matching searches to it.
    To send a track, the relay has the node upload it, validates it like any
-   download, and shares it over BitTorrent. Every reachable node relays for
+   download, and shares it over BitTorrent or bounded HTTP. Every reachable node relays for
    up to 16 others unless told not to.
 
 Successful reachability is checked again every 30 minutes. Inconclusive checks
 and unsuccessful relay discovery retry after two minutes, rotating the helpers
 instead of repeatedly asking the same first three addresses. A failed or
 unsupported dialback does not stop a node from trying a relay. Relay hello probes
-use at most four concurrent requests over 64 distinct candidates, with at most
-four registration attempts per round; candidate order rotates between rounds. Configured relays and the active relay also
+use at most two concurrent requests over 64 distinct candidates, with at most
+four registration attempts per retry round; candidate order rotates between rounds. Configured relays and both active relays also
 participate in searches when DHT is unavailable, within the existing peer budget.
+The two reverse connections share a two-task execution budget. Losing one does
+not clear the remaining relay's online status. Failed workers retry after two
+minutes and refresh their discovery candidates. A separate heartbeat checks at
+most four rotating known neighbors per minute (two requests at a time), waking
+the direct-reachability check when observed connectivity changes.
+
+The first two outgoing search requests can also ask a peer to forward a signed,
+short-lived query. Upgraded peers forward at most two additional hops, with at
+most two neighbors per hop (one in Game Mode). A node rejects repeated query
+IDs, keeps at most 512 IDs, and limits forwarding to two concurrent jobs with a
+burst of two and a refill of one per second. Requests cannot specify destination
+addresses; forwarding uses the node's own configured, LAN or remembered peers.
+It never starts another DHT lookup. Responses contain at most 50 entries and
+768 KiB of encoded entry data. Old peers ignore the optional query field.
+
+Forwarded results keep short-lived routes through the responding neighbors.
+When selected, a track can be fetched through that route with a three-hop
+budget. Each intermediary verifies the signed metadata, torrent pieces and
+decoded audio before serving it. The HTTP media endpoint only serves already
+validated files, never an arbitrary URL or path. HTTP transfers share the
+BitTorrent speed limits, including Game Mode, and allow at most two simultaneous
+sends and two receives. Transfers also have deadlines and a 1 MiB/s per-stream
+send ceiling. A receiver falls back to BitTorrent when an older relay does not
+support HTTP media. This is a transfer route through reachable user devices,
+not a way to guarantee connectivity when every possible route is blocked.
 
 The search screen shows the last checked reachability and connection suggestions.
 An unconfirmed bootstrap state never appears as confirmed online status. When a
@@ -253,8 +278,9 @@ Public HTTP admission (`src/ingress.rs`) uses the actual socket address, never
 overall. A global search bucket refills at four per second, with a burst of
 16. Excess work returns 429 without entering a waiting queue. General HTTP
 requests, source-table size, socket count and connection lifetime are also
-bounded. A search only consults local data and at most eight relay clients;
-it never recursively starts a DHT search. Relay registrations require a fresh
+bounded. A legacy search consults local data and at most eight relay clients;
+signed mesh searches additionally use the bounded forwarding described above.
+Neither recursively starts a DHT search. Relay registrations require a fresh
 Ed25519 signature and updates require the current session token. Unsigned
 registrations from older builds are rejected. Task answers are bound to the
 session that received the task, and pending tasks are removed on cancellation.

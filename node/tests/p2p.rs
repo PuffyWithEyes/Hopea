@@ -102,6 +102,101 @@ impl TestNode {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn mesh_finds_and_fetches_through_two_user_hops_without_bittorrent() {
+    let publisher = TestNode::start("publisher", vec![]).await;
+    let upload: UploadResponse = publisher
+        .share("Night%20Drive.flac", fixture("tone.flac"))
+        .await
+        .json()
+        .await
+        .unwrap();
+    let middle = TestNode::start("middle", vec![publisher.node.p2p_addr]).await;
+    let entry = TestNode::start("entry", vec![middle.node.p2p_addr]).await;
+    let listener = TestNode::start("listener", vec![entry.node.p2p_addr]).await;
+    let page = listener.search("night", true).await;
+    assert_eq!(page.total, 1);
+    // The origin cannot reach the publisher through its configured peers and
+    // the publisher's BitTorrent session is now stopped. All audio must pass
+    // through the validated HTTP relay path.
+    publisher.node.state.torrents.stop().await;
+    let audio = listener
+        .get(&api::audio_path(page.tracks[0].id))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(audio.status(), StatusCode::OK);
+    assert_eq!(&audio.bytes().await.unwrap()[..4], b"RIFF");
+    assert!(listener.wait_until_local(page.tracks[0].id).await.local);
+    assert_eq!(
+        publisher
+            .node
+            .state
+            .db
+            .track(upload.track.id)
+            .unwrap()
+            .unwrap()
+            .track
+            .title,
+        page.tracks[0].title
+    );
+    listener.node.shutdown().await;
+    entry.node.shutdown().await;
+    middle.node.shutdown().await;
+    publisher.node.shutdown().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn two_reverse_connections_survive_loss_of_one_relay() {
+    let first = TestNode::start("first-relay", vec![]).await;
+    let second = TestNode::start("second-relay", vec![]).await;
+    wait_for("first relay ready", || first.node.state.reach.direct()).await;
+    wait_for("second relay ready", || second.node.state.reach.direct()).await;
+    let client = TestNode::start_with("nat-client", |c| {
+        c.force_relay = true;
+        c.relays = vec![first.node.p2p_addr, second.node.p2p_addr];
+    })
+    .await;
+    wait_for("two independent reverse registrations", || {
+        first.node.state.relay.clients() == 1 && second.node.state.relay.clients() == 1
+    })
+    .await;
+    client
+        .share("Night%20Drive.flac", fixture("tone.flac"))
+        .await
+        .error_for_status()
+        .unwrap();
+    wait_for("confirmed relay", || {
+        client.node.state.reach.reported() == Reachability::Relay
+    })
+    .await;
+    let (stopped, survivor) = if client.node.state.reach.relay() == Some(first.node.p2p_addr) {
+        (first, second)
+    } else {
+        (second, first)
+    };
+    let remaining = survivor.node.p2p_addr;
+    stopped.node.shutdown().await;
+    wait_for("live relay retained", || {
+        client.node.state.reach.relay() == Some(remaining)
+    })
+    .await;
+    assert_eq!(client.node.state.reach.reported(), Reachability::Relay);
+    let listener = TestNode::start("listener", vec![remaining]).await;
+    let page = listener.search("night", true).await;
+    assert_eq!(page.total, 1);
+    let audio = listener
+        .get(&api::audio_path(page.tracks[0].id))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(audio.status(), StatusCode::OK);
+    assert_eq!(&audio.bytes().await.unwrap()[..4], b"RIFF");
+    listener.node.shutdown().await;
+    client.node.shutdown().await;
+    survivor.node.shutdown().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn remembered_public_peer_survives_restart_without_dht_or_configured_peers() {
     use hopea_node::{p2p, reach, AppState};
     let alice = TestNode::start("cached-alice", vec![]).await;

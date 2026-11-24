@@ -49,8 +49,8 @@ detected, Hopea temporarily caps BitTorrent downloads at 512 KiB/s and uploads
 at 128 KiB/s, preserving lower configured limits. It skips speculative track
 downloads and background recommendation searches, reduces concurrent outgoing
 search requests, and pauses account imports between tracks. Current playback
-continues. Imports finish their current file before pausing; HTTP, DHT and
-provider traffic are not covered by the BitTorrent bandwidth cap. Normal limits
+continues. Imports finish their current file before pausing. Relayed HTTP audio
+shares the BitTorrent bandwidth cap; discovery, DHT and provider traffic do not. Normal limits
 return after the game ends (about 15 seconds), or when Game Mode is disabled.
 
 Detection is best effort, with different mechanisms on each platform:
@@ -228,7 +228,8 @@ is `io.hopea.Hopea` (`io.hopea.Hopea.Devel` for development builds).
 ## Contributing and license
 
 See [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md).
-The player retains the original work and copyright notices of Emmanuele Bassi
+Hopea is based on Amberol. The player retains the original work and copyright
+notices of Emmanuele Bassi
 and its contributors. Hopea's sharing and import features are by Daniil Klimov.
 
 Code is licensed under GPL-3.0-or-later; see the per-file SPDX notices,

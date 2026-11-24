@@ -42,6 +42,50 @@ redownload audio or bypass download verification. Notifications received during
 an API request are retained until it completes. Disposing the generator cancels
 its subscription and pending timer.
 
+The waveform view reveals newly available peaks once. Repeated notifications
+with the same normalized samples preserve the current animation; updated samples
+replace an already visible waveform without collapsing it. Playback-position
+updates only repaint the cursor. Animation completion uses elapsed time, and
+silent channels normalize to zero rather than producing invalid coordinates.
+
+Saved playlists publish the first parsed song immediately, then batches of at
+most eight or after 50 ms of parsing. Continuations yield below GTK's redraw
+priority, including when file reads hit a hot cache. Favorite pages are displayed
+as they arrive, before reconciling local sharing, rather than collecting the
+entire catalog first. Neither path disables scrolling while songs are added.
+
+The album editor uses the cover itself as the labeled, keyboard-accessible image
+picker. Name and artwork share one row; Add Songs sits beside the song heading.
+Playback, sharing and deletion are secondary actions in the header menu, leaving
+Save and Cancel as the primary editing controls.
+
+### Search forwarding and recovery
+
+`node/src/mesh.rs` adds optional signed search envelopes to the existing search
+endpoint. Two requests from an originating search may carry an envelope. Each
+receiver validates its query signature, 30-second timestamp and hop budget,
+deduplicates it in a bounded cache, and contacts at most two locally known
+neighbors. Forwarding and reverse-client searches run concurrently; forwarding
+has a six-second deadline and never starts nested DHT discovery. Legacy peers
+continue to return their ordinary search response.
+
+Only verified entries with torrent info create temporary forwarding offers.
+An offer records the contacted peer, never an address from its response. Fetches
+follow at most three offer hops. The HTTP media endpoint serves held files only;
+receivers reuse the relay upload's full validation before storing and seeding.
+Fixed-size per-track lock stripes prevent competing HTTP/BitTorrent starts,
+and an active BitTorrent download refuses an HTTP replacement. Upload/download
+limits are shared with the torrent session rather than duplicated per transport.
+
+Two reverse relay connections share the existing two-task budget. Registration
+reservations are distinct from confirmed connections: an unfinished or failed
+handshake cannot make the status Online. Dropping a session retains the other
+confirmed relay. Failed workers retry with a two-minute delay and refreshed
+candidates; a bounded minute heartbeat also wakes reachability checks when
+neighbor connectivity changes. No permanent Hopea server or third-party proxy
+is introduced. These paths do not guarantee discovery through arbitrary ISP
+filtering or when no reachable user peer exists.
+
 All audible playback must go through the application's shared `AudioPlayer`,
 including search, album previews, imports and duplicate comparisons. Never create
 a separate `gst_play::Play` for a dialog: it bypasses tray/MPRIS controls and the

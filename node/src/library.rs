@@ -109,6 +109,12 @@ pub async fn share(state: &AppState, ingested: Ingested) -> anyhow::Result<Share
 /// the file isn't here yet. Returns `None` for tracks that failed
 /// validation before.
 pub async fn ensure_torrent(state: &AppState, row: &TorrentRow) -> anyhow::Result<Option<Handle>> {
+    let _track = state.mesh.lock_track(&row.info_hash).await;
+    let db = state.db.clone();
+    let id = row.id;
+    let Some(row) = tokio::task::spawn_blocking(move || db.torrent(id)).await?? else {
+        return Ok(None);
+    };
     if row.state == State::Rejected {
         return Ok(None);
     }
@@ -121,6 +127,13 @@ pub async fn ensure_torrent(state: &AppState, row: &TorrentRow) -> anyhow::Resul
     // The nodes that returned the track in a search; the BitTorrent session
     // looks for more in the DHT on its own, without delaying the start
     let sources = tokio::task::spawn_blocking(move || db.sources(id)).await??;
+    // Direct search answers still fetch torrent info lazily; forwarded
+    // answers already carry verified info for the intermediary route.
+    let mut info = row.info.clone();
+    if info.is_empty() {
+        let nodes: Vec<SocketAddr> = sources.iter().filter_map(|s| s.relay.or(s.node)).collect();
+        info = p2p::fetch_info(state, row.id, &nodes).await?;
+    }
     let mut peers: Vec<SocketAddr> = sources
         .iter()
         .filter(|s| s.relay.is_none())
@@ -132,19 +145,28 @@ pub async fn ensure_torrent(state: &AppState, row: &TorrentRow) -> anyhow::Resul
             let relay = source.relay.unwrap();
             match relay::request_fetch(state, relay, &row.info_hash).await {
                 Ok(()) => {
+                    // New peers can deliver verified audio on their search
+                    // connection even when the BitTorrent port is blocked.
+                    // Old peers return 404 and retain the BitTorrent path.
+                    match crate::mesh::download_locked(state, relay, &row.info_hash, _track.clone())
+                        .await
+                    {
+                        Ok(()) => return Ok(state.torrents.get(&row.info_hash)),
+                        Err(err) => tracing::debug!("Relay HTTP transfer unavailable: {err:#}"),
+                    }
+                    let db = state.db.clone();
+                    if tokio::task::spawn_blocking(move || db.torrent(id))
+                        .await??
+                        .is_some_and(|row| row.state == State::Rejected)
+                    {
+                        return Ok(None);
+                    }
                     peers.push(source.addr);
                     break;
                 }
                 Err(err) => tracing::info!("Relay {relay} could not provide the track: {err:#}"),
             }
         }
-    }
-    // Search answers don't carry the torrent itself: get it from a node
-    // that answered, now that it is needed
-    let mut info = row.info.clone();
-    if info.is_empty() {
-        let nodes: Vec<SocketAddr> = sources.iter().filter_map(|s| s.relay.or(s.node)).collect();
-        info = p2p::fetch_info(state, row.id, &nodes).await?;
     }
     let handle = state.torrents.add(&row.info_hash, &info, peers).await?;
     let mut row = row.clone();

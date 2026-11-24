@@ -33,6 +33,7 @@ pub mod keywords;
 pub mod lan;
 pub mod library;
 pub mod lyrics;
+pub(crate) mod mesh;
 pub mod metadata;
 pub mod p2p;
 pub mod reach;
@@ -83,6 +84,7 @@ pub struct AppState {
     pub reach: Arc<reach::Status>,
     /// Relaying for nodes nobody can reach
     pub relay: Arc<relay::Server>,
+    pub(crate) mesh: Arc<mesh::Mesh>,
     pub lan: Arc<lan::Peers>,
     /// Bumped whenever the set of tracks this node has changes
     pub changes: Arc<tokio::sync::watch::Sender<u64>>,
@@ -148,6 +150,7 @@ impl AppState {
             share_work: Arc::default(),
             reach: Arc::new(reach::Status::new()),
             relay: Arc::default(),
+            mesh: Arc::default(),
             lan: Arc::default(),
             changes: Arc::new(tokio::sync::watch::Sender::new(0)),
             pending_covers: Arc::default(),
@@ -242,6 +245,7 @@ impl Node {
             tokio::spawn(p2p::announce_loop(state.clone())),
             tokio::spawn(reach::run(state.clone())),
             tokio::spawn(relay::maintain(state.clone())),
+            tokio::spawn(mesh::maintain(state.clone())),
         ];
         let mut tasks = tasks;
         if config.local_discovery {

@@ -95,6 +95,28 @@ impl Torrents {
         })
     }
 
+    /// Charge HTTP audio against the same live quota as BitTorrent traffic.
+    pub(crate) async fn charge_http(&self, mut bytes: usize, upload: bool) -> anyhow::Result<()> {
+        while bytes > 0 {
+            let cap = if upload {
+                self.limits().upload
+            } else {
+                self.limits().download
+            };
+            let part = bytes
+                .min(cap.unwrap_or(u32::MAX).max(1) as usize)
+                .min(16 * 1024);
+            let size = std::num::NonZeroU32::new(part as u32).unwrap();
+            if upload {
+                self.session.ratelimits.prepare_for_upload(size).await?;
+            } else {
+                self.session.ratelimits.prepare_for_download(size).await?;
+            }
+            bytes -= part;
+        }
+        Ok(())
+    }
+
     /// The speed limits in effect.
     pub fn limits(&self) -> SpeedLimits {
         SpeedLimits {
