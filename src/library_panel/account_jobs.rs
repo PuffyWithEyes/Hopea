@@ -222,6 +222,19 @@ fn update_import_buttons() {
 }
 
 impl LibraryPanel {
+    pub(crate) fn cancel_active_import() {
+        JOB.with(|slot| {
+            if let Some(job) = slot.borrow().as_ref() {
+                job.cancelled.set(true);
+                for process in job.processes.borrow().iter() {
+                    if process.identifier().is_some() {
+                        library::service_import::cancel(process);
+                    }
+                }
+            }
+        });
+    }
+
     pub fn import_is_running() -> bool {
         JOB.with(|slot| {
             slot.borrow()

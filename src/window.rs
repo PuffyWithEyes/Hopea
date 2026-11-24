@@ -1516,6 +1516,13 @@ impl Window {
             window.unbind_state();
             window.unbind_waveform();
 
+            if let Some(app) = window
+                .application()
+                .and_downcast::<crate::application::Application>()
+            {
+                app.main_window_closing(window);
+            }
+
             glib::Propagation::Proceed
         });
 

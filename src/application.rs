@@ -51,6 +51,7 @@ mod imp {
         pub player: Rc<AudioPlayer>,
         pub receiver: RefCell<Option<Receiver<ApplicationAction>>>,
         pub background_hold: RefCell<Option<gio::ApplicationHoldGuard>>,
+        pub background_epoch: Cell<u64>,
         /// Keeps the app running while it shares music, with the window closed
         pub sharing_hold: RefCell<Option<gio::ApplicationHoldGuard>>,
         #[cfg(any(
@@ -84,6 +85,7 @@ mod imp {
                 player: AudioPlayer::new(sender),
                 receiver,
                 background_hold: RefCell::default(),
+                background_epoch: Cell::default(),
                 sharing_hold: RefCell::default(),
                 #[cfg(any(
                     target_os = "linux",
@@ -176,6 +178,10 @@ mod imp {
         }
 
         fn shutdown(&self) {
+            if self.player.state().current_song().is_some() {
+                self.player.stop();
+            }
+            crate::library_panel::LibraryPanel::cancel_active_import();
             #[cfg(any(
                 target_os = "linux",
                 target_os = "freebsd",
@@ -239,11 +245,24 @@ impl Application {
                 move |settings, _| {
                     let background_play = settings.boolean("background-play");
                     debug!("GSettings:background-play: {background_play}");
+                    let imp = this.imp();
+                    imp.background_epoch
+                        .set(imp.background_epoch.get().wrapping_add(1));
+                    if let Some(action) = this.lookup_action("background-play") {
+                        action
+                            .downcast::<gio::SimpleAction>()
+                            .unwrap()
+                            .set_state(&background_play.to_variant());
+                    }
                     if background_play {
                         this.request_background();
                     } else {
                         debug!("Dropping background hold");
                         this.imp().background_hold.replace(None);
+                    }
+                    this.update_sharing();
+                    if !background_play && this.is_registered() && this.windows().is_empty() {
+                        this.quit();
                     }
                 }
             ),
@@ -263,7 +282,7 @@ impl Application {
     )))]
     pub fn update_sharing(&self) {}
 
-    /// Network sharing continues after closing the window on desktop systems.
+    /// Network sharing continues after closing the window when background work is allowed.
     /// The player tray itself is independent of the sharing setting.
     #[cfg(any(
         target_os = "linux",
@@ -276,11 +295,25 @@ impl Application {
     ))]
     pub fn update_sharing(&self) {
         let imp = self.imp();
-        let sharing = imp.settings.boolean("library-enabled") && library::wanted();
+        let sharing = imp.settings.boolean("background-play")
+            && imp.settings.boolean("library-enabled")
+            && library::wanted();
         if sharing && imp.sharing_hold.borrow().is_none() {
             imp.sharing_hold.replace(Some(self.hold()));
         } else if !sharing {
             imp.sharing_hold.take();
+        }
+    }
+
+    /// Explicitly quit even if an import or another task still holds the app.
+    /// The tray remains available for the entire lifetime of the open window.
+    pub(crate) fn main_window_closing(&self, closing: &Window) {
+        if !self.imp().settings.boolean("background-play")
+            && !self.windows().iter().any(|window| {
+                window.is::<Window>() && window != closing.upcast_ref::<gtk::Window>()
+            })
+        {
+            self.quit();
         }
     }
 
@@ -561,7 +594,12 @@ impl Application {
     }
 
     #[cfg(target_os = "linux")]
-    async fn portal_request_background(&self) {
+    async fn portal_request_background(&self, epoch: u64) {
+        if self.imp().background_epoch.get() != epoch
+            || !self.imp().settings.boolean("background-play")
+        {
+            return;
+        }
         if let Some(window) = self.active_window() {
             let root = window.native().unwrap();
             let identifier = WindowIdentifier::from_native(&root).await;
@@ -569,12 +607,23 @@ impl Application {
                 .identifier(identifier)
                 .reason(&*i18n("Hopea needs to run in the background to play music"));
 
-            match request.send().await.and_then(
+            let result = request.send().await.and_then(
                 |r: ashpd::desktop::Request<ashpd::desktop::background::Background>| r.response(),
-            ) {
+            );
+            // A delayed portal reply must not undo a newer user preference.
+            if self.imp().background_epoch.get() != epoch
+                || !self.imp().settings.boolean("background-play")
+            {
+                return;
+            }
+            match result {
                 Ok(response) => {
                     debug!("Background request successful: {:?}", response);
-                    self.imp().background_hold.replace(Some(self.hold()));
+                    if response.run_in_background() {
+                        self.imp().background_hold.replace(Some(self.hold()));
+                    } else {
+                        let _ = self.imp().settings.set_boolean("background-play", false);
+                    }
                 }
                 Err(err) => {
                     warn!("Background request denied: {}", err);
@@ -591,11 +640,12 @@ impl Application {
     fn request_background(&self) {
         let background_play = self.imp().settings.boolean("background-play");
         if background_play {
+            let epoch = self.imp().background_epoch.get();
             let ctx = glib::MainContext::default();
             ctx.spawn_local(clone!(
                 #[weak(rename_to = app)]
                 self,
-                async move { app.portal_request_background().await }
+                async move { app.portal_request_background(epoch).await }
             ));
         }
     }
@@ -626,4 +676,130 @@ impl Application {
         target_os = "macos"
     )))]
     fn request_background(&self) {}
+}
+
+#[cfg(all(test, not(target_os = "android")))]
+mod background_tests {
+    use super::*;
+
+    #[test]
+    #[ignore = "requires a GTK display and isolated XDG directories"]
+    fn closing_window_respects_background_setting_even_with_task_hold() {
+        assert_eq!(std::env::var("GSETTINGS_BACKEND").as_deref(), Ok("memory"));
+        assert!(glib::user_data_dir().starts_with("/tmp"));
+        adw::init().unwrap();
+        gst::init().unwrap();
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+        gio::resources_register(
+            &gio::Resource::load(root.join("_builddir/src/hopea.gresource")).unwrap(),
+        );
+        let settings = utils::settings_manager();
+        settings.set_boolean("library-enabled", false).unwrap();
+        settings.set_boolean("library-rules-seen", true).unwrap();
+        settings.set_boolean("game-mode", false).unwrap();
+        settings.set_boolean("background-play", false).unwrap();
+        let app = Application::new();
+        app.set_flags(app.flags() | gio::ApplicationFlags::NON_UNIQUE);
+        let extra_hold = Rc::new(RefCell::new(None));
+        let second_close = Rc::new(Cell::new(false));
+        let shut_down = Rc::new(Cell::new(false));
+        app.connect_shutdown(clone!(
+            #[strong]
+            shut_down,
+            move |_| {
+                shut_down.set(true);
+            }
+        ));
+        // Run after the application's default activate handler has created its window.
+        app.connect_local(
+            "activate",
+            true,
+            clone!(
+                #[strong]
+                extra_hold,
+                #[strong]
+                second_close,
+                move |values| {
+                    let app = values[0].get::<Application>().unwrap();
+                    // An active import can hold the application independently of playback.
+                    extra_hold.replace(Some(app.hold()));
+                    let settings = &app.imp().settings;
+                    settings.set_boolean("background-play", true).unwrap();
+                    // Exercise sharing lifetime without starting a node or yielding to its monitor.
+                    settings.set_boolean("library-enabled", true).unwrap();
+                    library::set_wanted(true);
+                    app.update_sharing();
+                    assert!(app.imp().sharing_hold.borrow().is_some());
+                    settings.set_boolean("background-play", false).unwrap();
+                    assert!(app.imp().sharing_hold.borrow().is_none());
+                    assert!(app.imp().background_hold.borrow().is_none());
+                    assert_eq!(
+                        app.action_state("background-play").unwrap().get::<bool>(),
+                        Some(false)
+                    );
+                    settings.set_boolean("library-enabled", false).unwrap();
+                    library::set_wanted(false);
+                    settings.set_boolean("background-play", true).unwrap();
+                    app.windows().first().unwrap().close();
+                    // No active window remains when the queued portal request runs.
+                    // The explicit task hold keeps this phase running.
+                    glib::timeout_add_local_once(
+                        Duration::from_millis(100),
+                        clone!(
+                            #[weak]
+                            app,
+                            #[strong]
+                            second_close,
+                            move || {
+                                assert!(
+                                    app.windows().is_empty(),
+                                    "background mode allows closing the UI"
+                                );
+                                let window = Window::new(&app);
+                                GtkWindowExt::present(&window);
+                                let settings = &app.imp().settings;
+                                settings.set_boolean("background-play", false).unwrap();
+                                assert_eq!(
+                                    app.action_state("background-play").unwrap().get::<bool>(),
+                                    Some(false)
+                                );
+                                second_close.set(true);
+                                window.close();
+                            }
+                        ),
+                    );
+                    None
+                }
+            ),
+        );
+        let expired = Rc::new(Cell::new(false));
+        let watchdog = glib::timeout_add_local_once(
+            Duration::from_secs(10),
+            clone!(
+                #[weak]
+                app,
+                #[strong]
+                expired,
+                move || {
+                    expired.set(true);
+                    app.quit();
+                }
+            ),
+        );
+        assert_eq!(
+            app.run_with_args(&["hopea-background-test"]),
+            glib::ExitCode::SUCCESS
+        );
+        if !expired.get() {
+            watchdog.remove();
+        }
+        assert!(
+            !expired.get(),
+            "closing must quit even while the task hold is alive"
+        );
+        assert!(second_close.get() && shut_down.get());
+        assert!(app.imp().tray.borrow().is_none());
+        assert!(!app.player().state().playing());
+        extra_hold.take();
+    }
 }

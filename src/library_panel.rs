@@ -985,12 +985,19 @@ impl LibraryPanel {
                 i18n("A subscription does not grant permission to share music. Share only what you have permission to share."),
             ].join("\n\n"))
             .build();
-        let alert = adw::AlertDialog::builder()
-            .heading(i18n("Bring Your Music Over"))
-            .extra_child(&group)
-            .close_response("close")
+        let alert = adw::Dialog::builder()
+            .title(i18n("Bring Your Music Over"))
+            .content_width(560)
+            .content_height(680)
             .build();
-        alert.add_response("close", &i18n("_Close"));
+        let toolbar = adw::ToolbarView::new();
+        toolbar.add_top_bar(&adw::HeaderBar::new());
+        group.set_margin_start(18);
+        group.set_margin_end(18);
+        group.set_margin_top(12);
+        group.set_margin_bottom(18);
+        toolbar.set_content(Some(&crate::dialogs::scroll(&group)));
+        alert.set_child(Some(&toolbar));
 
         #[derive(Clone, Copy)]
         enum Source {
@@ -1035,16 +1042,28 @@ impl LibraryPanel {
         ];
         let (picked_tx, picked_rx) = async_channel::bounded::<Source>(1);
         for (title, subtitle, buttons) in rows.iter() {
-            let row = adw::ActionRow::builder()
-                .title(title.as_str())
-                .subtitle(subtitle.as_str())
-                .subtitle_lines(0)
-                .build();
-            let box_ = gtk::Box::builder()
+            // Buttons belong below the explanation: a suffix steals the text
+            // column's width, especially with translated labels on phones.
+            let row = gtk::Box::builder()
                 .orientation(gtk::Orientation::Vertical)
-                .spacing(6)
-                .valign(gtk::Align::Center)
+                .spacing(12)
+                .margin_top(12)
+                .margin_bottom(12)
+                .margin_start(12)
+                .margin_end(12)
                 .build();
+            for (text, class) in [(title, "heading"), (subtitle, "dim-label")] {
+                let label = gtk::Label::builder()
+                    .label(text.as_str())
+                    .xalign(0.0)
+                    .wrap(true)
+                    .wrap_mode(gtk::pango::WrapMode::WordChar)
+                    .hexpand(true)
+                    .css_classes([class])
+                    .build();
+                row.append(&label);
+            }
+            let box_ = crate::dialogs::actions();
             for (source, label) in buttons.iter() {
                 let button = gtk::Button::builder().label(label.as_str()).build();
                 let source = *source;
@@ -1058,13 +1077,22 @@ impl LibraryPanel {
                         alert.close();
                     }
                 ));
-                box_.append(&button);
+                box_.insert(&button, -1);
             }
-            row.add_suffix(&box_);
+            row.append(&box_);
             group.add(&row);
         }
-        alert.choose_future(Some(self)).await;
-        let Ok(source) = picked_rx.try_recv() else {
+        // Closing the dialog without choosing a source cancels the import.
+        // Wait for it to finish closing before opening the next dialog.
+        let (closed_tx, closed_rx) = async_channel::bounded(1);
+        alert.connect_closed(move |_| {
+            picked_tx.close();
+            let _ = closed_tx.try_send(());
+        });
+        AdwDialogExt::present(&alert, Some(self));
+        let _ = closed_rx.recv().await;
+        let picked = picked_rx.try_recv();
+        let Ok(source) = picked else {
             return;
         };
 
@@ -1553,6 +1581,13 @@ impl LibraryPanel {
             .build();
         let startup_group = adw::PreferencesGroup::new();
         startup_group.add(&join_row);
+        let background_row = adw::SwitchRow::builder()
+            .title(i18n("Run in Background"))
+            .subtitle(i18n("Keep playing and sharing after closing the window. When disabled, closing the window quits Hopea and removes its tray icon."))
+            .active(settings.boolean("background-play"))
+            .visible(!cfg!(target_os = "android"))
+            .build();
+        startup_group.add(&background_row);
 
         let protected_row = adw::SwitchRow::builder()
             .title(i18n("Share Only Through a VPN"))
@@ -1833,6 +1868,7 @@ impl LibraryPanel {
             return;
         }
         let mut stored = Vec::new();
+        stored.push(settings.set_boolean("background-play", background_row.is_active()));
         if join_row.is_active() != library::joins_at_start(&settings) {
             let value = if join_row.is_active() { "yes" } else { "no" };
             stored.push(settings.set_string("library-join-at-start", value));

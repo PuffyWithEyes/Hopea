@@ -21,6 +21,8 @@
     </key>
 	  <key name="background-play" type="b">
 	    <default>true</default>
+      <summary>Keep running after the desktop window closes</summary>
+      <description>When disabled, closing the last player window stops playback, imports and sharing, and removes the tray icon.</description>
 	  </key>
 	  <key name="library-enabled" type="b">
 	    <default>false</default>

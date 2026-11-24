@@ -11,6 +11,11 @@ Do not publish cookies, tokens, private links or browser profile contents.
 
 ## Building
 
+The player is in `src/`, its sharing node in `node/`, shared formats in `common/`,
+and the Spotify worker in `spotify/`. UI resources live in `data/` and `src/gtk/`,
+translations in `po/`, and patched dependencies in `vendor/`. Build helpers are
+in `build-aux/`; installation recipes are in `nix/` and `packaging/`.
+
 Run these commands from the project root. On NixOS or with Nix installed:
 
 ```sh
@@ -27,7 +32,7 @@ changing the environment, run `nix develop --command bash tests/test_nix.sh`
 before submitting the change.
 Meson generates `src/config.rs` and the UI resources; `cargo run` alone is not
 sufficient. Recompile after editing Blueprint files to update the GResource.
-See [README](../README.md) for system dependencies and platform limitations.
+See [platform notes](PLATFORMS.md) for system dependencies and platform limitations.
 
 ## Checks
 

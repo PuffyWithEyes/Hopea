@@ -1299,3 +1299,213 @@ fn progressive_playlist_and_shuffle_start_at_top() {
     );
     window.destroy();
 }
+
+/// Reproducible README images and the narrow import-dialog regression.
+/// All catalog entries and waveform samples are presentation fixtures, not
+/// downloaded recordings or evidence of live peer availability.
+#[test]
+#[ignore = "requires a GTK display and isolated XDG directories"]
+fn documentation_screenshots_and_import_layout() {
+    use hopea_common::{api::Track, AudioFormat};
+    assert_eq!(std::env::var("GSETTINGS_BACKEND").as_deref(), Ok("memory"));
+    assert!(glib::user_data_dir().starts_with("/tmp"));
+    adw::init().unwrap();
+    gst::init().unwrap();
+    gtk::Settings::default()
+        .unwrap()
+        .set_gtk_enable_animations(false);
+    adw::StyleManager::default().set_color_scheme(adw::ColorScheme::ForceDark);
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    gio::resources_register(
+        &gio::Resource::load(root.join("_builddir/src/hopea.gresource")).unwrap(),
+    );
+    let context = glib::MainContext::default();
+    let _guard = context.acquire().unwrap();
+    let settings = utils::settings_manager();
+    settings.set_boolean("library-enabled", false).unwrap();
+    settings.set_boolean("library-rules-seen", true).unwrap();
+    settings.set_boolean("game-mode", false).unwrap();
+    let app = crate::application::Application::new();
+    app.set_flags(app.flags() | gio::ApplicationFlags::NON_UNIQUE);
+    app.register(gio::Cancellable::NONE).unwrap();
+    let window = Window::new(&app);
+    let imp = window.imp();
+    let player = app.player();
+    let panel = window.import_panel();
+    let make_track = |id, title: &str, artist: &str, album: &str| Track {
+        id,
+        title: title.into(),
+        artist: Some(artist.into()),
+        album: Some(album.into()),
+        album_artist: None,
+        track_number: None,
+        year: None,
+        genre: None,
+        duration_ms: 210_000,
+        format: AudioFormat::Flac,
+        codec: "flac".into(),
+        sample_rate: 44100,
+        channels: 2,
+        size: 24_000_000,
+        sha256: format!("{id:064x}"),
+        has_cover: false,
+        uploader: "Demo library".into(),
+        uploaded_at: 0,
+        mine: false,
+        local: false,
+        favorite: false,
+        sources: 1,
+    };
+    let tracks = [
+        make_track(1, "Numb", "Linkin Park", "Meteora"),
+        make_track(2, "На чёрный день", "Янка Дягилева", "Продано!"),
+        make_track(3, "Demo recording", "Великие Октябри", "Demo collection"),
+        make_track(4, "Никто не хотел умирать", "Егор Летов", "Demo collection"),
+        make_track(
+            5,
+            "Всё идёт по плану",
+            "Гражданская Оборона",
+            "Всё идёт по плану",
+        ),
+    ];
+    for track in &tracks {
+        let mut track = track.clone();
+        track.local = true;
+        track.favorite = true;
+        let song = Song::from_remote(
+            &track,
+            &format!("file:///nonexistent/demo-{}.flac", track.id),
+            None,
+        );
+        player.queue().add_song(&song);
+    }
+    let output = std::env::var_os("HOPEA_README_SCREENSHOTS").map(std::path::PathBuf::from);
+    if let Some(path) = &output {
+        std::fs::create_dir_all(path).unwrap();
+    }
+    let wait = || context.block_on(glib::timeout_future(std::time::Duration::from_millis(450)));
+    let capture = |name: &str| {
+        wait();
+        if let Some(path) = &output {
+            let snapshot = gtk::Snapshot::new();
+            snapshot.append_color(
+                &gdk::RGBA::parse("#242424").unwrap(),
+                &gtk::graphene::Rect::new(0.0, 0.0, window.width() as f32, window.height() as f32),
+            );
+            window.snapshot_child(&window.first_child().unwrap(), &snapshot);
+            window
+                .renderer()
+                .unwrap()
+                .render_texture(&snapshot.to_node().unwrap(), None)
+                .save_to_png(path.join(name))
+                .unwrap();
+        }
+    };
+    player.state().set_current_song(player.queue().song_at(0));
+    player.state().set_playback_state(&PlaybackState::Playing);
+    player.state().set_position(62);
+    // A stable synthetic envelope illustrates the waveform without copyrighted audio.
+    window.unbind_waveform();
+    imp.waveform_view.set_peaks(Some(
+        (0..200)
+            .map(|i| {
+                let amplitude = 0.15
+                    + (i as f64 * 0.23).sin().abs() * (0.3 + (i as f64 * 0.043).sin().abs() * 0.55);
+                (amplitude, amplitude * 0.8)
+            })
+            .collect(),
+    ));
+    imp.waveform_view.set_position(62.0 / 210.0);
+    window.set_default_size(1100, 760);
+    imp.main_stack.set_visible_child_name("main-view");
+    imp.library_split.set_show_sidebar(false);
+    imp.split_view.set_show_sidebar(true);
+    GtkWindowExt::present(&window);
+    capture("desktop-playback.png");
+    let results = [
+        tracks[0].clone(),
+        make_track(6, "Somewhere I Belong", "Linkin Park", "Meteora"),
+        make_track(7, "In the End", "Linkin Park", "Hybrid Theory"),
+    ];
+    imp.split_view.set_show_sidebar(false);
+    imp.library_split.set_show_sidebar(true);
+    panel.test_documentation_search("Linkin Park", &results);
+    capture("desktop-search.png");
+    imp.library_split.set_show_sidebar(false);
+    window.set_default_size(390, 780);
+    window.set_height_request(1);
+    panel.test_android_chrome_and_keyboard(false);
+    // Match phone window decorations and the Android My Music entry point.
+    imp.player_header.set_show_start_title_buttons(false);
+    imp.player_header.set_show_end_title_buttons(false);
+    imp.my_music_header.set_visible(true);
+    imp.my_music_button.set_visible(false);
+    imp.playback_control
+        .imp()
+        .playlist_button
+        .set_visible(false);
+    wait();
+    imp.split_view.set_show_sidebar(false);
+    imp.library_sheet.set_open(false);
+    player.state().set_current_song(player.queue().song_at(1));
+    player.state().set_playback_state(&PlaybackState::Playing);
+    player.state().set_position(62);
+    capture("mobile-playback.png");
+    panel.test_documentation_search(
+        "Гражданская Оборона",
+        &[
+            tracks[4].clone(),
+            make_track(8, "Моя оборона", "Гражданская Оборона", "Прыг-скок"),
+        ],
+    );
+    imp.library_sheet.set_open(true);
+    capture("mobile-search.png");
+    imp.library_sheet.set_open(false);
+    player.state().set_playback_state(&PlaybackState::Stopped);
+    let task = glib::spawn_future_local(clone!(
+        #[strong]
+        panel,
+        async move {
+            panel.import_music().await;
+        }
+    ));
+    wait();
+    let dialog = window.visible_dialog().expect("import chooser must open");
+    fn labels(widget: &gtk::Widget, out: &mut Vec<gtk::Label>) {
+        if let Some(label) = widget.downcast_ref::<gtk::Label>() {
+            out.push(label.clone());
+        }
+        let mut child = widget.first_child();
+        while let Some(widget) = child {
+            child = widget.next_sibling();
+            labels(&widget, out);
+        }
+    }
+    let mut text = Vec::new();
+    labels(dialog.upcast_ref(), &mut text);
+    let description = text
+        .iter()
+        .find(|label| label.text().starts_with("Read your saved songs"))
+        .unwrap();
+    // Include Cyrillic and long translations rather than checking English alone.
+    description.set_text("Читайте сохранённые песни, плейлисты и альбомы из VK, Яндекс Музыки, Spotify или YouTube Music.");
+    for width in [360, 390, 560] {
+        window.set_default_size(width, 780);
+        wait();
+        assert!(
+            window.width() <= width,
+            "import dialog must fit the viewport"
+        );
+        assert!(
+            description.width() >= width.min(500) - 100,
+            "description must use the full card width, got {} at {width}",
+            description.width()
+        );
+    }
+    description.set_text("Read your saved songs, playlists and albums from VK, Yandex Music, Spotify or YouTube Music. Download available audio, or look for the songs on the sharing network.");
+    window.set_default_size(390, 780);
+    capture("mobile-import.png");
+    dialog.close();
+    context.block_on(task).unwrap();
+    window.close();
+}

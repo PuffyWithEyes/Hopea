@@ -27,6 +27,21 @@ impl AlbumResult {
 }
 
 impl LibraryPanel {
+    /// Documentation fixtures use real result factories but never contact peers.
+    #[cfg(test)]
+    pub(crate) fn test_documentation_search(&self, query: &str, tracks: &[Track]) {
+        self.test_show_search_with_albums();
+        self.reset_search();
+        self.imp()
+            .search_text_key
+            .replace(crate::search::text_key(query));
+        self.imp().search_entry.set_text(query);
+        self.imp().title_label.set_visible(true);
+        self.imp().status_fixture.set(true);
+        self.set_reach_status(Some(Reachability::Direct));
+        self.show_page(query, 0, tracks, tracks.len() as u64);
+    }
+
     pub(super) fn setup_results(&self) {
         let imp = self.imp();
         self.setup_album_results();

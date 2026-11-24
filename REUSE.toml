@@ -222,3 +222,15 @@ SPDX-License-Identifier = "CC0-1.0"
 path = ["build-aux/android/intl-backend.patch"]
 SPDX-FileCopyrightText = ["2008 Tor Lillqvist", "2026 Daniil Klimov"]
 SPDX-License-Identifier = "LGPL-2.0-or-later"
+
+[[annotations]]
+path = ["docs/PLATFORMS.md", "docs/SCREENSHOTS.md"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = ["2022 Emmanuele Bassi", "2026 Daniil Klimov"]
+SPDX-License-Identifier = "CC0-1.0"
+
+[[annotations]]
+path = "docs/screenshots/*.png"
+precedence = "aggregate"
+SPDX-FileCopyrightText = ["2022 Emmanuele Bassi", "2026 Daniil Klimov"]
+SPDX-License-Identifier = "GPL-3.0-or-later"

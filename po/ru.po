@@ -4578,3 +4578,12 @@ msgstr "Выберите изображение на этом устройств
 
 msgid "Try another search. Songs already on this device and songs with no reachable sources are hidden."
 msgstr "Попробуйте другой запрос. Песни, которые уже есть на этом устройстве или для которых нет доступных источников, скрыты."
+
+msgid "Run in Background"
+msgstr "Работать в фоне"
+
+msgid "_Run in Background"
+msgstr "_Работать в фоне"
+
+msgid "Keep playing and sharing after closing the window. When disabled, closing the window quits Hopea and removes its tray icon."
+msgstr "Продолжать воспроизведение и раздачу после закрытия окна. Если выключено, закрытие окна завершает Hopea и убирает значок из трея."
